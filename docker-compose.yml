@@ -1,0 +1,90 @@
+# TV Show Tracker — dev stack: backend + postgres + garage (S3).
+# Usage:
+#   1. cp .env.example .env  (and fill in secrets; generate with `openssl rand -hex 32`)
+#   2. docker compose up -d postgres garage
+#   3. ./scripts/garage-init.sh   (creates layout + S3 key + bucket; prints keys → paste into .env)
+#   4. docker compose up -d --build backend
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Dedicated, isolated Postgres for the backend integration tests so they never
+  # touch the dev database. Opt-in via the `test` profile — it does NOT start with
+  # a plain `docker compose up`. Storage is tmpfs (RAM): fast and wiped on restart.
+  #   docker compose up -d postgres-test
+  #   TEST_DATABASE_URL=postgres://<user>:<pw>@localhost:5433/${TEST_POSTGRES_DB:-tvshow_test} \
+  #     cargo test --manifest-path backend/Cargo.toml
+  postgres-test:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-tvshow_test}
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${TEST_POSTGRES_DB:-tvshow_test}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+    ports:
+      - "3900:3900"   # S3 API
+      - "3901:3901"   # RPC
+      - "3902:3902"   # S3 web
+      - "3903:3903"   # admin API
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_started
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      THETVDB_API_KEY: ${THETVDB_API_KEY}
+      THETVDB_BASE_URL: ${THETVDB_BASE_URL}
+      BACKEND_BIND_ADDR: ${BACKEND_BIND_ADDR}
+      RUST_LOG: ${RUST_LOG}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pg_data:
+  garage_meta:
+  garage_data:

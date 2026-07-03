@@ -1,0 +1,14 @@
+pub mod artwork;
+pub mod auth;
+pub mod discover;
+pub mod episode;
+pub mod health;
+pub mod media;
+pub mod movie;
+pub mod search;
+pub mod season;
+pub mod series;
+pub mod shows;
+pub mod stats;
+pub mod users;
+pub mod watch;

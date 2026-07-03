@@ -1,0 +1,285 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for French (`fr`).
+class AppLocalizationsFr extends AppLocalizations {
+  AppLocalizationsFr([String locale = 'fr']) : super(locale);
+
+  @override
+  String get appTitle => 'Cinetrack';
+
+  @override
+  String get navLibrary => 'Bibliothèque';
+
+  @override
+  String get navDiscover => 'Découvrir';
+
+  @override
+  String get navCalendar => 'Calendrier';
+
+  @override
+  String get navSearch => 'Rechercher';
+
+  @override
+  String get navProfile => 'Profil';
+
+  @override
+  String get friends => 'Amis';
+
+  @override
+  String get searchHint => 'Rechercher…';
+
+  @override
+  String get typeSeries => 'Séries';
+
+  @override
+  String get typeAnime => 'Animés';
+
+  @override
+  String get typeMovies => 'Films';
+
+  @override
+  String get typeAll => 'Tout';
+
+  @override
+  String get filters => 'Filtres';
+
+  @override
+  String get loading => 'Chargement…';
+
+  @override
+  String get retry => 'Réessayer';
+
+  @override
+  String get noResults => 'Aucun résultat';
+
+  @override
+  String get logIn => 'Se connecter';
+
+  @override
+  String get signUp => 'S\'inscrire';
+
+  @override
+  String get logOut => 'Se déconnecter';
+
+  @override
+  String get save => 'Enregistrer';
+
+  @override
+  String get cancel => 'Annuler';
+
+  @override
+  String get follow => 'Suivre';
+
+  @override
+  String get unfollow => 'Ne plus suivre';
+
+  @override
+  String get requested => 'Demandé';
+
+  @override
+  String get requestToFollow => 'Demander d\'amis';
+
+  @override
+  String get followers => 'Abonnés';
+
+  @override
+  String get following => 'Abonnements';
+
+  @override
+  String get statEpisodes => 'Épisodes';
+
+  @override
+  String get statWatched => 'Visionné';
+
+  @override
+  String get statMovies => 'Films';
+
+  @override
+  String get favorites => 'Favoris';
+
+  @override
+  String get shows => 'Séries';
+
+  @override
+  String get settings => 'Paramètres';
+
+  @override
+  String get sectionAccount => 'Compte';
+
+  @override
+  String get sectionPrivacy => 'Confidentialité';
+
+  @override
+  String get sectionAppearance => 'Apparence';
+
+  @override
+  String get sectionLanguages => 'Langues';
+
+  @override
+  String get sectionData => 'Données';
+
+  @override
+  String get sectionDangerZone => 'Zone de danger';
+
+  @override
+  String get themeDark => 'Sombre';
+
+  @override
+  String get themeLight => 'Clair';
+
+  @override
+  String get themeAuto => 'Auto';
+
+  @override
+  String get fieldName => 'Nom';
+
+  @override
+  String get fieldEmail => 'E-mail';
+
+  @override
+  String get changePassword => 'Changer le mot de passe';
+
+  @override
+  String get privateProfile => 'Profil privé';
+
+  @override
+  String get tagline => 'Suivez chaque série, film et visionnage.';
+
+  @override
+  String get fieldScreenName => 'Nom d\'affichage';
+
+  @override
+  String get fieldPassword => 'Mot de passe';
+
+  @override
+  String get fieldConfirmPassword => 'Confirmer le mot de passe';
+
+  @override
+  String get showPassword => 'Afficher le mot de passe';
+
+  @override
+  String get hidePassword => 'Masquer le mot de passe';
+
+  @override
+  String get createAccount => 'Créer un compte';
+
+  @override
+  String get haveAccountLogIn => 'Vous avez un compte ? Se connecter';
+
+  @override
+  String get newHereCreate => 'Nouveau ici ? Créer un compte';
+
+  @override
+  String get pwUppercase => 'Majuscule';
+
+  @override
+  String get pwLowercase => 'Minuscule';
+
+  @override
+  String get pwNumber => 'Chiffre';
+
+  @override
+  String get pwSpecial => 'Caractère spécial';
+
+  @override
+  String get customizeProfile => 'Personnaliser le profil';
+
+  @override
+  String get accountPrivate => 'Ce compte est privé';
+
+  @override
+  String followToSee(String name) {
+    return 'Suivez $name pour voir son profil.';
+  }
+
+  @override
+  String get findPeople => 'Trouver des personnes…';
+
+  @override
+  String get followRequests => 'Demandes d\'abonnement';
+
+  @override
+  String get accept => 'Accepter';
+
+  @override
+  String get decline => 'Refuser';
+
+  @override
+  String get remove => 'Retirer';
+
+  @override
+  String get private => 'Privé';
+
+  @override
+  String get status => 'Statut';
+
+  @override
+  String get forLater => 'Pour plus tard';
+
+  @override
+  String get stopWatching => 'Arrêter de regarder';
+
+  @override
+  String get clearStatus => 'Effacer le statut';
+
+  @override
+  String get markAllWatched => 'Tout marquer comme vu';
+
+  @override
+  String get unmarkAll => 'Tout démarquer';
+
+  @override
+  String get rewatchSeason => 'Revoir la saison (+1)';
+
+  @override
+  String get seasonActions => 'Actions sur la saison';
+
+  @override
+  String get markWatched => 'Marquer comme vu';
+
+  @override
+  String get markedWatched => 'Marqué comme vu';
+
+  @override
+  String get removeOneWatch => 'Retirer un visionnage';
+
+  @override
+  String get recentlyAired => 'Diffusé récemment';
+
+  @override
+  String get upcoming => 'À venir';
+
+  @override
+  String get openShow => 'Ouvrir la série';
+
+  @override
+  String get reset => 'Réinitialiser';
+
+  @override
+  String get clear => 'Effacer';
+
+  @override
+  String get favoritesOnly => 'Favoris uniquement';
+
+  @override
+  String get sortBy => 'Trier par';
+
+  @override
+  String get showResults => 'Voir les résultats';
+
+  @override
+  String get pw12chars => '12+ caractères';
+
+  @override
+  String get passwordsDontMatch => 'Les mots de passe ne correspondent pas';
+
+  @override
+  String get filterOrigLanguage => 'Langue originale';
+
+  @override
+  String get filterOrigCountry => 'Pays d\'origine';
+}

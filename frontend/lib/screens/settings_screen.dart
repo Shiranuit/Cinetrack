@@ -1,0 +1,433 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../api/api_client.dart';
+import '../design/app_colors.dart';
+import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
+import '../state/auth.dart';
+import '../state/settings.dart';
+import '../widgets/section.dart';
+import 'import_matches_screen.dart';
+
+const kLanguages = {
+  'eng': 'English',
+  'fra': 'Français',
+  'jpn': '日本語',
+  'spa': 'Español',
+  'deu': 'Deutsch',
+  'ita': 'Italiano',
+  'por': 'Português',
+  'kor': '한국어',
+  'zho': '中文',
+};
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _busy = false;
+  int _suggestions = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSuggestions();
+  }
+
+  void _refreshSuggestions() {
+    context.read<ApiClient>().importSuggestions(langs: context.read<SettingsController>().langsParam).then((s) {
+      if (mounted) setState(() => _suggestions = s.length);
+    }).catchError((_) {});
+  }
+
+  Future<void> _openMatches() async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportMatchesScreen()));
+    _refreshSuggestions();
+  }
+
+  Future<void> _importGdpr() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['zip'], withData: true);
+    final f = res?.files.firstOrNull;
+    if (f?.bytes == null || !mounted) return;
+    final api = context.read<ApiClient>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      final s = await api.importGdpr(f!.bytes!, f.name);
+      messenger.showSnackBar(SnackBar(
+        content: Text('Imported ${s['shows']} shows · ${s['watch_events']} watches · ${s['favorites']} favorites.\n'
+            'Matching missing shows in the background — check "Review import matches" shortly.'),
+      ));
+      // The background prefetch resolves dead ids; poll a few times for suggestions.
+      for (final delay in [8, 20, 40]) {
+        Future.delayed(Duration(seconds: delay), () {
+          if (mounted) _refreshSuggestions();
+        });
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This permanently deletes your account and all your data — tracked shows, '
+          'watch history, favorites and follows. This cannot be undone.',
+        ),
+        // Sensitive action: make Cancel the obvious, prominent default and Delete
+        // the deliberately-understated (subtle text) choice so it's hard to hit by
+        // accident.
+        actionsAlignment: MainAxisAlignment.spaceBetween,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: context.scheme.onSurfaceVariant),
+            child: const Text('Delete anyway'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep my account'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthController>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.deleteAccount();
+      // Pop Settings/Profile off the stack BEFORE logging out, otherwise they
+      // stay mounted over the login screen and the app looks stuck.
+      navigator.popUntil((r) => r.isFirst);
+      await auth.logout(); // clears token → app root returns to the auth screen
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setPrivacy(bool isPrivate) async {
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthController>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.setPrivacy(isPrivate);
+      await auth.reloadMe();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _errText(Object e) => e is ApiException ? e.message : '$e';
+
+  /// A single-field text dialog; returns the trimmed value or null if cancelled.
+  Future<String?> _promptText({
+    required String title,
+    required String label,
+    required String initial,
+    TextInputType? keyboard,
+    String? Function(String?)? validator,
+  }) async {
+    final ctrl = TextEditingController(text: initial);
+    final formKey = GlobalKey<FormState>();
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: keyboard,
+            decoration: InputDecoration(labelText: label),
+            validator: validator,
+            onFieldSubmitted: (_) {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, ctrl.text.trim());
+              }
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(ctx, ctrl.text.trim());
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return res;
+  }
+
+  Future<void> _editName() async {
+    final me = context.read<AuthController>().me;
+    final name = await _promptText(
+      title: 'Display name',
+      label: 'Name',
+      initial: me?.screenName ?? '',
+      keyboard: TextInputType.name,
+      validator: (v) => (v == null || v.trim().isEmpty) ? 'Name cannot be empty' : null,
+    );
+    if (name == null || !mounted) return;
+    await _saveProfile(screenName: name);
+  }
+
+  Future<void> _editEmail() async {
+    final me = context.read<AuthController>().me;
+    final email = await _promptText(
+      title: 'Email',
+      label: 'Email',
+      initial: me?.email ?? '',
+      keyboard: TextInputType.emailAddress,
+      validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+    );
+    if (email == null || !mounted) return;
+    await _saveProfile(email: email);
+  }
+
+  Future<void> _saveProfile({String? screenName, String? email}) async {
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthController>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.updateProfile(screenName: screenName, email: email);
+      await auth.reloadMe();
+      messenger.showSnackBar(const SnackBar(content: Text('Profile updated.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Change password: new + confirmation only (no current password — there's no
+  /// recovery flow, so a signed-in user must be able to reset it). Full policy is
+  /// enforced server-side; here we only check the two entries match.
+  Future<void> _changePassword() async {
+    final p1 = TextEditingController();
+    final p2 = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change password'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: p1,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'New password'),
+                validator: (v) => (v == null || v.length < 12) ? 'At least 12 characters' : null,
+              ),
+              const SizedBox(height: Insets.sm),
+              TextFormField(
+                controller: p2,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Confirm new password'),
+                validator: (v) => v != p1.text ? 'Passwords do not match' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(ctx, p1.text);
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+    p1.dispose();
+    p2.dispose();
+    if (result == null || !mounted) return;
+
+    final api = context.read<ApiClient>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.updatePassword(result);
+      messenger.showSnackBar(const SnackBar(content: Text('Password updated.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final settings = context.watch<SettingsController>();
+    final me = context.watch<AuthController>().me;
+    final isPrivate = me?.isPrivate ?? false;
+    final available = kLanguages.keys.where((k) => !settings.languages.contains(k)).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(t.settings),
+        bottom: _busy ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator()) : null,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: Insets.xxl),
+        children: [
+          SectionHeader(title: t.sectionAccount, icon: Icons.person_rounded),
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text(t.fieldName),
+            subtitle: Text(me?.screenName ?? '—'),
+            trailing: const Icon(Icons.edit_rounded, size: 20),
+            onTap: _busy ? null : _editName,
+          ),
+          ListTile(
+            leading: const Icon(Icons.alternate_email_rounded),
+            title: Text(t.fieldEmail),
+            subtitle: Text(me?.email ?? '—'),
+            trailing: const Icon(Icons.edit_rounded, size: 20),
+            onTap: _busy ? null : _editEmail,
+          ),
+          ListTile(
+            leading: const Icon(Icons.password_rounded),
+            title: Text(t.changePassword),
+            subtitle: const Text('Set a new password'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: _busy ? null : _changePassword,
+          ),
+          SectionHeader(title: t.sectionPrivacy, icon: Icons.lock_outline_rounded),
+          SwitchListTile(
+            secondary: const Icon(Icons.lock_person_rounded),
+            title: Text(t.privateProfile),
+            subtitle: const Text('Only accepted followers can see your profile and activity'),
+            value: isPrivate,
+            onChanged: _busy ? null : _setPrivacy,
+          ),
+          SectionHeader(title: t.sectionAppearance, icon: Icons.palette_rounded),
+          Padding(
+            padding: Insets.pageH,
+            child: SegmentedButton<ThemeMode>(
+              segments: [
+                ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode_rounded), label: Text(t.themeDark)),
+                ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode_rounded), label: Text(t.themeLight)),
+                ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto_rounded), label: Text(t.themeAuto)),
+              ],
+              selected: {settings.themeMode},
+              onSelectionChanged: (s) => settings.setThemeMode(s.first),
+            ),
+          ),
+          SectionHeader(title: t.sectionLanguages, icon: Icons.translate_rounded),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+            child: Text('Drag to set translation priority. The first available translation is used.',
+                style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+          ),
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            padding: const EdgeInsets.symmetric(horizontal: Insets.lg, vertical: Insets.sm),
+            onReorderItem: (oldIndex, newIndex) {
+              final langs = List<String>.from(settings.languages);
+              langs.insert(newIndex, langs.removeAt(oldIndex));
+              settings.setLanguages(langs);
+            },
+            children: [
+              for (var i = 0; i < settings.languages.length; i++)
+                Card(
+                  key: ValueKey(settings.languages[i]),
+                  margin: const EdgeInsets.only(bottom: Insets.sm),
+                  color: context.scheme.surfaceContainerHighest,
+                  child: ListTile(
+                    leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle_rounded)),
+                    title: Text(kLanguages[settings.languages[i]] ?? settings.languages[i]),
+                    subtitle: i == 0 ? Text('Primary', style: TextStyle(color: context.scheme.primary)) : null,
+                    trailing: settings.languages.length > 1
+                        ? IconButton(
+                            icon: const Icon(Icons.remove_circle_outline_rounded),
+                            onPressed: () {
+                              final langs = List<String>.from(settings.languages)..removeAt(i);
+                              settings.setLanguages(langs);
+                            },
+                          )
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+          if (available.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
+              child: Text('Add a language', style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+            ),
+            Padding(
+              padding: Insets.pageH,
+              child: Wrap(
+                spacing: Insets.sm,
+                runSpacing: Insets.sm,
+                children: [
+                  for (final k in available)
+                    ActionChip(
+                      avatar: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(kLanguages[k]!),
+                      onPressed: () => settings.setLanguages([...settings.languages, k]),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          SectionHeader(title: t.sectionData, icon: Icons.storage_rounded),
+          ListTile(
+            leading: const Icon(Icons.upload_file_rounded),
+            title: const Text('Import TV Time data'),
+            subtitle: const Text('Upload your GDPR export (.zip)'),
+            onTap: _busy ? null : _importGdpr,
+          ),
+          if (_suggestions > 0)
+            ListTile(
+              leading: Badge(label: Text('$_suggestions'), child: const Icon(Icons.rule_rounded)),
+              title: const Text('Review import matches'),
+              subtitle: Text('$_suggestions show${_suggestions == 1 ? '' : 's'} need confirming'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: _busy ? null : _openMatches,
+            ),
+          SectionHeader(title: t.sectionDangerZone, icon: Icons.person_off_rounded, accent: context.scheme.error),
+          ListTile(
+            leading: Icon(Icons.delete_forever_rounded, color: context.scheme.error),
+            title: Text('Delete account', style: TextStyle(color: context.scheme.error)),
+            subtitle: const Text('Permanently remove your account and all data'),
+            onTap: _busy ? null : _deleteAccount,
+          ),
+        ],
+      ),
+    );
+  }
+}

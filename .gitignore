@@ -1,0 +1,18 @@
+# Secrets / local env (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+
+# GDPR export is personal data — do not commit
+gdpr-data/
+
+# Rust
+backend/target/
+
+# Flutter
+frontend/.dart_tool/
+frontend/build/
+
+# OS / editor
+.DS_Store
+*.swp
