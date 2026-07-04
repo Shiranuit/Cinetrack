@@ -39,17 +39,27 @@
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://{$API_DOMAIN} https://www.gstatic.com https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		-Server
 	}
-	# Flutter web's entry files have FIXED names (not content-hashed), so a plain
-	# browser cache serves a STALE app after a deploy — e.g. an old, baked-in
-	# "download the APK" version. Force revalidation on them (cheap: ETag -> 304 when
-	# unchanged). Cloudflare respects this and stops injecting its 4h default TTL.
-	# The hashed/immutable assets (under /assets, /canvaskit) keep caching normally.
-	@entry path / /index.html /flutter_bootstrap.js /flutter_service_worker.js /flutter.js /main.dart.js /version.json /manifest.json
-	header @entry Cache-Control "no-cache"
-	root * /srv
-	# SPA fallback so client-side (deep-link) routes resolve to index.html.
-	try_files {path} /index.html
-	file_server
+	# --- Versioned, immutable caching -------------------------------------------
+	# The web app is built with `--base-href=/{$APP_VERSION}/`, so every sub-resource
+	# (main.dart.js, assets, canvaskit, fonts, ...) is requested under that per-release
+	# prefix. That prefix IS the cache key: it's identical for a whole release and
+	# changes only on the next deploy — so everything under it can be cached forever
+	# with zero revalidation, no per-file content hashing needed. {$APP_VERSION} is
+	# baked into this image (see Dockerfile), so it always matches the build's base-href.
+	handle_path /{$APP_VERSION}/* {
+		root * /srv
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	# The HTML shell (root `/` + SPA deep-link fallbacks like /reset-password) is served
+	# from the same files but must ALWAYS revalidate, so a new deploy's base-href (and
+	# thus the new version prefix) is picked up immediately. It's tiny.
+	handle {
+		root * /srv
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 }
 
 # ---- Backend API ----------------------------------------------------------

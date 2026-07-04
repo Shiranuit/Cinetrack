@@ -1,7 +1,7 @@
 {
     "name": "Cinetrack",
     "short_name": "Cinetrack",
-    "start_url": ".",
+    "start_url": "/",
     "display": "standalone",
     "background_color": "#0C0E12",
     "theme_color": "#F4B740",

@@ -26,13 +26,23 @@ ARG GITHUB_REPO=Shiranuit/Cinetrack
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 COPY . .
+# `--base-href=/<version>/` puts every sub-resource under a per-release path prefix,
+# which serves as a single immutable cache key (see Caddyfile). Must start AND end
+# with `/`. Routing is hash-based and deep links read `Uri.base`, so the prefix does
+# not affect route URLs or the reset/invite links.
 RUN flutter build web --release \
+      --base-href="/${APP_VERSION}/" \
       --dart-define=API_BASE=${API_BASE} \
       --dart-define=APP_VERSION=${APP_VERSION} \
       --dart-define=GITHUB_REPO=${GITHUB_REPO}
 
 # ---- Stage 2: serve the SPA + reverse-proxy the API, with automatic HTTPS -
 FROM caddy:2-alpine
+# Re-declare the arg in this stage and expose it to Caddy as an env var, so the
+# `handle_path /{$APP_VERSION}/*` rule strips exactly the prefix the build baked into
+# its base-href. Both derive from the same build arg, so they can never drift.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 COPY --from=build /app/build/web /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80 443
