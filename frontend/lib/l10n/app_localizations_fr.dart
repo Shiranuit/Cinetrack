@@ -282,4 +282,96 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get filterOrigCountry => 'Pays d\'origine';
+
+  @override
+  String get installAndroidBanner =>
+      'Cinetrack, c\'est encore mieux en application.';
+
+  @override
+  String get installAndroidCta => 'Télécharger l\'app Android';
+
+  @override
+  String get forgotPassword => 'Mot de passe oublié ?';
+
+  @override
+  String get resetPassword => 'Réinitialiser le mot de passe';
+
+  @override
+  String get resetLinkSent =>
+      'Si un compte existe pour cette adresse, un lien de réinitialisation a été envoyé.';
+
+  @override
+  String get passwordUpdated => 'Mot de passe mis à jour.';
+
+  @override
+  String get newPassword => 'Nouveau mot de passe';
+
+  @override
+  String get currentPassword => 'Mot de passe actuel';
+
+  @override
+  String get inviteCode => 'Code d\'invitation';
+
+  @override
+  String get invites => 'Invitations';
+
+  @override
+  String get inviteSent => 'Invitation envoyée.';
+
+  @override
+  String get copied => 'Copié dans le presse-papiers';
+
+  @override
+  String get copyLink => 'Copier le lien';
+
+  @override
+  String get sendInviteByEmail => 'E-mail (facultatif)';
+
+  @override
+  String get createInvite => 'Créer';
+
+  @override
+  String get noInvitesYet => 'Aucune invitation.';
+
+  @override
+  String get inviteLink => 'Lien à partager';
+
+  @override
+  String get expires => 'Expire';
+
+  @override
+  String get inviteUsed => 'Utilisée';
+
+  @override
+  String get invitePending => 'En attente';
+
+  @override
+  String get securityActivity => 'Activité de sécurité';
+
+  @override
+  String get noActivityYet => 'Aucune activité.';
+
+  @override
+  String get evLoginOk => 'Connexion';
+
+  @override
+  String get evLoginFail => 'Tentative de connexion échouée';
+
+  @override
+  String get evPasswordChanged => 'Mot de passe modifié';
+
+  @override
+  String get evResetRequested => 'Réinitialisation demandée';
+
+  @override
+  String get evResetCompleted => 'Réinitialisation effectuée';
+
+  @override
+  String get evRegistered => 'Compte créé';
+
+  @override
+  String get evInviteCreated => 'Invitation créée';
+
+  @override
+  String get evAccountDeleted => 'Compte supprimé';
 }

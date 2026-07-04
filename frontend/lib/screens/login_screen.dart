@@ -5,6 +5,7 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/auth.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _screenName = TextEditingController();
+  final _inviteCode = TextEditingController();
   bool _register = false;
   bool _obscure = true;
   bool _busy = false;
@@ -27,6 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _password.addListener(() => setState(() {}));
     _confirm.addListener(() => setState(() {}));
+    // Web invite deep link: app.cine-track.com/signup?invite=CODE — jump straight
+    // into sign-up with the code pre-filled.
+    final invite = Uri.base.queryParameters['invite'];
+    if (invite != null && invite.isNotEmpty) {
+      _register = true;
+      _inviteCode.text = invite;
+    }
   }
 
   @override
@@ -35,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _password.dispose();
     _confirm.dispose();
     _screenName.dispose();
+    _inviteCode.dispose();
     super.dispose();
   }
 
@@ -61,7 +71,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthController>();
     try {
       if (_register) {
-        await auth.register(_email.text.trim(), _password.text, _screenName.text.trim());
+        await auth.register(_email.text.trim(), _password.text, _screenName.text.trim(),
+            inviteCode: _inviteCode.text.trim());
       } else {
         await auth.login(_email.text.trim(), _password.text);
       }
@@ -107,6 +118,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _screenName,
                     decoration: InputDecoration(labelText: t.fieldScreenName, prefixIcon: const Icon(Icons.badge_outlined)),
+                  ),
+                  const SizedBox(height: Insets.md),
+                  TextField(
+                    controller: _inviteCode,
+                    decoration: InputDecoration(labelText: t.inviteCode, prefixIcon: const Icon(Icons.card_giftcard_rounded)),
                   ),
                   const SizedBox(height: Insets.md),
                 ],
@@ -167,6 +183,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           }),
                   child: Text(_register ? t.haveAccountLogIn : t.newHereCreate),
                 ),
+                if (!_register)
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                    child: Text(t.forgotPassword),
+                  ),
               ],
             ),
           ),

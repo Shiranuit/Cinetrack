@@ -56,6 +56,18 @@ impl MirrorScope {
     }
 }
 
+/// SMTP settings for transactional email (password reset, invitations). `None`
+/// disables sending (the mailer logs instead).
+#[derive(Clone, Debug)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    /// e.g. `Cinetrack <no-reply@cine-track.com>`
+    pub from: String,
+}
+
 /// Runtime configuration, loaded from environment (see `.env.example`).
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -68,6 +80,12 @@ pub struct Config {
     pub jwt_secret: String,
     /// Public URL clients reach the API at (used to build absolute media URLs).
     pub public_base_url: String,
+    /// Public URL of the web app (used to build links in emails: reset, invite).
+    pub web_base_url: String,
+    /// When false (default), registration requires a valid invite code.
+    pub allow_public_registration: bool,
+    /// SMTP for outgoing mail; `None` = log-only.
+    pub smtp: Option<SmtpConfig>,
     pub s3_endpoint: String,
     pub s3_region: String,
     pub s3_bucket: String,
@@ -95,6 +113,24 @@ impl Config {
             env::var(key).unwrap_or_else(|_| default.to_string())
         }
 
+        // A weak JWT secret makes HS256 session tokens forgeable — enforce a floor.
+        let jwt_secret = req("JWT_SECRET")?;
+        if jwt_secret.len() < 32 {
+            anyhow::bail!("JWT_SECRET must be at least 32 characters (generate with `openssl rand -hex 32`)");
+        }
+
+        let smtp = env::var("SMTP_HOST").ok().filter(|s| !s.is_empty()).map(|host| SmtpConfig {
+            host,
+            port: env::var("SMTP_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(587),
+            username: opt("SMTP_USER", ""),
+            password: opt("SMTP_PASS", ""),
+            from: opt("MAIL_FROM", "Cinetrack <no-reply@localhost>"),
+        });
+
+        let allow_public_registration = env::var("ALLOW_PUBLIC_REGISTRATION")
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
         Ok(Self {
             database_url: req("DATABASE_URL")?,
             catalog_mode: CatalogMode::parse(&opt("CATALOG_MODE", "hybrid")),
@@ -102,8 +138,11 @@ impl Config {
             bind_addr: opt("BACKEND_BIND_ADDR", "0.0.0.0:8080"),
             thetvdb_base_url: opt("THETVDB_BASE_URL", "https://api4.thetvdb.com/v4"),
             thetvdb_api_key: req("THETVDB_API_KEY")?,
-            jwt_secret: req("JWT_SECRET")?,
+            jwt_secret,
             public_base_url: opt("PUBLIC_BASE_URL", "http://localhost:8080"),
+            web_base_url: opt("WEB_BASE_URL", "http://localhost:8080"),
+            allow_public_registration,
+            smtp,
             s3_endpoint: opt("S3_ENDPOINT", ""),
             s3_region: opt("S3_REGION", "garage"),
             s3_bucket: opt("S3_BUCKET", "artwork"),

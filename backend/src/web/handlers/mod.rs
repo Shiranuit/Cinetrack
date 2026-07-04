@@ -3,6 +3,7 @@ pub mod auth;
 pub mod discover;
 pub mod episode;
 pub mod health;
+pub mod invites;
 pub mod media;
 pub mod movie;
 pub mod search;

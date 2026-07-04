@@ -1,10 +1,15 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import 'filters.dart';
 import 'models.dart';
+// Web gets a credentialed BrowserClient (sends the httpOnly refresh cookie);
+// native gets a plain client.
+import 'net_client_io.dart' if (dart.library.js_interop) 'net_client_web.dart';
 
 class ApiException implements Exception {
   final int status;
@@ -14,21 +19,32 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status): $message';
 }
 
+/// Secure-storage key for the refresh token (mobile/desktop only; on web the
+/// refresh token lives in an httpOnly cookie the browser manages).
+const _refreshKey = 'cinetrack_refresh';
+
 class ApiClient {
   ApiClient({String? base}) : base = base ?? Config.apiBase;
 
   final String base;
-  String? token;
+  final http.Client _client = createNetClient();
+  final FlutterSecureStorage _secure = const FlutterSecureStorage();
 
-  /// Called when an authenticated request comes back 401 (e.g. the account was
-  /// deleted or the token expired) so the app can drop the dead session.
+  /// Short-lived access token, kept only in memory (never persisted on web, so
+  /// XSS can't read it; the long-lived refresh token is httpOnly/secure-storage).
+  String? _accessToken;
+
+  /// Called when the session is truly dead (refresh failed) so the app returns
+  /// to the login screen.
   void Function()? onUnauthorized;
 
   Map<String, String> _headers({bool json = false}) {
     final h = <String, String>{};
     if (json) h['content-type'] = 'application/json';
-    final t = token;
+    final t = _accessToken;
     if (t != null) h['authorization'] = 'Bearer $t';
+    // Tell the backend to keep the refresh token in an httpOnly cookie (web).
+    if (kIsWeb) h['x-use-cookie'] = '1';
     return h;
   }
 
@@ -40,21 +56,89 @@ class ApiClient {
   Future<dynamic> _decode(http.Response r) async {
     final body = r.body.isEmpty ? null : jsonDecode(r.body);
     if (r.statusCode >= 200 && r.statusCode < 300) return body;
-    // A 401 on a request we sent a token with means the session is dead — drop it.
-    if (r.statusCode == 401 && token != null) onUnauthorized?.call();
     final msg = (body is Map && body['error'] != null) ? body['error'] : 'HTTP ${r.statusCode}';
     throw ApiException(r.statusCode, '$msg');
   }
 
-  Future<dynamic> _get(String path, [Map<String, dynamic>? query]) async =>
-      _decode(await http.get(_uri(path, query), headers: _headers()));
+  /// Run a request; on a 401 for an authenticated call, try to refresh the access
+  /// token once and retry. If refresh fails, drop the session.
+  Future<dynamic> _request(Future<http.Response> Function() send, {bool auth = true}) async {
+    var r = await send();
+    if (r.statusCode == 401 && auth) {
+      if (await _tryRefresh()) {
+        r = await send();
+      } else {
+        onUnauthorized?.call();
+      }
+    }
+    return _decode(r);
+  }
 
-  Future<dynamic> _send(String method, String path, {Object? body}) async {
-    final req = http.Request(method, _uri(path))
-      ..headers.addAll(_headers(json: body != null));
-    if (body != null) req.body = jsonEncode(body);
-    final streamed = await req.send();
-    return _decode(await http.Response.fromStream(streamed));
+  Future<dynamic> _get(String path, [Map<String, dynamic>? query]) =>
+      _request(() => _client.get(_uri(path, query), headers: _headers()));
+
+  Future<dynamic> _send(String method, String path, {Object? body, bool auth = true}) =>
+      _request(() async {
+        final req = http.Request(method, _uri(path))..headers.addAll(_headers(json: body != null));
+        if (body != null) req.body = jsonEncode(body);
+        return http.Response.fromStream(await _client.send(req));
+      }, auth: auth);
+
+  // ---- session / refresh ----
+
+  Future<bool>? _refreshInFlight;
+
+  /// Refresh the access token, de-duplicating concurrent callers.
+  Future<bool> _tryRefresh() =>
+      _refreshInFlight ??= _doTryRefresh().whenComplete(() => _refreshInFlight = null);
+
+  Future<bool> _doTryRefresh() async {
+    try {
+      final headers = <String, String>{'content-type': 'application/json'};
+      var bodyStr = '{}';
+      if (kIsWeb) {
+        headers['x-use-cookie'] = '1'; // refresh token comes from the cookie
+      } else {
+        final stored = await _secure.read(key: _refreshKey);
+        if (stored == null) return false;
+        bodyStr = jsonEncode({'refresh_token': stored});
+      }
+      final req = http.Request('POST', _uri('/api/auth/refresh'))
+        ..headers.addAll(headers)
+        ..body = bodyStr;
+      final r = await http.Response.fromStream(await _client.send(req));
+      if (r.statusCode < 200 || r.statusCode >= 300) return false;
+      await _adoptSession(jsonDecode(r.body) as Map<String, dynamic>);
+      return _accessToken != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Adopt an access token (memory) and, on native, persist the rotated refresh
+  /// token to secure storage.
+  Future<void> _adoptSession(Map<String, dynamic> j) async {
+    _accessToken = (j['access_token'] ?? j['token']) as String?;
+    if (!kIsWeb && j['refresh_token'] != null) {
+      await _secure.write(key: _refreshKey, value: j['refresh_token'] as String);
+    }
+  }
+
+  /// Restore a session on startup (web: cookie; native: stored refresh token).
+  Future<bool> tryRestore() => _tryRefresh();
+
+  Future<void> logout() async {
+    // Best-effort server revoke (carries the access token; no retry on 401).
+    try {
+      await _send('POST', '/api/auth/logout', auth: false);
+    } catch (_) {}
+    await clearLocalSession();
+  }
+
+  Future<void> clearLocalSession() async {
+    _accessToken = null;
+    _refreshInFlight = null;
+    if (!kIsWeb) await _secure.delete(key: _refreshKey);
   }
 
   /// Decode a JSON array into a typed list, validating each element is an object
@@ -70,23 +154,42 @@ class ApiClient {
         _ => throw ApiException(500, 'expected a list, got $data'),
       };
 
-  // ---- auth ----
-  Future<(String, int)> login(String email, String password) async {
-    final j = await _send('POST', '/api/auth/login', body: {'email': email, 'password': password});
-    return switch (j) {
-      {'token': final String token, 'user_id': final int id} => (token, id),
-      _ => throw ApiException(500, 'unexpected auth response: $j'),
-    };
+  // ---- auth ---- (login/register/forgot/reset are unauthenticated: a 401 means
+  // bad credentials, not an expired token, so they don't trigger a refresh.)
+  Future<int> login(String email, String password) async {
+    final j = await _send('POST', '/api/auth/login',
+        body: {'email': email, 'password': password}, auth: false) as Map<String, dynamic>;
+    await _adoptSession(j);
+    return (j['user_id'] as num).toInt();
   }
 
-  Future<(String, int)> register(String email, String password, String screenName) async {
-    final j = await _send('POST', '/api/auth/register',
-        body: {'email': email, 'password': password, 'screen_name': screenName});
-    return switch (j) {
-      {'token': final String token, 'user_id': final int id} => (token, id),
-      _ => throw ApiException(500, 'unexpected auth response: $j'),
-    };
+  Future<int> register(String email, String password, String screenName, {String? inviteCode}) async {
+    final j = await _send('POST', '/api/auth/register', body: {
+      'email': email,
+      'password': password,
+      'screen_name': screenName,
+      if (inviteCode != null && inviteCode.isNotEmpty) 'invite_code': inviteCode,
+    }, auth: false) as Map<String, dynamic>;
+    await _adoptSession(j);
+    return (j['user_id'] as num).toInt();
   }
+
+  Future<void> forgotPassword(String email) =>
+      _send('POST', '/api/auth/forgot', body: {'email': email}, auth: false);
+
+  Future<void> resetPassword(String token, String newPassword) =>
+      _send('POST', '/api/auth/reset', body: {'token': token, 'new_password': newPassword}, auth: false);
+
+  Future<InviteCreated> createInvite({String? email}) async {
+    final j = await _send('POST', '/api/invites',
+        body: {if (email != null && email.isNotEmpty) 'email': email});
+    return InviteCreated.fromJson(j as Map<String, dynamic>);
+  }
+
+  Future<List<InviteInfo>> listInvites() async => _list(await _get('/api/invites'), InviteInfo.fromJson);
+
+  Future<List<SecurityEvent>> securityLog() async =>
+      _list(await _get('/api/me/security-log'), SecurityEvent.fromJson);
 
   Future<Me> me() async => Me.fromJson(await _get('/api/me'));
 
@@ -97,9 +200,13 @@ class ApiClient {
         'email': ?email,
       }));
 
-  /// Set a new password (no current password required — there's no recovery flow).
-  Future<void> updatePassword(String newPassword) =>
-      _send('PUT', '/api/me/password', body: {'new_password': newPassword});
+  /// Change password. Requires the current one; returns a FRESH token (other
+  /// sessions are invalidated server-side, so the caller must adopt this token).
+  /// Change password (requires the current one). The current session stays valid
+  /// server-side; other sessions are revoked.
+  Future<void> changePassword(String currentPassword, String newPassword) =>
+      _send('PUT', '/api/me/password',
+          body: {'current_password': currentPassword, 'new_password': newPassword});
 
   // ---- catalog / browse ----
   Future<Series> series(int id, {String lang = 'eng'}) async =>
@@ -270,12 +377,13 @@ class ApiClient {
   Future<void> unwatch(int episodeId) => _send('DELETE', '/api/episodes/$episodeId/watch');
 
   // ---- uploads ----
-  Future<dynamic> _upload(String path, List<int> bytes, String filename) async {
-    final req = http.MultipartRequest('POST', _uri(path))
-      ..headers.addAll(_headers())
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-    return _decode(await http.Response.fromStream(await req.send()));
-  }
+  Future<dynamic> _upload(String path, List<int> bytes, String filename) =>
+      _request(() async {
+        final req = http.MultipartRequest('POST', _uri(path))
+          ..headers.addAll(_headers())
+          ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        return http.Response.fromStream(await _client.send(req));
+      });
 
   Future<void> uploadAvatar(List<int> bytes, String filename) => _upload('/api/me/avatar', bytes, filename);
   Future<void> uploadCover(List<int> bytes, String filename) => _upload('/api/me/cover', bytes, filename);

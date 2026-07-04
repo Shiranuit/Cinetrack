@@ -10,6 +10,8 @@ import '../state/auth.dart';
 import '../state/settings.dart';
 import '../widgets/section.dart';
 import 'import_matches_screen.dart';
+import 'invites_screen.dart';
+import 'security_log_screen.dart';
 
 const kLanguages = {
   'eng': 'English',
@@ -224,35 +226,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Change password: new + confirmation only (no current password — there's no
-  /// recovery flow, so a signed-in user must be able to reset it). Full policy is
-  /// enforced server-side; here we only check the two entries match.
+  /// Change password: requires the CURRENT password (backend enforces it). The
+  /// backend rotates the session token, so we adopt the returned one.
   Future<void> _changePassword() async {
+    final t = AppLocalizations.of(context);
+    final cur = TextEditingController();
     final p1 = TextEditingController();
     final p2 = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final result = await showDialog<String>(
+    final result = await showDialog<(String, String)>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Change password'),
+        title: Text(t.changePassword),
         content: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
-                controller: p1,
+                controller: cur,
                 obscureText: true,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'New password'),
+                decoration: InputDecoration(labelText: t.currentPassword),
+                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: Insets.sm),
+              TextFormField(
+                controller: p1,
+                obscureText: true,
+                decoration: InputDecoration(labelText: t.newPassword),
                 validator: (v) => (v == null || v.length < 12) ? 'At least 12 characters' : null,
               ),
               const SizedBox(height: Insets.sm),
               TextFormField(
                 controller: p2,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Confirm new password'),
-                validator: (v) => v != p1.text ? 'Passwords do not match' : null,
+                decoration: InputDecoration(labelText: t.fieldConfirmPassword),
+                validator: (v) => v != p1.text ? t.passwordsDontMatch : null,
               ),
             ],
           ),
@@ -261,13 +271,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(ctx, p1.text);
+              if (formKey.currentState!.validate()) Navigator.pop(ctx, (cur.text, p1.text));
             },
             child: const Text('Update'),
           ),
         ],
       ),
     );
+    cur.dispose();
     p1.dispose();
     p2.dispose();
     if (result == null || !mounted) return;
@@ -276,8 +287,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      await api.updatePassword(result);
-      messenger.showSnackBar(const SnackBar(content: Text('Password updated.')));
+      await api.changePassword(result.$1, result.$2); // this session stays valid
+      messenger.showSnackBar(SnackBar(content: Text(t.passwordUpdated)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
     } finally {
@@ -322,6 +333,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Set a new password'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: _busy ? null : _changePassword,
+          ),
+          ListTile(
+            leading: const Icon(Icons.card_giftcard_rounded),
+            title: Text(t.invites),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InvitesScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.shield_outlined),
+            title: Text(t.securityActivity),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SecurityLogScreen())),
           ),
           SectionHeader(title: t.sectionPrivacy, icon: Icons.lock_outline_rounded),
           SwitchListTile(

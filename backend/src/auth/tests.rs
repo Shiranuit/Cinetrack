@@ -65,19 +65,19 @@ fn verify_rejects_garbage_hash_without_panicking() {
 #[test]
 fn token_roundtrips_the_user_id() {
     let secret = "test-secret-value";
-    let tok = token::issue(secret, 42).unwrap();
-    assert_eq!(token::verify(secret, &tok).unwrap(), 42);
+    let tok = token::issue(secret, 42, "sess-1", 900).unwrap();
+    assert_eq!(token::verify(secret, &tok).unwrap(), (42, "sess-1".to_string()));
 }
 
 #[test]
 fn token_rejects_a_wrong_secret() {
-    let tok = token::issue("secret-a", 7).unwrap();
+    let tok = token::issue("secret-a", 7, "s", 900).unwrap();
     assert!(matches!(token::verify("secret-b", &tok), Err(AppError::Unauthorized(_))));
 }
 
 #[test]
 fn token_rejects_tampered_and_malformed_tokens() {
-    let tok = token::issue("secret", 7).unwrap();
+    let tok = token::issue("secret", 7, "s", 900).unwrap();
     let tampered = format!("{tok}x");
     assert!(token::verify("secret", &tampered).is_err());
     assert!(token::verify("secret", "garbage.jwt.value").is_err());

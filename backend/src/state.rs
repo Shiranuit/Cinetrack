@@ -3,7 +3,10 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio::sync::Notify;
 
-use crate::{config::Config, db, storage::Storage, thetvdb::TheTvdbClient};
+use crate::{
+    auth::ratelimit::RateLimiter, config::Config, db, email::Mailer, storage::Storage,
+    thetvdb::TheTvdbClient,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,6 +19,10 @@ pub struct AppState {
     /// Signalled whenever work is added to `catalog.fetch_queue`, so the
     /// enrichment worker drains immediately instead of waiting for its heartbeat.
     pub enrich_notify: Arc<Notify>,
+    /// Outgoing email (password reset, invitations); log-only when SMTP is unset.
+    pub mailer: Arc<Mailer>,
+    /// In-memory throttle for auth endpoints (login/register/forgot/reset).
+    pub auth_limiter: Arc<RateLimiter>,
 }
 
 impl AppState {
@@ -37,12 +44,16 @@ impl AppState {
             None => tracing::warn!("object storage disabled (no S3 creds)"),
         }
 
+        let mailer = Arc::new(Mailer::from_config(config.smtp.as_ref()));
+
         Ok(AppState {
             db,
             tvdb,
             storage,
             config: Arc::new(config),
             enrich_notify: Arc::new(Notify::new()),
+            mailer,
+            auth_limiter: Arc::new(RateLimiter::new()),
         })
     }
 }

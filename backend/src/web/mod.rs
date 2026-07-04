@@ -10,14 +10,20 @@ use std::time::Instant;
 
 use axum::{
     Router,
-    extract::Request,
+    extract::{DefaultBodyLimit, Request},
+    http::{HeaderName, HeaderValue, Method, header},
     middleware::{self, Next},
     response::Response,
     routing::{get, post, put},
 };
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use crate::state::AppState;
+/// Global request body cap (covers avatar/cover + GDPR import uploads). Prevents
+/// a handful of huge POSTs from exhausting memory. Avatars are further capped to
+/// 5 MB in the handler.
+const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
+
+use crate::{config::Config, state::AppState};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -25,8 +31,14 @@ pub fn router(state: AppState) -> Router {
         // ---- auth ----
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/forgot", post(handlers::auth::forgot_password))
+        .route("/api/auth/reset", post(handlers::auth::reset_password))
+        .route("/api/auth/refresh", post(handlers::auth::refresh))
+        .route("/api/auth/logout", post(handlers::auth::logout))
+        .route("/api/invites", post(handlers::invites::create_invite).get(handlers::invites::list_invites))
         .route("/api/me", get(handlers::auth::me).delete(handlers::auth::delete_me).put(handlers::auth::update_profile))
         .route("/api/me/password", put(handlers::auth::update_password))
+        .route("/api/me/security-log", get(handlers::auth::security_log))
         .route("/api/me/avatar", post(handlers::media::upload_avatar))
         .route("/api/me/cover", post(handlers::media::upload_cover))
         .route("/api/users/{id}/avatar", get(handlers::media::serve_avatar))
@@ -87,10 +99,44 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/{id}/stats", get(handlers::users::user_stats))
         .route("/api/users/{id}/follow", post(handlers::users::follow).delete(handlers::users::unfollow))
         .layer(middleware::from_fn(log_requests))
-        // Allow the Flutter web app (served from a different origin/port in dev)
-        // to call the API. We use bearer tokens (not cookies), so permissive is safe.
-        .layer(CorsLayer::permissive())
+        .layer(middleware::from_fn(security_headers))
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(build_cors(&state.config))
         .with_state(state)
+}
+
+/// CORS for the web app. Credentialed (the web refresh token is an httpOnly
+/// cookie), so the origin can't be `*`: pin it to WEB_BASE_URL in production; in
+/// dev, reflect the caller (Flutter serves the web app on a random localhost port).
+fn build_cors(config: &Config) -> CorsLayer {
+    let origin = if config.public_base_url.starts_with("https") {
+        config
+            .web_base_url
+            .parse::<HeaderValue>()
+            .map(|v| AllowOrigin::list([v]))
+            .unwrap_or_else(|_| AllowOrigin::mirror_request())
+    } else {
+        AllowOrigin::mirror_request()
+    };
+    CorsLayer::new()
+        .allow_origin(origin)
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            HeaderName::from_static("x-use-cookie"),
+        ])
+}
+
+/// Baseline hardening headers on every response.
+async fn security_headers(req: Request, next: Next) -> Response {
+    let mut res = next.run(req).await;
+    let h = res.headers_mut();
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    res
 }
 
 /// Logs each request's method, path, status and latency at INFO.

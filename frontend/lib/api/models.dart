@@ -544,3 +544,46 @@ class Stats {
         favorites: j['favorites'] as int? ?? 0,
       );
 }
+
+/// A freshly created invitation — the `code`/`link` are shown once (the server
+/// stores only a hash).
+class InviteCreated {
+  final String code, link, expiresAt;
+  final bool emailed;
+  InviteCreated({required this.code, required this.link, required this.expiresAt, required this.emailed});
+  factory InviteCreated.fromJson(Map<String, dynamic> j) => InviteCreated(
+        code: j['code'] as String? ?? '',
+        link: j['link'] as String? ?? '',
+        expiresAt: j['expires_at'] as String? ?? '',
+        emailed: j['emailed'] as bool? ?? false,
+      );
+}
+
+/// One of my invitations and its status (the code is never returned again).
+class InviteInfo {
+  final String? email;
+  final String createdAt, expiresAt;
+  final bool used;
+  InviteInfo({this.email, required this.createdAt, required this.expiresAt, required this.used});
+  factory InviteInfo.fromJson(Map<String, dynamic> j) => InviteInfo(
+        email: j['email'] as String?,
+        createdAt: j['created_at'] as String? ?? '',
+        expiresAt: j['expires_at'] as String? ?? '',
+        used: j['used'] as bool? ?? false,
+      );
+}
+
+/// One security-audit entry for the account activity screen.
+class SecurityEvent {
+  final String event;
+  final String? ip;
+  final String createdAt;
+  final Map<String, dynamic>? detail;
+  SecurityEvent({required this.event, this.ip, required this.createdAt, this.detail});
+  factory SecurityEvent.fromJson(Map<String, dynamic> j) => SecurityEvent(
+        event: j['event'] as String? ?? '',
+        ip: j['ip'] as String?,
+        createdAt: j['created_at'] as String? ?? '',
+        detail: j['detail'] is Map<String, dynamic> ? j['detail'] as Map<String, dynamic> : null,
+      );
+}

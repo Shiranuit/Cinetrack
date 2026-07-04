@@ -1,4 +1,4 @@
-package com.example.frontend
+package io.github.shiranuit.cinetrack
 
 import io.flutter.embedding.android.FlutterActivity
 

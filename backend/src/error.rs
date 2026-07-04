@@ -15,6 +15,10 @@ pub enum AppError {
     Unauthorized(String),
     #[error("bad request: {0}")]
     BadRequest(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+    #[error("too many requests: {0}")]
+    TooManyRequests(String),
     #[error("conflict: {0}")]
     Conflict(String),
     #[error("database error: {0}")]
@@ -33,6 +37,8 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not found".to_string()),
             AppError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m.clone()),
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            AppError::Forbidden(m) => (StatusCode::FORBIDDEN, m.clone()),
+            AppError::TooManyRequests(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             AppError::Db(_) => (StatusCode::INTERNAL_SERVER_ERROR, "database error".to_string()),
             AppError::TheTvdb(m) => (StatusCode::BAD_GATEWAY, m.clone()),

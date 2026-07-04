@@ -657,6 +657,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Origin country'**
   String get filterOrigCountry;
+
+  /// No description provided for @installAndroidBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Cinetrack runs better as an app.'**
+  String get installAndroidBanner;
+
+  /// No description provided for @installAndroidCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Get the Android app'**
+  String get installAndroidCta;
+
+  /// No description provided for @forgotPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get forgotPassword;
+
+  /// No description provided for @resetPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset password'**
+  String get resetPassword;
+
+  /// No description provided for @resetLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If an account exists for that address, a reset link has been sent.'**
+  String get resetLinkSent;
+
+  /// No description provided for @passwordUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Password updated.'**
+  String get passwordUpdated;
+
+  /// No description provided for @newPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get newPassword;
+
+  /// No description provided for @currentPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get currentPassword;
+
+  /// No description provided for @inviteCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite code'**
+  String get inviteCode;
+
+  /// No description provided for @invites.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitations'**
+  String get invites;
+
+  /// No description provided for @inviteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation sent.'**
+  String get inviteSent;
+
+  /// No description provided for @copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get copied;
+
+  /// No description provided for @copyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get copyLink;
+
+  /// No description provided for @sendInviteByEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email (optional)'**
+  String get sendInviteByEmail;
+
+  /// No description provided for @createInvite.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get createInvite;
+
+  /// No description provided for @noInvitesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No invitations yet.'**
+  String get noInvitesYet;
+
+  /// No description provided for @inviteLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Shareable link'**
+  String get inviteLink;
+
+  /// No description provided for @expires.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get expires;
+
+  /// No description provided for @inviteUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get inviteUsed;
+
+  /// No description provided for @invitePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get invitePending;
+
+  /// No description provided for @securityActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security activity'**
+  String get securityActivity;
+
+  /// No description provided for @noActivityYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity yet.'**
+  String get noActivityYet;
+
+  /// No description provided for @evLoginOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get evLoginOk;
+
+  /// No description provided for @evLoginFail.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed sign-in attempt'**
+  String get evLoginFail;
+
+  /// No description provided for @evPasswordChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed'**
+  String get evPasswordChanged;
+
+  /// No description provided for @evResetRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Password reset requested'**
+  String get evResetRequested;
+
+  /// No description provided for @evResetCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Password reset completed'**
+  String get evResetCompleted;
+
+  /// No description provided for @evRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'Account created'**
+  String get evRegistered;
+
+  /// No description provided for @evInviteCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation created'**
+  String get evInviteCreated;
+
+  /// No description provided for @evAccountDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Account deleted'**
+  String get evAccountDeleted;
 }
 
 class _AppLocalizationsDelegate

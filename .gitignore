@@ -1,10 +1,17 @@
-# Secrets / local env (keep .env.example tracked)
+# Secrets / local env — ignore ALL .env files, keep only the *.example templates.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.production.example
 
 # GDPR export is personal data — do not commit
 gdpr-data/
+# Series ids distilled from the GDPR export (reveals personal viewing history)
+scripts/export-series-ids.txt
+
+# Production bind-mount volumes (Postgres data, Garage meta/data, Caddy certs) —
+# real user data + TLS material, must never be committed.
+/data/
 
 # Rust
 backend/target/
@@ -16,3 +23,21 @@ frontend/build/
 # OS / editor
 .DS_Store
 *.swp
+
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
+
+# Local database dump (large; may contain data) — never commit.
+/dump.sql

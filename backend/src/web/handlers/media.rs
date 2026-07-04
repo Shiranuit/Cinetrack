@@ -14,6 +14,10 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
+/// Max size for an uploaded avatar / cover (defence-in-depth on top of the global
+/// request body limit).
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+
 /// Read the first file field's bytes (+ content type) from a multipart body.
 async fn first_file(mut mp: Multipart) -> AppResult<(Vec<u8>, String)> {
     while let Some(field) = mp.next_field().await.map_err(|e| AppError::BadRequest(format!("multipart: {e}")))? {
@@ -24,11 +28,37 @@ async fn first_file(mut mp: Multipart) -> AppResult<(Vec<u8>, String)> {
     Err(AppError::BadRequest("no file in upload".into()))
 }
 
+/// Determine the real image type from magic bytes — never trust the client's
+/// Content-Type. Returns the canonical MIME for the allowed formats, else `None`.
+/// This is what stops a user uploading HTML/SVG-with-script as their "avatar" and
+/// having us serve it back as active content from our own domain.
+fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
 async fn upload_image(state: &AppState, user_id: i64, kind: &str, mp: Multipart) -> AppResult<String> {
     let storage = state.storage.as_ref().ok_or_else(|| AppError::Storage("object storage not configured".into()))?;
-    let (bytes, ct) = first_file(mp).await?;
+    let (bytes, _client_ct) = first_file(mp).await?;
+    if bytes.len() > MAX_IMAGE_BYTES {
+        return Err(AppError::BadRequest("image too large (max 5 MB)".into()));
+    }
+    let ct = sniff_image(&bytes)
+        .ok_or_else(|| AppError::BadRequest("unsupported image type (PNG, JPEG, GIF or WebP only)".into()))?;
     let key = format!("users/{user_id}/{kind}");
-    storage.put(&key, &bytes, &ct).await?;
+    storage.put(&key, &bytes, ct).await?;
     let url = format!("{}/api/users/{user_id}/{kind}?v={}", state.config.public_base_url, now());
     let col = if kind == "avatar" { "avatar_url" } else { "cover_url" };
     sqlx::query(&format!("UPDATE app.users SET {col} = $1, updated_at = now() WHERE id = $2"))
@@ -56,6 +86,9 @@ async fn serve(state: &AppState, user_id: i64, kind: &str) -> AppResult<Response
         [
             (header::CONTENT_TYPE, ct),
             (header::CACHE_CONTROL, "public, max-age=3600".to_string()),
+            // Belt-and-suspenders: never let a browser MIME-sniff stored bytes into
+            // active content, even though we already validated the type on upload.
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
         ],
         bytes,
     )

@@ -10,8 +10,10 @@ import 'design/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'state/auth.dart';
 import 'state/settings.dart';
+import 'widgets/android_install_banner.dart';
 
 void main() {
   // On web, suppress the browser's native context menu so a long-press / right
@@ -54,14 +56,55 @@ class CinetrackApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: settings.themeMode,
-      home: Consumer<AuthController>(
-        builder: (context, auth, _) {
-          if (auth.loading) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          }
-          return auth.isAuthed ? const AppShell() : const LoginScreen();
-        },
+      // Above every route: an install-the-app nudge that only renders on
+      // web-Android (no-op otherwise), pointing at the matching-version APK.
+      builder: (context, child) => Column(
+        children: [
+          const AndroidInstallBanner(),
+          Expanded(child: child ?? const SizedBox.shrink()),
+        ],
       ),
+      home: const RootView(),
+    );
+  }
+}
+
+/// Chooses the first screen. Handles the web password-reset deep link
+/// (`/reset-password?token=...`) before falling back to auth-gated routing.
+class RootView extends StatefulWidget {
+  const RootView({super.key});
+  @override
+  State<RootView> createState() => _RootViewState();
+}
+
+class _RootViewState extends State<RootView> {
+  String? _resetToken;
+
+  @override
+  void initState() {
+    super.initState();
+    final uri = Uri.base;
+    if (uri.path.contains('reset-password')) {
+      final tok = uri.queryParameters['token'];
+      if (tok != null && tok.isNotEmpty) _resetToken = tok;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_resetToken != null) {
+      return ResetPasswordScreen(
+        token: _resetToken!,
+        onDone: () => setState(() => _resetToken = null),
+      );
+    }
+    return Consumer<AuthController>(
+      builder: (context, auth, _) {
+        if (auth.loading) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return auth.isAuthed ? const AppShell() : const LoginScreen();
+      },
     );
   }
 }

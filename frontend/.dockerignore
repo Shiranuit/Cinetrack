@@ -1,0 +1,12 @@
+# Keep the web build context small & reproducible.
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+.git/
+# Native platform folders aren't needed for `flutter build web`.
+android/
+ios/
+linux/
+macos/
+windows/
+test/

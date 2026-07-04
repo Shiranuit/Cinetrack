@@ -6,8 +6,7 @@ import 'package:frontend/api/api_client.dart';
 Future<void> main() async {
   final api = ApiClient(base: 'http://localhost:8080');
 
-  final (token, uid) = await api.login('redesign@x.com', 'Redesign!2026Xy');
-  api.token = token;
+  final uid = await api.login('redesign@x.com', 'Redesign!2026Xy');
   print('login ok: user_id=$uid');
 
   final me = await api.me();

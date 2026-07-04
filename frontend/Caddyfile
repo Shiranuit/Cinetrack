@@ -1,0 +1,23 @@
+# Cinetrack edge (one Caddy, two vhosts), with automatic Let's Encrypt HTTPS:
+#   WEB_DOMAIN (e.g. app.cine-track.com) -> the Flutter web SPA
+#   API_DOMAIN (e.g. api.cine-track.com) -> the Rust backend
+# All three names come from env (set by the production compose), so the serving
+# domains are configurable per deploy without rebuilding the image.
+{
+	email {$ACME_EMAIL}
+}
+
+# ---- Web app --------------------------------------------------------------
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	root * /srv
+	# SPA fallback so client-side (deep-link) routes resolve to index.html.
+	try_files {path} /index.html
+	file_server
+}
+
+# ---- Backend API ----------------------------------------------------------
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy backend:8080
+}

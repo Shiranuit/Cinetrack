@@ -283,4 +283,95 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get filterOrigCountry => 'Herkunftsland';
+
+  @override
+  String get installAndroidBanner => 'Cinetrack runs better as an app.';
+
+  @override
+  String get installAndroidCta => 'Get the Android app';
+
+  @override
+  String get forgotPassword => 'Forgot password?';
+
+  @override
+  String get resetPassword => 'Reset password';
+
+  @override
+  String get resetLinkSent =>
+      'If an account exists for that address, a reset link has been sent.';
+
+  @override
+  String get passwordUpdated => 'Password updated.';
+
+  @override
+  String get newPassword => 'New password';
+
+  @override
+  String get currentPassword => 'Current password';
+
+  @override
+  String get inviteCode => 'Invite code';
+
+  @override
+  String get invites => 'Invitations';
+
+  @override
+  String get inviteSent => 'Invitation sent.';
+
+  @override
+  String get copied => 'Copied to clipboard';
+
+  @override
+  String get copyLink => 'Copy link';
+
+  @override
+  String get sendInviteByEmail => 'Email (optional)';
+
+  @override
+  String get createInvite => 'Create';
+
+  @override
+  String get noInvitesYet => 'No invitations yet.';
+
+  @override
+  String get inviteLink => 'Shareable link';
+
+  @override
+  String get expires => 'Expires';
+
+  @override
+  String get inviteUsed => 'Used';
+
+  @override
+  String get invitePending => 'Pending';
+
+  @override
+  String get securityActivity => 'Security activity';
+
+  @override
+  String get noActivityYet => 'No activity yet.';
+
+  @override
+  String get evLoginOk => 'Signed in';
+
+  @override
+  String get evLoginFail => 'Failed sign-in attempt';
+
+  @override
+  String get evPasswordChanged => 'Password changed';
+
+  @override
+  String get evResetRequested => 'Password reset requested';
+
+  @override
+  String get evResetCompleted => 'Password reset completed';
+
+  @override
+  String get evRegistered => 'Account created';
+
+  @override
+  String get evInviteCreated => 'Invitation created';
+
+  @override
+  String get evAccountDeleted => 'Account deleted';
 }

@@ -1,0 +1,175 @@
+# Cinetrack — PRODUCTION stack (single Dedibox / bare-metal box).
+#
+#   backend (Rust) + postgres + garage (S3) + web (Flutter web + Caddy TLS proxy)
+#
+# Serves the Flutter WEB app on WEB_DOMAIN and the backend API on API_DOMAIN, both
+# over HTTPS from one Caddy (two vhosts). The mobile/desktop apps are built
+# separately with the SAME API URL baked in, e.g.:
+#   flutter build apk --release --dart-define=API_BASE=https://api.cine-track.com
+#
+# Usage:
+#   cp .env.production.example .env.production   # fill in real secrets — DO NOT commit
+#   mkdir -p data/postgres data/garage/meta data/garage/data data/caddy/data data/caddy/config
+#   docker compose -f production.docker-compose.yaml --env-file .env.production up -d --build
+#   # first boot only: create the Garage layout + S3 key/bucket, paste keys into .env.production
+#   ./scripts/garage-init.sh   # then re-run `up -d` so the backend picks up S3_ACCESS/SECRET
+#
+# DATA SAFETY: Postgres, Garage and Caddy's certs live in ./data via BIND MOUNTS
+# (host paths), NOT named volumes. `docker compose down -v` removes named/anonymous
+# volumes only — bind mounts are untouched, so your database SURVIVES `down -v`.
+# Back it up anyway:  docker compose -f production.docker-compose.yaml exec postgres \
+#   pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" | zstd > backup-$(date +%F).sql.zst
+# (For this app, the ~10 MB `app.*` schema is the only irreplaceable data — the
+#  catalog is re-buildable from TheTVDB via the seed crawl.)
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Tuned for a ~32 GB box hosting a ~16 GB DB (leaves RAM for backend + OS cache).
+    command:
+      - postgres
+      - -c
+      - shared_buffers=8GB
+      - -c
+      - effective_cache_size=20GB
+      - -c
+      - maintenance_work_mem=1GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - max_connections=100
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - min_wal_size=1GB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - random_page_cost=1.1          # SSD
+      - -c
+      - effective_io_concurrency=200  # SSD
+      - -c
+      - jit=off                       # OLTP-style queries: JIT hurts more than helps
+    shm_size: "1gb"                    # room for parallel-query dynamic shared memory
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data   # bind mount — survives `down -v`
+    # No published ports: the DB is reachable only on the internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+    logging: *default-logging
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - ./data/garage/meta:/var/lib/garage/meta   # bind mount — survives `down -v`
+      - ./data/garage/data:/var/lib/garage/data   # bind mount — survives `down -v`
+    # No published ports: only the backend talks to garage:3900 on the internal net.
+    networks: [internal]
+    logging: *default-logging
+
+  backend:
+    # Prebuilt by CI and pulled from GHCR — `docker compose pull backend` fetches it,
+    # so the box never runs a heavy Rust compile next to Postgres. `build:` stays as
+    # a local escape hatch (`docker compose ... up --build`).
+    image: ghcr.io/${GHCR_OWNER:-shiranuit}/cinetrack-backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_started
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-100}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET:-artwork}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      THETVDB_API_KEY: ${THETVDB_API_KEY}
+      THETVDB_BASE_URL: ${THETVDB_BASE_URL:-https://api4.thetvdb.com/v4}
+      THETVDB_MAX_RPS: ${THETVDB_MAX_RPS:-200}
+      BACKEND_BIND_ADDR: 0.0.0.0:8080
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      WEB_BASE_URL: ${WEB_BASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER:-}
+      ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-Cinetrack <no-reply@localhost>}
+      CATALOG_MODE: ${CATALOG_MODE:-hybrid}
+      MIRROR_SCOPE: ${MIRROR_SCOPE:-full}
+      SYNC_INTERVAL_SECS: ${SYNC_INTERVAL_SECS:-300}
+      ENRICH_INTERVAL_SECS: ${ENRICH_INTERVAL_SECS:-30}
+      ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-64}
+      RUST_LOG: ${RUST_LOG:-info}
+    # Migrations run automatically on boot (AppState::bootstrap).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 2g
+    # No published ports: reached only via the `web` reverse proxy.
+    networks: [internal]
+    logging: *default-logging
+
+  web:
+    # Serves the Flutter WEB app + reverse-proxies /api & /health to the backend,
+    # with automatic HTTPS. The mobile/desktop apps hit the same origin. Built by
+    # CI and pulled from GHCR (API URL baked in); `build:` is a local escape hatch.
+    image: ghcr.io/${GHCR_OWNER:-shiranuit}/cinetrack-web:${IMAGE_TAG:-latest}
+    build:
+      context: ./frontend
+      args:
+        API_BASE: ${API_BASE}
+        APP_VERSION: ${APP_VERSION:-dev}
+        GITHUB_REPO: ${GITHUB_REPO:-Shiranuit/Cinetrack}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./data/caddy/data:/data       # TLS certs — bind mount so they persist (LE rate limits)
+      - ./data/caddy/config:/config
+    mem_limit: 512m
+    networks: [internal]
+    logging: *default-logging
+
+networks:
+  internal:
+    driver: bridge

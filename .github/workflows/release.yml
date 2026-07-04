@@ -1,0 +1,186 @@
+name: Release
+
+# On a version tag (v*): build the Flutter APK and attach it to the GitHub
+# Release, build & push the backend image to GHCR, then deploy to the Dedibox
+# over SSH. `workflow_dispatch` builds the APK + image without releasing/deploying.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  # ---- Flutter Android APK -> release artifact --------------------------------
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Configure release signing
+        working-directory: frontend/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release-keystore.jks
+            {
+              echo "storeFile=release-keystore.jks"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > key.properties
+            echo "Release signing configured (real keystore)."
+          else
+            echo "::warning::KEYSTORE_BASE64 not set — APK will be DEBUG-signed and will NOT update in place across releases."
+          fi
+
+      - name: Build release APK (API URL baked in at build time)
+        working-directory: frontend
+        run: |
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }}
+
+      - name: Name the APK after the tag
+        id: apk
+        run: |
+          VERSION="${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
+          mkdir -p dist
+          cp frontend/build/app/outputs/flutter-apk/app-release.apk "dist/cinetrack-${VERSION}.apk"
+          echo "path=dist/cinetrack-${VERSION}.apk" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+  # ---- Backend image -> GHCR --------------------------------------------------
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cinetrack-backend
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=sha,enable=${{ github.ref_type != 'tag' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---- Web app image (Flutter web + Caddy) -> GHCR ----------------------------
+  web-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cinetrack-web
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=sha,enable=${{ github.ref_type != 'tag' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          # Baked into the web bundle: API origin, this release tag (so the app's
+          # download button hands out the matching APK), and the repo for the link.
+          build-args: |
+            API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }}
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+            GITHUB_REPO=${{ github.repository }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---- GitHub Release with the APK attached (tags only) -----------------------
+  release:
+    needs: [apk]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
+
+  # ---- Deploy to the Dedibox over SSH (tags only) -----------------------------
+  deploy:
+    needs: [image, web-image]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull the new images & restart on the box
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEDIBOX_HOST }}
+          username: ${{ secrets.DEDIBOX_USER }}
+          key: ${{ secrets.DEDIBOX_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEDIBOX_APP_DIR }}"
+            git fetch --tags --prune
+            git checkout --force "${{ github.ref_name }}"
+            export IMAGE_TAG="${{ github.ref_name }}"
+            COMPOSE="docker compose -f production.docker-compose.yaml --env-file .env.production"
+            $COMPOSE pull backend web
+            $COMPOSE up -d --remove-orphans
+            docker image prune -f

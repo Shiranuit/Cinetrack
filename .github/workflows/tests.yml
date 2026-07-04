@@ -1,0 +1,63 @@
+name: Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+
+jobs:
+  backend:
+    name: Backend (cargo test)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tvshow
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: tvshow_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U tvshow -d tvshow_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      # The integration + sync DB tests read this; unset would make them skip.
+      TEST_DATABASE_URL: postgres://tvshow:test@localhost:5432/tvshow_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            backend/target
+          key: tests-cargo-${{ hashFiles('backend/Cargo.lock') }}
+          restore-keys: tests-cargo-
+
+      - name: cargo test
+        working-directory: backend
+        run: cargo test --locked
+
+  frontend:
+    name: Frontend (flutter analyze)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter analyze
+        working-directory: frontend
+        run: |
+          flutter pub get
+          flutter analyze
