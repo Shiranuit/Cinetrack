@@ -128,9 +128,15 @@ class ApiClient {
   Future<bool> tryRestore() => _tryRefresh();
 
   Future<void> logout() async {
-    // Best-effort server revoke (carries the access token; no retry on 401).
+    // Revoke server-side by refresh token: cookie on web, body on mobile — works
+    // even if the access token has expired. Best-effort.
     try {
-      await _send('POST', '/api/auth/logout', auth: false);
+      Object? body;
+      if (!kIsWeb) {
+        final rt = await _secure.read(key: _refreshKey);
+        if (rt != null) body = {'refresh_token': rt};
+      }
+      await _send('POST', '/api/auth/logout', body: body, auth: false);
     } catch (_) {}
     await clearLocalSession();
   }

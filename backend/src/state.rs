@@ -23,6 +23,8 @@ pub struct AppState {
     pub mailer: Arc<Mailer>,
     /// In-memory throttle for auth endpoints (login/register/forgot/reset).
     pub auth_limiter: Arc<RateLimiter>,
+    /// Per-user throttle for expensive read endpoints (search/discover/filter).
+    pub read_limiter: Arc<RateLimiter>,
 }
 
 impl AppState {
@@ -54,6 +56,7 @@ impl AppState {
             enrich_notify: Arc::new(Notify::new()),
             mailer,
             auth_limiter: Arc::new(RateLimiter::new()),
+            read_limiter: Arc::new(RateLimiter::new()),
         })
     }
 }

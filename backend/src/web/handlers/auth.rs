@@ -19,13 +19,16 @@ use crate::{
 /// Web refresh-token cookie name.
 const REFRESH_COOKIE: &str = "cinetrack_refresh";
 
-/// Real client IP from Caddy's `X-Forwarded-For` (first hop). Used as a rate-limit
-/// bucket key and in the audit trail, so `unknown` for a missing header is fine.
+/// Real client IP from `X-Forwarded-For`. We take the LAST hop — the one appended
+/// by our own reverse proxy (Caddy) — because earlier entries are client-supplied
+/// and forgeable. Using the first entry would let an attacker spoof the header to
+/// bypass rate limiting and forge audit IPs. (Caddy is also configured to
+/// overwrite the header outright; taking the last is defence-in-depth.)
 pub(crate) fn client_ip(headers: &HeaderMap) -> String {
     headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
+        .and_then(|v| v.rsplit(',').next())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "unknown".to_string())
@@ -265,9 +268,17 @@ pub async fn refresh(
     Ok(auth_response(&state, &headers, user_id, access, new_refresh))
 }
 
-/// Log out THIS device: revoke the current session and clear the web cookie.
-pub async fn logout(AuthSession { sid, .. }: AuthSession, State(state): State<AppState>) -> AppResult<Response> {
-    session::revoke(&state, &sid).await?;
+/// Log out THIS device: revoke the session that owns the presented refresh token
+/// (cookie on web, body on mobile) and clear the web cookie. Works even if the
+/// access token has expired — the whole point of a reliable logout.
+pub async fn logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Option<Json<RefreshReq>>,
+) -> AppResult<Response> {
+    if let Some(rt) = read_refresh_cookie(&headers).or_else(|| body.and_then(|Json(b)| b.refresh_token)) {
+        session::revoke_by_refresh(&state, &rt).await?;
+    }
     let secure = state.config.public_base_url.starts_with("https");
     let cleared = format!(
         "{REFRESH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/api/auth; Max-Age=0{}",

@@ -10,6 +10,18 @@
 # ---- Web app --------------------------------------------------------------
 {$WEB_DOMAIN} {
 	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# CSP tuned for Flutter web (wasm + canvaskit workers + inline styles) that
+		# still calls the API and hotlinks TheTVDB posters over https. If a build
+		# uses an inline bootstrap script, add 'unsafe-inline' to script-src. Verify
+		# against the deployed app; it's adjustable here without rebuilding.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://{$API_DOMAIN}; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		-Server
+	}
 	root * /srv
 	# SPA fallback so client-side (deep-link) routes resolve to index.html.
 	try_files {path} /index.html
@@ -19,5 +31,9 @@
 # ---- Backend API ----------------------------------------------------------
 {$API_DOMAIN} {
 	encode zstd gzip
-	reverse_proxy backend:8080
+	reverse_proxy backend:8080 {
+		# Overwrite X-Forwarded-For with the real peer so the backend can't be fed
+		# a spoofed client IP (rate-limit / audit-log integrity).
+		header_up X-Forwarded-For {remote_host}
+	}
 }

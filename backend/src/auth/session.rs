@@ -31,6 +31,10 @@ pub async fn create(state: &AppState, user_id: i64, device: Option<String>, ip: 
 /// every authenticated request, so revocation (logout / password change) takes
 /// effect immediately.
 pub async fn is_active(state: &AppState, sid: &str) -> AppResult<bool> {
+    // Guard the ::uuid cast so a malformed sid is a clean "inactive", not a 500.
+    if uuid::Uuid::parse_str(sid).is_err() {
+        return Ok(false);
+    }
     let ok: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM app.session WHERE id = $1::uuid AND NOT revoked AND expires_at > now())",
     )
@@ -38,6 +42,17 @@ pub async fn is_active(state: &AppState, sid: &str) -> AppResult<bool> {
     .fetch_one(&state.db)
     .await?;
     Ok(ok)
+}
+
+/// Revoke the session that owns this refresh token (current or previous). Used by
+/// logout, so it works even when the caller's access token has already expired.
+pub async fn revoke_by_refresh(state: &AppState, presented: &str) -> AppResult<()> {
+    let h = auth::token_hash(presented);
+    sqlx::query("UPDATE app.session SET revoked = true WHERE refresh_hash = $1 OR prev_hash = $1")
+        .bind(&h)
+        .execute(&state.db)
+        .await?;
+    Ok(())
 }
 
 /// Exchange a refresh token for a fresh one (rotation). Returns

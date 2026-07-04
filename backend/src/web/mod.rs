@@ -6,14 +6,14 @@ mod query;
 #[cfg(test)]
 mod tests;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::{
     Router,
-    extract::{DefaultBodyLimit, Request},
+    extract::{DefaultBodyLimit, Request, State},
     http::{HeaderName, HeaderValue, Method, header},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{get, post, put},
 };
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -23,7 +23,10 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 /// 5 MB in the handler.
 const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 
-use crate::{config::Config, state::AppState};
+use crate::{config::Config, error::AppError, state::AppState};
+
+/// Per-user requests/second cap on expensive read endpoints.
+const READ_RPS: usize = 20;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -98,11 +101,86 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/{id}/movies", get(handlers::users::user_movies))
         .route("/api/users/{id}/stats", get(handlers::users::user_stats))
         .route("/api/users/{id}/follow", post(handlers::users::follow).delete(handlers::users::unfollow))
-        .layer(middleware::from_fn(log_requests))
-        .layer(middleware::from_fn(security_headers))
+        // Resolve the route state first, then layer the cross-cutting middleware
+        // (the gate carries its own AppState). Execution order, outer→inner:
+        //   log → CORS (answers OPTIONS preflight) → gate (auth + read limit) →
+        //   security headers → body limit → handler.
+        .with_state(state.clone())
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(middleware::from_fn(security_headers))
+        .layer(middleware::from_fn_with_state(state.clone(), gate))
         .layer(build_cors(&state.config))
-        .with_state(state)
+        .layer(middleware::from_fn(log_requests))
+}
+
+/// Default-deny gate: every request needs a valid session EXCEPT a small public
+/// whitelist (health, the auth endpoints, and profile images). Also enforces the
+/// per-user read rate limit. New routes are protected by default.
+async fn gate(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+
+    if method == Method::OPTIONS || is_public(&method, &path) {
+        return next.run(req).await;
+    }
+
+    // Pull the token out SYNCHRONOUSLY (owned) so we never hold a borrow of the
+    // non-Send request body across the DB await (which would make the future !Send).
+    let token = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::to_string);
+
+    let user_id = match token {
+        Some(t) => authenticate(&state, &t).await,
+        None => None,
+    };
+    let Some(user_id) = user_id else {
+        return AppError::Unauthorized("authentication required".into()).into_response();
+    };
+
+    if is_expensive(&path)
+        && !state.read_limiter.check(&format!("read:{user_id}"), READ_RPS, Duration::from_secs(1))
+    {
+        return AppError::TooManyRequests("slow down — too many requests".into()).into_response();
+    }
+
+    next.run(req).await
+}
+
+/// Validate the access token + session, returning the user id.
+async fn authenticate(state: &AppState, token: &str) -> Option<i64> {
+    let (user_id, sid) = crate::auth::token::verify(&state.config.jwt_secret, token).ok()?;
+    crate::auth::session::is_active(state, &sid).await.unwrap_or(false).then_some(user_id)
+}
+
+/// Endpoints reachable WITHOUT a session.
+fn is_public(method: &Method, path: &str) -> bool {
+    if path == "/health" {
+        return true;
+    }
+    if matches!(
+        path,
+        "/api/auth/register" | "/api/auth/login" | "/api/auth/forgot" | "/api/auth/reset"
+            | "/api/auth/refresh" | "/api/auth/logout"
+    ) {
+        return true;
+    }
+    // Profile images are loaded by <img>/CachedNetworkImage, which can't attach a
+    // bearer token — and avatars/covers are low-sensitivity public assets.
+    method == Method::GET
+        && path.starts_with("/api/users/")
+        && (path.ends_with("/avatar") || path.ends_with("/cover"))
+}
+
+/// Query-heavy endpoints subject to the per-user read rate limit.
+fn is_expensive(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/search" | "/api/discover" | "/api/library/filter" | "/api/filters" | "/api/calendar"
+    ) || (path.starts_with("/api/users/") && path.ends_with("/filter"))
 }
 
 /// CORS for the web app. Credentialed (the web refresh token is an httpOnly
@@ -110,12 +188,18 @@ pub fn router(state: AppState) -> Router {
 /// dev, reflect the caller (Flutter serves the web app on a random localhost port).
 fn build_cors(config: &Config) -> CorsLayer {
     let origin = if config.public_base_url.starts_with("https") {
-        config
-            .web_base_url
-            .parse::<HeaderValue>()
-            .map(|v| AllowOrigin::list([v]))
-            .unwrap_or_else(|_| AllowOrigin::mirror_request())
+        // Production: pin to the exact web origin. If WEB_BASE_URL is malformed,
+        // FAIL CLOSED (allow no cross-origin) rather than reflecting any origin
+        // with credentials, which would be an account-data-exfiltration hole.
+        match config.web_base_url.parse::<HeaderValue>() {
+            Ok(v) => AllowOrigin::list([v]),
+            Err(_) => {
+                tracing::error!("CORS: WEB_BASE_URL {:?} is not a valid origin — denying all cross-origin", config.web_base_url);
+                AllowOrigin::list([])
+            }
+        }
     } else {
+        // Dev only (http): reflect the caller (Flutter serves on a random localhost port).
         AllowOrigin::mirror_request()
     };
     CorsLayer::new()
@@ -136,6 +220,11 @@ async fn security_headers(req: Request, next: Next) -> Response {
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
     h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    // Pin HTTPS (ignored by browsers over plain HTTP, so safe to always send).
+    h.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
     res
 }
 
