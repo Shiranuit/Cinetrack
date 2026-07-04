@@ -126,5 +126,8 @@
   "evInviteCreated": "招待を作成しました",
   "evAccountDeleted": "アカウントを削除しました",
   "updateAvailable": "新しいバージョンが利用可能です",
-  "update": "更新"
+  "update": "更新",
+  "updateRequired": "アップデートが必要です",
+  "updateRequiredBody": "このバージョンはサポートされていません。Cinetrack を使い続けるには更新してください。",
+  "updateFailed": "アップデートに失敗しました。もう一度お試しください。"
 }

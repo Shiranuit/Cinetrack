@@ -390,4 +390,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get update => '更新';
+
+  @override
+  String get updateRequired => '需要更新';
+
+  @override
+  String get updateRequiredBody => '此版本已不再受支持。请更新以继续使用 Cinetrack。';
+
+  @override
+  String get updateFailed => '更新失败。请重试。';
 }

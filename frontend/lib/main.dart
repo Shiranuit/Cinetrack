@@ -14,6 +14,7 @@ import 'l10n/app_localizations.dart';
 import 'screens/app_shell.dart';
 import 'screens/login_screen.dart';
 import 'screens/reset_password_screen.dart';
+import 'screens/update_required_screen.dart';
 import 'state/auth.dart';
 import 'state/settings.dart';
 import 'util/native_drag.dart';
@@ -135,16 +136,18 @@ class _RootViewState extends State<RootView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_resetToken != null) {
-      return ResetPasswordScreen(
-        token: _resetToken!,
-        onDone: () => setState(() => _resetToken = null),
-      );
-    }
     return Consumer<AuthController>(
       builder: (context, auth, _) {
         if (auth.loading) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        // A forced update blocks everything (deep links included) until the user updates.
+        if (auth.updateRequired) return const UpdateRequiredScreen();
+        if (_resetToken != null) {
+          return ResetPasswordScreen(
+            token: _resetToken!,
+            onDone: () => setState(() => _resetToken = null),
+          );
         }
         return auth.isAuthed ? const AppShell() : LoginScreen(initialInvite: _inviteCode);
       },

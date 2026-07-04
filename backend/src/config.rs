@@ -110,6 +110,12 @@ pub struct Config {
     /// the git tag; "dev" for local/untagged builds. Exposed via `/api/config` so
     /// clients can detect when they're older than the server and prompt to update.
     pub app_version: String,
+    /// Compatibility-reference version, exposed via `/api/config` as `min_version`.
+    /// Native clients hard-block ("update required") only when they're behind this
+    /// across a semver BREAKING boundary (a new major, or a new minor while in 0.x);
+    /// patch bumps don't force. Defaults to `app_version` (a breaking release forces
+    /// mobile, patches don't); set `MIN_APP_VERSION` to raise the floor manually.
+    pub min_app_version: String,
     /// `DB_PROFILE=1`: log every SQL statement with its elapsed time, and
     /// `EXPLAIN (ANALYZE, BUFFERS)` the expensive read queries. Dev/diagnostics only.
     pub db_profile: bool,
@@ -157,6 +163,15 @@ impl Config {
             .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false);
 
+        // The mandatory-update floor defaults to the RUNNING version, so mobile
+        // clients are kept in lockstep with the deployed backend/web. Set
+        // MIN_APP_VERSION explicitly to relax it (allow older clients).
+        let app_version = opt("APP_VERSION", "dev");
+        let min_app_version = env::var("MIN_APP_VERSION")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| app_version.clone());
+
         Ok(Self {
             database_url: req("DATABASE_URL")?,
             catalog_mode: CatalogMode::parse(&opt("CATALOG_MODE", "hybrid")),
@@ -178,7 +193,8 @@ impl Config {
             thetvdb_max_rps: env::var("THETVDB_MAX_RPS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(35),
             enrich_interval_secs: env::var("ENRICH_INTERVAL_SECS").ok().and_then(|v| v.parse().ok()),
             enrich_concurrency: env::var("ENRICH_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(8),
-            app_version: opt("APP_VERSION", "dev"),
+            app_version,
+            min_app_version,
             db_profile: env_flag("DB_PROFILE"),
             backend_profile: env_flag("BACKEND_PROFILE"),
             db_profile_min_ms: env::var("DB_PROFILE_MIN_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(50),

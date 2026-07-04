@@ -393,6 +393,7 @@ mod tests {
             enrich_interval_secs: None,
             enrich_concurrency: 8,
             app_version: "test".into(),
+            min_app_version: String::new(),
             db_profile: false,
             backend_profile: false,
             db_profile_min_ms: 50,

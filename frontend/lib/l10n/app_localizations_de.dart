@@ -395,4 +395,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get update => 'Aktualisieren';
+
+  @override
+  String get updateRequired => 'Update erforderlich';
+
+  @override
+  String get updateRequiredBody =>
+      'Diese Version wird nicht mehr unterstützt. Bitte aktualisiere, um Cinetrack weiter zu nutzen.';
+
+  @override
+  String get updateFailed => 'Update fehlgeschlagen. Bitte versuche es erneut.';
 }

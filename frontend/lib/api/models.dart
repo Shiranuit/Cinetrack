@@ -15,11 +15,16 @@ class ServerConfig {
   /// The backend's running release (e.g. "v0.2.0" / "dev"). Null on older servers.
   final String? version;
 
-  const ServerConfig({this.registrationEnabled = true, this.version});
+  /// The lowest client build the server still allows; older clients are hard-blocked
+  /// with an "update required" screen. Null = no floor.
+  final String? minVersion;
+
+  const ServerConfig({this.registrationEnabled = true, this.version, this.minVersion});
 
   factory ServerConfig.fromJson(Map<String, dynamic> j) => ServerConfig(
         registrationEnabled: j['registration_enabled'] as bool? ?? true,
         version: j['version'] as String?,
+        minVersion: j['min_version'] as String?,
       );
 }
 

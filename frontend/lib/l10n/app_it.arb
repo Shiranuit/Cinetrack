@@ -126,5 +126,8 @@
   "evInviteCreated": "Invito creato",
   "evAccountDeleted": "Account eliminato",
   "updateAvailable": "È disponibile una nuova versione",
-  "update": "Aggiorna"
+  "update": "Aggiorna",
+  "updateRequired": "Aggiornamento richiesto",
+  "updateRequiredBody": "Questa versione non è più supportata. Aggiorna per continuare a usare Cinetrack.",
+  "updateFailed": "Aggiornamento non riuscito. Riprova."
 }

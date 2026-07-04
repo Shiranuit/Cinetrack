@@ -873,6 +873,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update'**
   String get update;
+
+  /// No description provided for @updateRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateRequired;
+
+  /// No description provided for @updateRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This version is no longer supported. Please update to keep using Cinetrack.'**
+  String get updateRequiredBody;
+
+  /// No description provided for @updateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed. Please try again.'**
+  String get updateFailed;
 }
 
 class _AppLocalizationsDelegate

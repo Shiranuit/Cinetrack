@@ -3,6 +3,10 @@
          manifests only, so WITHOUT it here the RELEASE APK has no internet access and
          every request fails at DNS with "Failed host lookup ... errno = 7". -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Lets the in-app updater hand a downloaded APK to the system package installer
+         (the user still confirms the install and grants "install unknown apps" once;
+         Android does not allow silent installs for sideloaded apps). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="Cinetrack"
         android:name="${applicationName}"

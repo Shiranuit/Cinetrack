@@ -31,6 +31,26 @@ Cinetrack's backend is configured entirely through **environment variables** (lo
 | `ALLOW_PUBLIC_REGISTRATION` | `false` | `false` = invite-only sign-up (users need an invite code). `true` = anyone can register. Accepts `1`/`true`/`yes`. The login screen hides the "create account" button when this is off. |
 | `PASSWORD_PEPPER` | _(unset)_ | Optional server-side secret mixed into every Argon2 password hash, kept out of the DB. **Set once and never change it** (existing hashes won't verify). Generate: `openssl rand -hex 32`. |
 
+## Client versioning & forced updates
+
+The backend advertises its version through the public `GET /api/config` endpoint, so
+the app can detect when it's out of date. Both values are normally injected by CI, not
+set by hand.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `APP_VERSION` | `dev` | This build's release tag (e.g. `v0.2.4`). **Baked into the backend image at build time** from the git tag (the CI release workflow passes it as a Docker build-arg); you rarely set it manually. Returned as `version` from `/api/config`. The Flutter app compares it to its own baked version to show an optional "a new version is available" banner. |
+| `MIN_APP_VERSION` | = `APP_VERSION` | The compatibility-reference version, returned as `min_version`. A **native** app is hard-blocked by a non-dismissible "Update required" screen **only when it's behind this across a breaking boundary** - a new **major**, or (while still in 0.x) a new **minor**. Patch bumps, and minor bumps once at 1.0+, are backward-compatible and only trigger the optional "a new version is available" banner. The web app self-updates on reload, so it's never blocked. **Defaults to the running version**, so a breaking release forces mobile to update while patch releases don't. Set it explicitly to raise the floor manually (e.g. if a patch turns out to break compatibility). |
+
+Notes:
+
+- Version comparison only applies between real release tags (`vX.Y.Z`). On a `dev`/untagged
+  backend both values are `dev`, so nothing is ever forced - safe for local runs.
+- Forced updates only affect clients that already ship the version-check feature (v0.2.3+);
+  older installs don't know about `min_version` and won't self-block until updated once.
+- The matching APK is published from the same tag as the backend, so when the floor rises the
+  new APK is already available (the in-app updater downloads the latest release asset).
+
 ## Catalog & sync
 
 Two independent knobs control how the local mirror of TheTVDB behaves.

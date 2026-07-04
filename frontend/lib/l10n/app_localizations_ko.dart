@@ -390,4 +390,14 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get update => '업데이트';
+
+  @override
+  String get updateRequired => '업데이트가 필요합니다';
+
+  @override
+  String get updateRequiredBody =>
+      '이 버전은 더 이상 지원되지 않습니다. Cinetrack을 계속 사용하려면 업데이트하세요.';
+
+  @override
+  String get updateFailed => '업데이트에 실패했습니다. 다시 시도해 주세요.';
 }

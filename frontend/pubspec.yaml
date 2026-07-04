@@ -52,6 +52,10 @@ dependencies:
   # can route reset-password / invite deep links that arrive via a native intent
   # (Uri.base only carries the launch URL on web).
   app_links: ^6.3.0
+  # In-app updater: download the new APK to a temp file (path_provider) and hand it
+  # to the system package installer (open_filex). Android sideload only.
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:

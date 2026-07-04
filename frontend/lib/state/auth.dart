@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 
 import '../api/api_client.dart';
@@ -30,6 +31,11 @@ class AuthController extends ChangeNotifier {
   String? serverVersion;
   bool updateAvailable = false;
 
+  /// This build is below the server's MIN_APP_VERSION → the app is hard-blocked with
+  /// a non-dismissible "update required" screen. Native only (web self-updates on
+  /// reload), so we never dead-end a browser.
+  bool updateRequired = false;
+
   bool get isAuthed => me != null;
 
   /// Restore a session on startup: try to mint an access token from the refresh
@@ -41,6 +47,9 @@ class AuthController extends ChangeNotifier {
       registrationEnabled = cfg.registrationEnabled;
       serverVersion = cfg.version;
       updateAvailable = isOlderVersion(Config.appVersion, cfg.version);
+      // Force only across a breaking boundary (new major, or new minor while in 0.x);
+      // patch/minor bumps are backward-compatible, so they only nudge via the banner.
+      updateRequired = !kIsWeb && isBreakingBehind(Config.appVersion, cfg.minVersion);
     } catch (_) {}
     try {
       if (await api.tryRestore()) {

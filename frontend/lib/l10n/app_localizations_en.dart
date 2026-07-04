@@ -394,4 +394,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get update => 'Update';
+
+  @override
+  String get updateRequired => 'Update required';
+
+  @override
+  String get updateRequiredBody =>
+      'This version is no longer supported. Please update to keep using Cinetrack.';
+
+  @override
+  String get updateFailed => 'Update failed. Please try again.';
 }

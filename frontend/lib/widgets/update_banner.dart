@@ -29,8 +29,12 @@ class UpdateBanner extends StatefulWidget {
 class _UpdateBannerState extends State<UpdateBanner> {
   @override
   Widget build(BuildContext context) {
-    final outdated = context.watch<AuthController>().updateAvailable;
-    if (!outdated || _dismissed) return const SizedBox.shrink();
+    final auth = context.watch<AuthController>();
+    // Show the slim nudge only for a NON-breaking update. When an update is forced,
+    // the full-screen "Update required" gate already covers it, so hide the banner.
+    if (!auth.updateAvailable || auth.updateRequired || _dismissed) {
+      return const SizedBox.shrink();
+    }
     final t = AppLocalizations.of(context);
     return Material(
       color: context.scheme.tertiaryContainer,
@@ -48,8 +52,10 @@ class _UpdateBannerState extends State<UpdateBanner> {
               ),
               if (_isAndroid)
                 TextButton(
+                  // Latest (not this build's own version); browser downloads it, the
+                  // forced-update screen does the one-tap in-app install instead.
                   onPressed: () =>
-                      launchUrl(Uri.parse(Config.androidApkUrl), mode: LaunchMode.externalApplication),
+                      launchUrl(Uri.parse(Config.latestApkUrl), mode: LaunchMode.externalApplication),
                   child: Text(t.update),
                 ),
               IconButton(
