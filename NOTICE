@@ -1,0 +1,34 @@
+Cinetrack
+Copyright 2026 The Cinetrack Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Trademarks / Naming
+--------------------------------------------------------------------------------
+
+"Cinetrack" and "cine-track" (including the cine-track.com domain and the
+Cinetrack name, logo, and app icon) are names and marks of the Cinetrack
+project. The Apache 2.0 license (Section 6) grants NO trademark rights.
+
+You are free to use, modify, self-host, and redistribute this software -
+including for commercial purposes - but you may NOT use the "Cinetrack" or
+"cine-track" name, logo, or icon to name, brand, or promote your own copy,
+fork, or derivative, or in a way that implies endorsement by or affiliation
+with the Cinetrack project. Please rename your fork/instance.
+
+Nominative use is fine: you may state factually that your work "is based on
+Cinetrack" or "is a fork of Cinetrack."
+
+--------------------------------------------------------------------------------
+Third-party data & attribution
+--------------------------------------------------------------------------------
+
+Metadata for series, movies, episodes, and artwork is provided by TheTVDB
+(https://thetvdb.com) via their v4 API. TheTVDB is a separate service with its
+own terms and licensing; using this software with TheTVDB requires your own
+TheTVDB API key and compliance with their license. Attribution to TheTVDB,
+with a link to TheTVDB.com, is shown to end users as required by TheTVDB.
+
+Cinetrack is not affiliated with, endorsed by, or sponsored by TheTVDB, or by
+TV Time / Whip Media.

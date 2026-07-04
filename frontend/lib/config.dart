@@ -18,9 +18,12 @@ class Config {
   static const githubRepo =
       String.fromEnvironment('GITHUB_REPO', defaultValue: 'Shiranuit/Cinetrack');
 
-  /// The Android APK matching THIS exact release (so the web app hands out the
-  /// same version it is), or the latest-release page for untagged/dev builds.
+  /// A DIRECT link to the Android APK — the browser downloads it immediately, it
+  /// does NOT open a GitHub page. For a tagged build it points at the APK for THIS
+  /// exact release (so the web app hands out the version it is running); for an
+  /// untagged/dev build it falls back to the stable-named asset on the latest
+  /// release (`releases/latest/download/...` 302s straight to the newest APK).
   static String get androidApkUrl => appVersion.startsWith('v')
       ? 'https://github.com/$githubRepo/releases/download/$appVersion/cinetrack-$appVersion.apk'
-      : 'https://github.com/$githubRepo/releases/latest';
+      : 'https://github.com/$githubRepo/releases/latest/download/cinetrack.apk';
 }

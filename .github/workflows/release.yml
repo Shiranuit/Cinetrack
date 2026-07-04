@@ -62,6 +62,10 @@ jobs:
           VERSION="${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
           mkdir -p dist
           cp frontend/build/app/outputs/flutter-apk/app-release.apk "dist/cinetrack-${VERSION}.apk"
+          # Also publish a STABLE-named copy so the web app's install button can hand
+          # out a version-independent direct-download link that always 302s to the
+          # newest APK:  github.com/<repo>/releases/latest/download/cinetrack.apk
+          cp frontend/build/app/outputs/flutter-apk/app-release.apk "dist/cinetrack.apk"
           echo "path=dist/cinetrack-${VERSION}.apk" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
