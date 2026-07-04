@@ -124,5 +124,7 @@
   "evResetCompleted": "パスワードのリセットが完了しました",
   "evRegistered": "アカウントを作成しました",
   "evInviteCreated": "招待を作成しました",
-  "evAccountDeleted": "アカウントを削除しました"
+  "evAccountDeleted": "アカウントを削除しました",
+  "updateAvailable": "新しいバージョンが利用可能です",
+  "update": "更新"
 }

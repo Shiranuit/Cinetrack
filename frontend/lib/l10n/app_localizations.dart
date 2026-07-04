@@ -861,6 +861,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Account deleted'**
   String get evAccountDeleted;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A new version is available'**
+  String get updateAvailable;
+
+  /// No description provided for @update.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get update;
 }
 
 class _AppLocalizationsDelegate

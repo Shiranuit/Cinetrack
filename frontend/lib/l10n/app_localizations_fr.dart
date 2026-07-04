@@ -389,4 +389,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get evAccountDeleted => 'Compte supprimé';
+
+  @override
+  String get updateAvailable => 'Une nouvelle version est disponible';
+
+  @override
+  String get update => 'Mettre à jour';
 }

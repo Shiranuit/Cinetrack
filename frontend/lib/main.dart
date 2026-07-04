@@ -15,6 +15,7 @@ import 'state/auth.dart';
 import 'state/settings.dart';
 import 'util/native_drag.dart';
 import 'widgets/android_install_banner.dart';
+import 'widgets/update_banner.dart';
 
 void main() {
   // On web, suppress the browser's native context menu so a long-press / right
@@ -68,6 +69,7 @@ class CinetrackApp extends StatelessWidget {
         // children (e.g. the invites screen) throw "infinite width" on layout.
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const UpdateBanner(),
           const AndroidInstallBanner(),
           Expanded(child: child ?? const SizedBox.shrink()),
         ],

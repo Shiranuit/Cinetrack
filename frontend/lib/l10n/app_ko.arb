@@ -124,5 +124,7 @@
   "evResetCompleted": "비밀번호 재설정 완료됨",
   "evRegistered": "계정 생성됨",
   "evInviteCreated": "초대 생성됨",
-  "evAccountDeleted": "계정 삭제됨"
+  "evAccountDeleted": "계정 삭제됨",
+  "updateAvailable": "새 버전을 사용할 수 있습니다",
+  "update": "업데이트"
 }

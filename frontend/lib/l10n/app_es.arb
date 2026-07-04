@@ -124,5 +124,7 @@
   "evResetCompleted": "Restablecimiento de contraseña completado",
   "evRegistered": "Cuenta creada",
   "evInviteCreated": "Invitación creada",
-  "evAccountDeleted": "Cuenta eliminada"
+  "evAccountDeleted": "Cuenta eliminada",
+  "updateAvailable": "Hay una nueva versión disponible",
+  "update": "Actualizar"
 }

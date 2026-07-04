@@ -384,4 +384,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get evAccountDeleted => '账户已删除';
+
+  @override
+  String get updateAvailable => '有新版本可用';
+
+  @override
+  String get update => '更新';
 }

@@ -124,5 +124,7 @@
   "evResetCompleted": "Redefinição de senha concluída",
   "evRegistered": "Conta criada",
   "evInviteCreated": "Convite criado",
-  "evAccountDeleted": "Conta excluída"
+  "evAccountDeleted": "Conta excluída",
+  "updateAvailable": "Uma nova versão está disponível",
+  "update": "Atualizar"
 }

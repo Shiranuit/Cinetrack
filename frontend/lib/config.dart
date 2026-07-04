@@ -27,3 +27,24 @@ class Config {
       ? 'https://github.com/$githubRepo/releases/download/$appVersion/cinetrack-$appVersion.apk'
       : 'https://github.com/$githubRepo/releases/latest/download/cinetrack.apk';
 }
+
+/// True if [current] is a strictly older release than [latest] (both "vX.Y.Z").
+/// Returns false if either side isn't a parseable release tag (e.g. "dev"), so an
+/// untagged/dev build never nags about updates and a malformed value is ignored.
+bool isOlderVersion(String current, String? latest) {
+  List<int>? parse(String? v) {
+    if (v == null || !v.startsWith('v')) return null;
+    final parts = v.substring(1).split('.');
+    if (parts.length != 3) return null;
+    final nums = [for (final p in parts) int.tryParse(p)];
+    if (nums.any((n) => n == null)) return null;
+    return nums.cast<int>();
+  }
+
+  final a = parse(current), b = parse(latest);
+  if (a == null || b == null) return false;
+  for (var i = 0; i < 3; i++) {
+    if (a[i] != b[i]) return a[i] < b[i];
+  }
+  return false;
+}

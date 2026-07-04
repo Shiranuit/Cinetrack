@@ -11,6 +11,10 @@ RUN touch src/main.rs && cargo build --release
 
 # Runtime
 FROM debian:bookworm-slim
+# Baked-in release tag (from the git tag in CI), surfaced via GET /api/config so
+# clients can detect they're older than the server. "dev" for local builds.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/backend /usr/local/bin/backend

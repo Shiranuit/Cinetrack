@@ -11,10 +11,15 @@ class ServerConfig {
   /// Visitors can self-register without an invite. When false, sign-up is
   /// invite-only and the "create an account" toggle is hidden.
   final bool registrationEnabled;
-  const ServerConfig({this.registrationEnabled = true});
+
+  /// The backend's running release (e.g. "v0.2.0" / "dev"). Null on older servers.
+  final String? version;
+
+  const ServerConfig({this.registrationEnabled = true, this.version});
 
   factory ServerConfig.fromJson(Map<String, dynamic> j) => ServerConfig(
         registrationEnabled: j['registration_enabled'] as bool? ?? true,
+        version: j['version'] as String?,
       );
 }
 

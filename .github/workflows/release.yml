@@ -103,6 +103,9 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: ./backend
+          # Bake the release tag in so GET /api/config reports the running version.
+          build-args: |
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

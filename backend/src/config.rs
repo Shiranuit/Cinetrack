@@ -106,6 +106,10 @@ pub struct Config {
     /// Number of concurrent in-flight enrichment fetches (bounds queue drain
     /// parallelism; the rate pacer still caps total throughput). Default 8.
     pub enrich_concurrency: usize,
+    /// This build's release tag (e.g. "v0.2.0"), baked in at image-build time from
+    /// the git tag; "dev" for local/untagged builds. Exposed via `/api/config` so
+    /// clients can detect when they're older than the server and prompt to update.
+    pub app_version: String,
     /// `DB_PROFILE=1`: log every SQL statement with its elapsed time, and
     /// `EXPLAIN (ANALYZE, BUFFERS)` the expensive read queries. Dev/diagnostics only.
     pub db_profile: bool,
@@ -174,6 +178,7 @@ impl Config {
             thetvdb_max_rps: env::var("THETVDB_MAX_RPS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(35),
             enrich_interval_secs: env::var("ENRICH_INTERVAL_SECS").ok().and_then(|v| v.parse().ok()),
             enrich_concurrency: env::var("ENRICH_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(8),
+            app_version: opt("APP_VERSION", "dev"),
             db_profile: env_flag("DB_PROFILE"),
             backend_profile: env_flag("BACKEND_PROFILE"),
             db_profile_min_ms: env::var("DB_PROFILE_MIN_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(50),

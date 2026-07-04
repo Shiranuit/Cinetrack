@@ -388,4 +388,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get evAccountDeleted => 'Cuenta eliminada';
+
+  @override
+  String get updateAvailable => 'Hay una nueva versión disponible';
+
+  @override
+  String get update => 'Actualizar';
 }

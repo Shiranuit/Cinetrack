@@ -124,5 +124,7 @@
   "evResetCompleted": "Réinitialisation effectuée",
   "evRegistered": "Compte créé",
   "evInviteCreated": "Invitation créée",
-  "evAccountDeleted": "Compte supprimé"
+  "evAccountDeleted": "Compte supprimé",
+  "updateAvailable": "Une nouvelle version est disponible",
+  "update": "Mettre à jour"
 }

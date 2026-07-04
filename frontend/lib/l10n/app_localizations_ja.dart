@@ -384,4 +384,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get evAccountDeleted => 'アカウントを削除しました';
+
+  @override
+  String get updateAvailable => '新しいバージョンが利用可能です';
+
+  @override
+  String get update => '更新';
 }

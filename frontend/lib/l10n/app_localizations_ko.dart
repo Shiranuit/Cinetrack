@@ -384,4 +384,10 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get evAccountDeleted => '계정 삭제됨';
+
+  @override
+  String get updateAvailable => '새 버전을 사용할 수 있습니다';
+
+  @override
+  String get update => '업데이트';
 }

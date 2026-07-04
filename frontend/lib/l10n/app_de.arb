@@ -124,5 +124,7 @@
   "evResetCompleted": "Passwortzurücksetzung abgeschlossen",
   "evRegistered": "Konto erstellt",
   "evInviteCreated": "Einladung erstellt",
-  "evAccountDeleted": "Konto gelöscht"
+  "evAccountDeleted": "Konto gelöscht",
+  "updateAvailable": "Eine neue Version ist verfügbar",
+  "update": "Aktualisieren"
 }

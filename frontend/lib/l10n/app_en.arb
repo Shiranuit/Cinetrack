@@ -131,5 +131,7 @@
   "evResetCompleted": "Password reset completed",
   "evRegistered": "Account created",
   "evInviteCreated": "Invitation created",
-  "evAccountDeleted": "Account deleted"
+  "evAccountDeleted": "Account deleted",
+  "updateAvailable": "A new version is available",
+  "update": "Update"
 }

@@ -388,4 +388,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get evAccountDeleted => 'Conta excluída';
+
+  @override
+  String get updateAvailable => 'Uma nova versão está disponível';
+
+  @override
+  String get update => 'Atualizar';
 }

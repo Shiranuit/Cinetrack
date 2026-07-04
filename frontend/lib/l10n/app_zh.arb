@@ -124,5 +124,7 @@
   "evResetCompleted": "密码重置已完成",
   "evRegistered": "账户已创建",
   "evInviteCreated": "邀请已创建",
-  "evAccountDeleted": "账户已删除"
+  "evAccountDeleted": "账户已删除",
+  "updateAvailable": "有新版本可用",
+  "update": "更新"
 }
