@@ -44,5 +44,8 @@ FROM caddy:2-alpine
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 COPY --from=build /app/build/web /srv
+# Ensure the App Links verification file is served regardless of whether the web
+# build copies dot-directories. Reachable at https://<web>/.well-known/assetlinks.json.
+COPY web/.well-known /srv/.well-known
 COPY Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80 443

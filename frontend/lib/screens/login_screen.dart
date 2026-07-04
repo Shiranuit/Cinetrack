@@ -10,7 +10,11 @@ import '../widgets/password_strength.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.initialInvite});
+
+  /// Invite code from a deep link (native App Link). On web it's read from the URL.
+  final String? initialInvite;
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -31,9 +35,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _password.addListener(() => setState(() {}));
     _confirm.addListener(() => setState(() {}));
-    // Web invite deep link: app.cine-track.com/signup?invite=CODE — jump straight
-    // into sign-up with the code pre-filled.
-    final invite = Uri.base.queryParameters['invite'];
+    // Invite deep link (app.cine-track.com/signup?invite=CODE): jump straight into
+    // sign-up with the code pre-filled. From the native App Link (initialInvite) or,
+    // on web, the launch URL.
+    final invite = widget.initialInvite ?? Uri.base.queryParameters['invite'];
     if (invite != null && invite.isNotEmpty) {
       _register = true;
       _inviteCode.text = invite;

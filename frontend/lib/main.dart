@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -89,15 +92,45 @@ class RootView extends StatefulWidget {
 
 class _RootViewState extends State<RootView> {
   String? _resetToken;
+  String? _inviteCode;
+  StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
     super.initState();
-    final uri = Uri.base;
+    // Web: the launch URL is in Uri.base.
+    _handleUri(Uri.base);
+    // Native: the App Link / Universal Link that opened the app (cold start) plus
+    // any that arrive while it's running, via the platform intent.
+    if (!kIsWeb) {
+      final links = AppLinks();
+      links.getInitialLink().then((uri) {
+        if (uri != null) _handleUri(uri);
+      });
+      _linkSub = links.uriLinkStream.listen(_handleUri);
+    }
+  }
+
+  /// Route a deep link (from the web launch URL or a native intent) to the right
+  /// screen. Unrecognized links just open the app normally.
+  void _handleUri(Uri uri) {
     if (uri.path.contains('reset-password')) {
       final tok = uri.queryParameters['token'];
-      if (tok != null && tok.isNotEmpty) _resetToken = tok;
+      if (tok != null && tok.isNotEmpty) {
+        setState(() => _resetToken = tok);
+        return;
+      }
     }
+    final invite = uri.queryParameters['invite'];
+    if (invite != null && invite.isNotEmpty) {
+      setState(() => _inviteCode = invite);
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -113,7 +146,7 @@ class _RootViewState extends State<RootView> {
         if (auth.loading) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        return auth.isAuthed ? const AppShell() : const LoginScreen();
+        return auth.isAuthed ? const AppShell() : LoginScreen(initialInvite: _inviteCode);
       },
     );
   }

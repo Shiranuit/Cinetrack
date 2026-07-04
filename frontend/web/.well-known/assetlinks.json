@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.shiranuit.cinetrack",
+      "sha256_cert_fingerprints": [
+        "EF:DF:6E:C9:7B:DA:A2:47:64:E1:F6:3C:8E:0F:78:F0:EF:9A:26:5B:F6:D1:72:60:07:3A:EA:4B:91:90:19:24"
+      ]
+    }
+  }
+]
