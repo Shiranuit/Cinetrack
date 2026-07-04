@@ -23,10 +23,10 @@ subprojects {
 // plugins hardcode an older compileSdk (e.g. file_picker 8.x -> 34) while others
 // (flutter_plugin_android_lifecycle) require consumers to compile against 36+, which
 // is newer than Flutter 3.44's default (35). Overriding it on the app module alone
-// doesn't cover the plugin modules, so set it on each after they're evaluated.
+// doesn't cover the plugin modules, so set it on each.
 subprojects {
-    afterEvaluate {
-        extensions.findByName("android")?.let { android ->
+    fun forceCompileSdk36(project: Project) {
+        project.extensions.findByName("android")?.let { android ->
             runCatching {
                 android.javaClass.getMethod("setCompileSdk", Integer::class.java).invoke(android, 36)
             }.recoverCatching {
@@ -34,6 +34,9 @@ subprojects {
             }
         }
     }
+    // `evaluationDependsOn(":app")` above means some projects are already evaluated
+    // here (afterEvaluate would throw), so configure those directly; defer the rest.
+    if (state.executed) forceCompileSdk36(this) else afterEvaluate { forceCompileSdk36(this) }
 }
 
 tasks.register<Delete>("clean") {

@@ -38,14 +38,9 @@
        of the horizontal poster rails on web. */
     html, body { user-select: none; -webkit-user-select: none; }
   </style>
-  <script>
-    // Prevent native drag-and-drop (image/element dragging). Without this, dragging
-    // a poster starts a browser image-drag: the pointer's button state flips to 0
-    // mid-drag and the browser captures further move events, so the rail never
-    // scrolls. Flutter's own drag (ReorderableListView etc.) doesn't use native DnD,
-    // so suppressing it here is safe.
-    window.addEventListener('dragstart', function (e) { e.preventDefault(); }, true);
-  </script>
+  <!-- Native drag-and-drop is suppressed from Dart (preventNativeDrag in main) rather
+       than an inline <script> here, so the strict Content-Security-Policy needs no
+       'unsafe-inline' / script hash for it. -->
 </head>
 <body>
   <!--

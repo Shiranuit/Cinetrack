@@ -31,11 +31,12 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
-		# CSP tuned for Flutter web (wasm + canvaskit workers + inline styles) that
-		# still calls the API and hotlinks TheTVDB posters over https. If a build
-		# uses an inline bootstrap script, add 'unsafe-inline' to script-src. Verify
-		# against the deployed app; it's adjustable here without rebuilding.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://{$API_DOMAIN}; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		# CSP tuned for Flutter web: it loads the CanvasKit renderer (canvaskit.js +
+		# .wasm) and the Roboto font from Google's CDN (www.gstatic.com /
+		# fonts.gstatic.com), calls our API, and hotlinks TheTVDB posters over https.
+		# script-src/connect-src allow gstatic for CanvasKit; connect-src/font-src allow
+		# the font. Adjustable here without rebuilding the app bundle.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://{$API_DOMAIN} https://www.gstatic.com https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		-Server
 	}
 	root * /srv
