@@ -100,6 +100,8 @@ services:
         condition: service_healthy
       garage:
         condition: service_started
+      mailer:
+        condition: service_started
     environment:
       DATABASE_URL: ${DATABASE_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-100}
@@ -117,11 +119,15 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER:-}
       ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
-      SMTP_HOST: ${SMTP_HOST:-}
+      # Mail defaults to the internal Postfix relay (mailer) over the private
+      # network — plain SMTP (SMTP_TLS=none), no auth. Override these to use an
+      # external provider instead (host, 587, STARTTLS, user/pass).
+      SMTP_HOST: ${SMTP_HOST:-mailer}
       SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_TLS: ${SMTP_TLS:-none}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      MAIL_FROM: ${MAIL_FROM:-Cinetrack <no-reply@localhost>}
+      MAIL_FROM: ${MAIL_FROM:-Cinetrack <no-reply@cine-track.com>}
       CATALOG_MODE: ${CATALOG_MODE:-hybrid}
       MIRROR_SCOPE: ${MIRROR_SCOPE:-full}
       SYNC_INTERVAL_SECS: ${SYNC_INTERVAL_SECS:-300}
@@ -140,10 +146,34 @@ services:
     networks: [internal]
     logging: *default-logging
 
+  mailer:
+    # Send-only SMTP relay with DKIM signing. The backend hands it mail over the
+    # private network (plain SMTP, no auth); it DKIM-signs and delivers directly to
+    # recipients' mail servers. Not internet-facing (no published ports), but the
+    # HOST needs OUTBOUND port 25 open to deliver (Dedibox allows it by default).
+    # Requires the mail DNS + reverse DNS set up — see docs/mail-setup.md.
+    image: boky/postfix:latest
+    hostname: ${MAIL_HOSTNAME:-mail.cine-track.com}
+    restart: unless-stopped
+    environment:
+      ALLOWED_SENDER_DOMAINS: ${MAIL_DOMAIN:-cine-track.com}
+      POSTFIX_myhostname: ${MAIL_HOSTNAME:-mail.cine-track.com}
+      # Auto-generate a DKIM key on first boot if none exists. Publish the printed
+      # public record (also written to ./data/postfix/keys/<domain>/<selector>.txt,
+      # selector "mail") as a DNS TXT record: mail._domainkey.<domain>.
+      DKIM_AUTOGENERATE: "1"
+    volumes:
+      # Persist DKIM keys so the published DNS record stays valid across restarts.
+      - ./data/postfix/keys:/etc/opendkim/keys
+    networks: [internal]
+    logging: *default-logging
+
   web:
-    # Serves the Flutter WEB app + reverse-proxies /api & /health to the backend,
-    # with automatic HTTPS. The mobile/desktop apps hit the same origin. Built by
-    # CI and pulled from GHCR (API URL baked in); `build:` is a local escape hatch.
+    # Serves the Flutter WEB app + reverse-proxies /api & /health to the backend.
+    # Sits BEHIND Cloudflare (app/api are proxied): TLS uses a Cloudflare Origin
+    # Certificate mounted at /etc/caddy/origin, and the vhosts only accept traffic
+    # from Cloudflare's edge. The mobile/desktop apps hit the same origin (via CF).
+    # Built by CI and pulled from GHCR; `build:` is a local escape hatch.
     image: ghcr.io/${GHCR_OWNER:-shiranuit}/cinetrack-web:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
@@ -158,13 +188,15 @@ services:
     environment:
       WEB_DOMAIN: ${WEB_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL}
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"   # HTTP/3
     volumes:
-      - ./data/caddy/data:/data       # TLS certs — bind mount so they persist (LE rate limits)
+      # Cloudflare Origin Certificate (create in Cloudflare -> SSL/TLS -> Origin
+      # Server). Put the cert as tls.crt and the key as tls.key in ./data/caddy/origin.
+      - ./data/caddy/origin:/etc/caddy/origin:ro
+      - ./data/caddy/data:/data
       - ./data/caddy/config:/config
     mem_limit: 512m
     networks: [internal]

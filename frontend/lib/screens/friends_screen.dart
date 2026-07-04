@@ -99,7 +99,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     _refresh();
   }
 
-  Future<void> _openProfile(int id) async {
+  Future<void> _openProfile(String id) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(userId: id)));
     _refresh();
   }

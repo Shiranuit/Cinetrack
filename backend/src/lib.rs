@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod config;
 pub mod db;
 pub mod email;
+pub mod email_templates;
 pub mod error;
 pub mod import;
 pub mod state;

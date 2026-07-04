@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::{sync::OnceLock, time::Duration};
 
 use axum::{
@@ -19,11 +20,16 @@ use crate::{
 /// Web refresh-token cookie name.
 const REFRESH_COOKIE: &str = "cinetrack_refresh";
 
-/// Real client IP from `X-Forwarded-For`. We take the LAST hop — the one appended
-/// by our own reverse proxy (Caddy) — because earlier entries are client-supplied
-/// and forgeable. Using the first entry would let an attacker spoof the header to
-/// bypass rate limiting and forge audit IPs. (Caddy is also configured to
-/// overwrite the header outright; taking the last is defence-in-depth.)
+/// Real client IP from `X-Forwarded-For`. We take the LAST hop — the value set by
+/// our own reverse proxy (Caddy) — because earlier entries are client-supplied and
+/// forgeable. Using the first entry would let an attacker spoof the header to bypass
+/// rate limiting and forge audit IPs.
+///
+/// Trust chain in production: browser -> Cloudflare -> Caddy -> backend. Caddy
+/// OVERWRITES `X-Forwarded-For` with the real visitor IP (from Cloudflare's
+/// `CF-Connecting-IP`) and only accepts requests from Cloudflare's edge, so the
+/// single value we read here is authoritative. Without Cloudflare, Caddy sets it to
+/// the direct peer instead — either way, the last hop is the trusted proxy's value.
 pub(crate) fn client_ip(headers: &HeaderMap) -> String {
     headers
         .get("x-forwarded-for")
@@ -88,7 +94,7 @@ fn read_refresh_cookie(headers: &HeaderMap) -> Option<String> {
 /// Build a login/refresh response. Web (cookie mode) gets the refresh token as an
 /// httpOnly cookie and only the access token in the body; mobile/desktop get both
 /// in the body (stored in secure storage).
-fn auth_response(state: &AppState, headers: &HeaderMap, user_id: i64, access: String, refresh: String) -> Response {
+fn auth_response(state: &AppState, headers: &HeaderMap, user_id: Uuid, access: String, refresh: String) -> Response {
     let secure = state.config.public_base_url.starts_with("https");
     let mut body = json!({
         "token": access.clone(),        // alias for compatibility
@@ -160,10 +166,10 @@ pub async fn register(
         .unwrap_or_else(|| email.split('@').next().unwrap_or("user"))
         .to_string();
 
+    // UUIDv7: time-ordered (good index locality) yet non-enumerable, and generated
+    // here so there's no MAX(id)+1 read-then-insert race on signup.
+    let new_id = uuid::Uuid::now_v7();
     let mut tx = state.db.begin().await?;
-    let new_id: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(id), 0) + 1 FROM app.users")
-        .fetch_one(&mut *tx)
-        .await?;
     let ins = sqlx::query(
         "INSERT INTO app.users (id, email, password_hash, screen_name) VALUES ($1, $2, $3, $4)",
     )
@@ -217,7 +223,7 @@ pub async fn login(
         return Err(AppError::TooManyRequests("too many login attempts, try again later".into()));
     }
 
-    let row: Option<(i64, Option<String>)> =
+    let row: Option<(Uuid, Option<String>)> =
         sqlx::query_as("SELECT id, password_hash FROM app.users WHERE email = $1")
             .bind(&email)
             .fetch_optional(&state.db)
@@ -289,7 +295,7 @@ pub async fn logout(
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct Me {
-    pub id: i64,
+    pub id: Uuid,
     pub email: Option<String>,
     pub screen_name: String,
     pub bio: Option<String>,
@@ -384,29 +390,33 @@ pub async fn forgot_password(
         return Err(AppError::TooManyRequests("too many reset requests, try again later".into()));
     }
     let email = req.email.trim().to_ascii_lowercase();
-    let user: Option<(i64,)> = sqlx::query_as("SELECT id FROM app.users WHERE email = $1")
+    let user: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM app.users WHERE email = $1")
         .bind(&email)
         .fetch_optional(&state.db)
         .await?;
 
     if let Some((user_id,)) = user {
         let token = auth::random_token();
+        let mut tx = state.db.begin().await?;
+        // One active reset link per user: supersede any outstanding (unused) token so
+        // a new request invalidates the previous link.
+        sqlx::query("UPDATE app.password_reset SET used_at = now() WHERE user_id = $1 AND used_at IS NULL")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query(
             "INSERT INTO app.password_reset (token_hash, user_id, expires_at) \
-             VALUES ($1, $2, now() + interval '1 hour')",
+             VALUES ($1, $2, now() + interval '10 minutes')",
         )
         .bind(auth::token_hash(&token))
         .bind(user_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         let link = format!("{}/reset-password?token={}", state.config.web_base_url, token);
-        let body = format!(
-            "A password reset was requested for your Cinetrack account.\n\n\
-             Reset it here (valid for 1 hour):\n{link}\n\n\
-             If this wasn't you, you can safely ignore this email."
-        );
-        state.mailer.send(&email, "Reset your Cinetrack password", &body).await;
+        let (subject, text, html) = crate::email_templates::reset_password(&link);
+        state.mailer.send_html(&email, &subject, &text, &html).await;
         crate::audit::record(&state, Some(user_id), crate::audit::event::RESET_REQUESTED, &client_ip(&headers), None).await;
     }
 
@@ -432,7 +442,7 @@ pub async fn reset_password(
     auth::password::validate(&req.new_password)?;
 
     let mut tx = state.db.begin().await?;
-    let row: Option<(i64,)> = sqlx::query_as(
+    let row: Option<(Uuid,)> = sqlx::query_as(
         "UPDATE app.password_reset SET used_at = now() \
          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING user_id",
     )

@@ -3,6 +3,8 @@
 //! hashed, and rotates on every refresh. Presenting an already-rotated token
 //! (theft) revokes the whole session.
 
+use uuid::Uuid;
+
 use crate::{auth, error::{AppError, AppResult}, state::AppState};
 
 /// Access-token lifetime. Short — the refresh token (cookie/secure storage)
@@ -12,7 +14,7 @@ pub const ACCESS_TTL_SECS: i64 = 30 * 60;
 const SESSION_TTL: &str = "30 days";
 
 /// Open a new session for `user_id`. Returns `(session_id, refresh_token)`.
-pub async fn create(state: &AppState, user_id: i64, device: Option<String>, ip: &str) -> AppResult<(String, String)> {
+pub async fn create(state: &AppState, user_id: Uuid, device: Option<String>, ip: &str) -> AppResult<(String, String)> {
     let refresh = auth::random_token();
     let sid: String = sqlx::query_scalar(&format!(
         "INSERT INTO app.session (user_id, refresh_hash, device, ip, expires_at) \
@@ -58,9 +60,9 @@ pub async fn revoke_by_refresh(state: &AppState, presented: &str) -> AppResult<(
 /// Exchange a refresh token for a fresh one (rotation). Returns
 /// `(user_id, session_id, new_refresh)`. Reusing an already-rotated token is
 /// treated as theft — the session is revoked and an error returned.
-pub async fn rotate(state: &AppState, presented: &str) -> AppResult<(i64, String, String)> {
+pub async fn rotate(state: &AppState, presented: &str) -> AppResult<(Uuid, String, String)> {
     let h = auth::token_hash(presented);
-    let row: Option<(String, i64, bool)> = sqlx::query_as(
+    let row: Option<(String, Uuid, bool)> = sqlx::query_as(
         "SELECT id::text, user_id, (refresh_hash = $1) AS is_current \
          FROM app.session \
          WHERE (refresh_hash = $1 OR prev_hash = $1) AND NOT revoked AND expires_at > now()",
@@ -103,7 +105,7 @@ pub async fn revoke(state: &AppState, sid: &str) -> AppResult<()> {
 }
 
 /// Revoke every session for a user (e.g. after a password reset).
-pub async fn revoke_all(state: &AppState, user_id: i64) -> AppResult<()> {
+pub async fn revoke_all(state: &AppState, user_id: Uuid) -> AppResult<()> {
     sqlx::query("UPDATE app.session SET revoked = true WHERE user_id = $1 AND NOT revoked")
         .bind(user_id)
         .execute(&state.db)
@@ -113,7 +115,7 @@ pub async fn revoke_all(state: &AppState, user_id: i64) -> AppResult<()> {
 
 /// Revoke every session for a user EXCEPT `keep_sid` (e.g. after a password change
 /// while staying logged in on this device).
-pub async fn revoke_all_except(state: &AppState, user_id: i64, keep_sid: &str) -> AppResult<()> {
+pub async fn revoke_all_except(state: &AppState, user_id: Uuid, keep_sid: &str) -> AppResult<()> {
     sqlx::query("UPDATE app.session SET revoked = true WHERE user_id = $1 AND id <> $2::uuid AND NOT revoked")
         .bind(user_id)
         .bind(keep_sid)

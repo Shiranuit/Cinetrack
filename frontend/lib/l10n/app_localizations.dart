@@ -748,10 +748,16 @@ abstract class AppLocalizations {
   /// **'Create'**
   String get createInvite;
 
+  /// No description provided for @inviteHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an email to send the invite directly, or leave it blank to get a shareable link.'**
+  String get inviteHelp;
+
   /// No description provided for @noInvitesYet.
   ///
   /// In en, this message translates to:
-  /// **'No invitations yet.'**
+  /// **'No invitations yet — create one above to invite someone.'**
   String get noInvitesYet;
 
   /// No description provided for @inviteLink.
@@ -777,6 +783,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pending'**
   String get invitePending;
+
+  /// No description provided for @revoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get revoke;
+
+  /// No description provided for @revokeInviteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke this invitation? The link will stop working.'**
+  String get revokeInviteConfirm;
+
+  /// No description provided for @inviteRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation revoked'**
+  String get inviteRevoked;
 
   /// No description provided for @securityActivity.
   ///

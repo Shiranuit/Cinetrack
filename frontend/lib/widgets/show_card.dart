@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
@@ -37,7 +38,13 @@ class ShowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      onLongPress: onLongPress,
+      // On web a mouse press+drag on a card would otherwise get caught by the
+      // long-press recognizer (opening the context sheet) and starve the rail's
+      // horizontal drag — so a drag "acts like a right-click" and the carousel
+      // won't scroll. Drop long-press on web and expose the same menu via a real
+      // right-click (secondary tap), which is the correct desktop idiom anyway.
+      onLongPress: kIsWeb ? null : onLongPress,
+      onSecondaryTap: onLongPress,
       borderRadius: BorderRadius.circular(Radii.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

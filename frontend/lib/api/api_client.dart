@@ -162,14 +162,14 @@ class ApiClient {
 
   // ---- auth ---- (login/register/forgot/reset are unauthenticated: a 401 means
   // bad credentials, not an expired token, so they don't trigger a refresh.)
-  Future<int> login(String email, String password) async {
+  Future<String> login(String email, String password) async {
     final j = await _send('POST', '/api/auth/login',
         body: {'email': email, 'password': password}, auth: false) as Map<String, dynamic>;
     await _adoptSession(j);
-    return (j['user_id'] as num).toInt();
+    return j['user_id'] as String; // UUID
   }
 
-  Future<int> register(String email, String password, String screenName, {String? inviteCode}) async {
+  Future<String> register(String email, String password, String screenName, {String? inviteCode}) async {
     final j = await _send('POST', '/api/auth/register', body: {
       'email': email,
       'password': password,
@@ -177,7 +177,7 @@ class ApiClient {
       if (inviteCode != null && inviteCode.isNotEmpty) 'invite_code': inviteCode,
     }, auth: false) as Map<String, dynamic>;
     await _adoptSession(j);
-    return (j['user_id'] as num).toInt();
+    return j['user_id'] as String; // UUID
   }
 
   Future<void> forgotPassword(String email) =>
@@ -193,6 +193,7 @@ class ApiClient {
   }
 
   Future<List<InviteInfo>> listInvites() async => _list(await _get('/api/invites'), InviteInfo.fromJson);
+  Future<void> revokeInvite(String id) => _send('DELETE', '/api/invites/$id');
 
   Future<List<SecurityEvent>> securityLog() async =>
       _list(await _get('/api/me/security-log'), SecurityEvent.fromJson);
@@ -318,25 +319,25 @@ class ApiClient {
   Future<List<UserBrief>> searchUsers(String q) async =>
       _list(await _get('/api/users/search', {'q': q}), UserBrief.fromJson);
   Future<List<UserBrief>> following() async => _list(await _get('/api/users/following'), UserBrief.fromJson);
-  Future<void> followUser(int userId, bool value) =>
+  Future<void> followUser(String userId, bool value) =>
       _send(value ? 'POST' : 'DELETE', '/api/users/$userId/follow');
 
-  Future<UserProfile> userProfile(int id) async => UserProfile.fromJson(await _get('/api/users/$id'));
-  Future<Stats> userStats(int id) async => Stats.fromJson(await _get('/api/users/$id/stats'));
-  Future<List<UserShow>> userShows(int id, {String? langs}) async =>
+  Future<UserProfile> userProfile(String id) async => UserProfile.fromJson(await _get('/api/users/$id'));
+  Future<Stats> userStats(String id) async => Stats.fromJson(await _get('/api/users/$id/stats'));
+  Future<List<UserShow>> userShows(String id, {String? langs}) async =>
       _list(await _get('/api/users/$id/shows', {'langs': ?langs}), UserShow.fromJson);
-  Future<Library> userLibrary(int id, {String? langs}) async =>
+  Future<Library> userLibrary(String id, {String? langs}) async =>
       Library.fromJson(await _get('/api/users/$id/library', {'langs': ?langs}));
-  Future<List<SearchResult>> userFilteredShows(int id, AdvancedFilters f, {String? langs}) async =>
+  Future<List<SearchResult>> userFilteredShows(String id, AdvancedFilters f, {String? langs}) async =>
       _list(await _get('/api/users/$id/filter', {...f.toQuery(), 'limit': '200', 'langs': ?langs}), SearchResult.fromJson);
-  Future<List<LibraryMovie>> userMovies(int id, {String? langs}) async =>
+  Future<List<LibraryMovie>> userMovies(String id, {String? langs}) async =>
       _list(await _get('/api/users/$id/movies', {'langs': ?langs}), LibraryMovie.fromJson);
   Future<List<UserBrief>> followRequests() async =>
       _list(await _get('/api/users/requests'), UserBrief.fromJson);
   Future<List<UserBrief>> followers() async => _list(await _get('/api/users/followers'), UserBrief.fromJson);
-  Future<void> removeFollower(int followerId) => _send('DELETE', '/api/users/followers/$followerId');
-  Future<void> acceptRequest(int followerId) => _send('POST', '/api/users/requests/$followerId/accept');
-  Future<void> rejectRequest(int followerId) => _send('POST', '/api/users/requests/$followerId/reject');
+  Future<void> removeFollower(String followerId) => _send('DELETE', '/api/users/followers/$followerId');
+  Future<void> acceptRequest(String followerId) => _send('POST', '/api/users/requests/$followerId/accept');
+  Future<void> rejectRequest(String followerId) => _send('POST', '/api/users/requests/$followerId/reject');
   Future<void> setPrivacy(bool isPrivate) => _send('PUT', '/api/me/privacy', body: {'is_private': isPrivate});
   Future<void> setProfileBlocks(List<String> blocks) => _send('PUT', '/api/me/profile-blocks', body: {'blocks': blocks});
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import 'drag_scroll_behavior.dart';
 import 'show_card.dart';
 
 /// A section title, optionally with a leading accent dot/icon and a trailing count.
@@ -80,12 +81,17 @@ class PosterRail extends StatelessWidget {
         ),
         SizedBox(
           height: railHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: Insets.pageH,
-            itemCount: count,
-            separatorBuilder: (_, _) => const SizedBox(width: Insets.md),
-            itemBuilder: (context, i) => SizedBox(width: cardWidth, child: itemBuilder(context, i)),
+          // Mouse drag handled by a mouse-only horizontal-drag recognizer
+          // (MouseDragScroll); touch/trackpad use the ListView's native physics.
+          child: MouseDragScroll(
+            builder: (context, controller) => ListView.separated(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: Insets.pageH,
+              itemCount: count,
+              separatorBuilder: (_, _) => const SizedBox(width: Insets.md),
+              itemBuilder: (context, i) => SizedBox(width: cardWidth, child: itemBuilder(context, i)),
+            ),
           ),
         ),
       ],

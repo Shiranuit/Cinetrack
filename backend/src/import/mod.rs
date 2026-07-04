@@ -10,6 +10,7 @@ mod source;
 #[cfg(test)]
 mod tests;
 
+use uuid::Uuid;
 use std::collections::HashMap;
 
 use anyhow::Context;
@@ -19,7 +20,7 @@ use source::{Row, ZipSource, boolv, i32v, i64v, s, ts_utc};
 
 #[derive(Debug, Default, serde::Serialize)]
 pub struct ImportSummary {
-    pub user_id: i64,
+    pub user_id: Uuid,
     pub shows: usize,
     pub favorites: usize,
     pub watch_events: usize,
@@ -41,7 +42,7 @@ pub async fn run(state: &AppState, zip_path: &str) -> anyhow::Result<ImportSumma
 /// Import an uploaded zip's tracking data into an existing (logged-in) user.
 /// Skips the slow catalog prefetch (read-through fills it lazily) so the upload
 /// request returns promptly.
-pub async fn run_into(state: &AppState, bytes: Vec<u8>, user_id: i64) -> anyhow::Result<ImportSummary> {
+pub async fn run_into(state: &AppState, bytes: Vec<u8>, user_id: Uuid) -> anyhow::Result<ImportSummary> {
     let src = ZipSource::open_bytes(bytes)?;
     import(state, src, Some(user_id), false).await
 }
@@ -49,7 +50,7 @@ pub async fn run_into(state: &AppState, bytes: Vec<u8>, user_id: i64) -> anyhow:
 /// Import a zip on disk into an existing user (repairs/refreshes their data).
 /// Prefetches the catalog so posters/episodes are available. Used by the CLI to
 /// backfill an account whose earlier import was partial.
-pub async fn run_zip_into(state: &AppState, zip_path: &str, user_id: i64) -> anyhow::Result<ImportSummary> {
+pub async fn run_zip_into(state: &AppState, zip_path: &str, user_id: Uuid) -> anyhow::Result<ImportSummary> {
     let src = ZipSource::open(zip_path)?;
     import(state, src, Some(user_id), true).await
 }
@@ -57,7 +58,7 @@ pub async fn run_zip_into(state: &AppState, zip_path: &str, user_id: i64) -> any
 async fn import(
     state: &AppState,
     mut src: ZipSource,
-    target_user: Option<i64>,
+    target_user: Option<Uuid>,
     prefetch: bool,
 ) -> anyhow::Result<ImportSummary> {
     // Load the CSVs we use (flat relational ones + the favorites list).
@@ -121,7 +122,7 @@ async fn import(
 
 /// Apply the export's cover/bio/country to an existing user (in-app import),
 /// leaving their screen_name/email/password untouched.
-async fn update_profile_from_export(state: &AppState, user_id: i64, personal: &[Row]) -> anyhow::Result<()> {
+async fn update_profile_from_export(state: &AppState, user_id: Uuid, personal: &[Row]) -> anyhow::Result<()> {
     let (mut country, mut bio, mut cover) = (None, None, None);
     for r in personal {
         match s(r, "name") {
@@ -146,7 +147,7 @@ async fn update_profile_from_export(state: &AppState, user_id: i64, personal: &[
 
 /// Prefetch every series the user tracks into the catalog (via read-through) so
 /// the library shows names/posters. Run in the background after an in-app import.
-pub async fn prefetch_user_series(state: &AppState, user_id: i64) {
+pub async fn prefetch_user_series(state: &AppState, user_id: Uuid) {
     let ids: Vec<i64> = sqlx::query_scalar("SELECT series_id FROM app.user_show WHERE user_id = $1")
         .bind(user_id)
         .fetch_all(&state.db)
@@ -173,7 +174,7 @@ pub async fn backfill_unavailable(state: &AppState) -> (usize, usize) {
     (ok, failed)
 }
 
-async fn upsert_user(state: &AppState, social: &[Row], personal: &[Row]) -> anyhow::Result<i64> {
+async fn upsert_user(state: &AppState, social: &[Row], personal: &[Row]) -> anyhow::Result<Uuid> {
     let s0 = social.first().context("user_social_data.csv is empty")?;
     let external = i64v(s0, "user_id").context("user_social_data.user_id missing")?;
 
@@ -189,17 +190,12 @@ async fn upsert_user(state: &AppState, social: &[Row], personal: &[Row]) -> anyh
 
     // Reuse the existing internal id if this account was imported before;
     // otherwise assign a fresh one.
-    let existing: Option<i64> =
+    let existing: Option<Uuid> =
         sqlx::query_scalar("SELECT id FROM app.users WHERE external_tvtime_id = $1")
             .bind(external)
             .fetch_optional(&state.db)
             .await?;
-    let user_id = match existing {
-        Some(id) => id,
-        None => sqlx::query_scalar("SELECT COALESCE(MAX(id), 0) + 1 FROM app.users")
-            .fetch_one(&state.db)
-            .await?,
-    };
+    let user_id = existing.unwrap_or_else(Uuid::now_v7);
 
     sqlx::query(
         "INSERT INTO app.users \
@@ -307,7 +303,7 @@ fn build_shows(
     map
 }
 
-async fn upsert_show(state: &AppState, user_id: i64, series_id: i64, a: &ShowAcc) -> anyhow::Result<()> {
+async fn upsert_show(state: &AppState, user_id: Uuid, series_id: i64, a: &ShowAcc) -> anyhow::Result<()> {
     sqlx::query(
         "INSERT INTO app.user_show \
            (user_id, series_id, is_followed, is_favorited, status, archived, active, diffusion, \
@@ -344,7 +340,7 @@ async fn upsert_show(state: &AppState, user_id: i64, series_id: i64, a: &ShowAcc
     Ok(())
 }
 
-async fn import_rewatches(state: &AppState, user_id: i64, rows: &[Row]) -> anyhow::Result<usize> {
+async fn import_rewatches(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
     let mut n = 0;
     for r in rows {
         let Some(episode_id) = i64v(r, "episode_id") else { continue };
@@ -364,7 +360,7 @@ async fn import_rewatches(state: &AppState, user_id: i64, rows: &[Row]) -> anyho
     Ok(n)
 }
 
-async fn import_ratings(state: &AppState, user_id: i64, rows: &[Row]) -> anyhow::Result<usize> {
+async fn import_ratings(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
     let mut n = 0;
     for r in rows {
         let Some(episode_id) = i64v(r, "episode_id") else { continue };
@@ -395,7 +391,7 @@ async fn import_ratings(state: &AppState, user_id: i64, rows: &[Row]) -> anyhow:
 /// (`key=user-series-…`) and a single stats-summary row (`key=tracking-stats`)
 /// with no episode_id — those are NOT movie watches (there are no per-movie rows in
 /// this export) so we skip them here. `key`/`uuid` gives idempotency.
-async fn import_watch_events(state: &AppState, user_id: i64, rows: &[Row]) -> anyhow::Result<usize> {
+async fn import_watch_events(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for r in rows {
@@ -437,7 +433,7 @@ async fn import_watch_events(state: &AppState, user_id: i64, rows: &[Row]) -> an
 
 /// Import TV Time's stats-summary row (`key=tracking-stats`) — the authoritative
 /// movie count + total watch time (runtimes in SECONDS) — onto the user.
-async fn import_stats(state: &AppState, user_id: i64, rows: &[Row]) -> anyhow::Result<()> {
+async fn import_stats(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<()> {
     let Some(r) = rows.iter().find(|r| s(r, "key") == Some("tracking-stats")) else { return Ok(()) };
     sqlx::query(
         "UPDATE app.users SET \
@@ -530,7 +526,7 @@ enum ResolveOutcome {
 ///   a PENDING suggestion for the user to confirm/reject in the UI.
 ///
 /// Returns `(applied, suggested)` counts.
-pub async fn resolve_unavailable(state: &AppState, user_id: i64) -> (usize, usize) {
+pub async fn resolve_unavailable(state: &AppState, user_id: Uuid) -> (usize, usize) {
     let dead: Vec<(i64, Option<String>)> = sqlx::query_as(
         "SELECT series_id, import_name FROM app.user_show WHERE user_id = $1 AND unavailable \
            AND series_id NOT IN (SELECT dead_series_id FROM app.import_match WHERE user_id = $1)",
@@ -564,7 +560,7 @@ pub async fn resolve_unavailable(state: &AppState, user_id: i64) -> (usize, usiz
 
 async fn resolve_one(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     old_id: i64,
     name: &str,
 ) -> anyhow::Result<ResolveOutcome> {
@@ -717,7 +713,7 @@ pub struct MatchSuggestion {
 /// cached (falling back to the base name, which for anime is often Japanese).
 pub async fn list_suggestions(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     langs: &[String],
 ) -> crate::error::AppResult<Vec<MatchSuggestion>> {
     let rows = sqlx::query_as::<_, MatchSuggestion>(
@@ -743,7 +739,7 @@ pub async fn list_suggestions(
 
 /// Confirm a suggestion: remap the dead series to the suggested live one and mark
 /// it confirmed. Returns false if the suggestion doesn't exist / isn't pending.
-pub async fn confirm_suggestion(state: &AppState, user_id: i64, id: i64) -> crate::error::AppResult<bool> {
+pub async fn confirm_suggestion(state: &AppState, user_id: Uuid, id: i64) -> crate::error::AppResult<bool> {
     let row: Option<(i64, i64)> = sqlx::query_as(
         "SELECT dead_series_id, suggested_series_id FROM app.import_match \
          WHERE id = $1 AND user_id = $2 AND status = 'pending'",
@@ -768,7 +764,7 @@ pub async fn confirm_suggestion(state: &AppState, user_id: i64, id: i64) -> crat
 
 /// Reject a suggestion: leave the dead series hidden (`unavailable`) and remember
 /// the rejection so we don't suggest it again.
-pub async fn reject_suggestion(state: &AppState, user_id: i64, id: i64) -> crate::error::AppResult<bool> {
+pub async fn reject_suggestion(state: &AppState, user_id: Uuid, id: i64) -> crate::error::AppResult<bool> {
     let n = sqlx::query(
         "UPDATE app.import_match SET status = 'rejected' \
          WHERE id = $1 AND user_id = $2 AND status = 'pending'",
@@ -786,7 +782,7 @@ pub async fn reject_suggestion(state: &AppState, user_id: i64, id: i64) -> crate
 /// Merges into an existing row if the user already tracks the new id.
 pub async fn remap_user_series(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     old_id: i64,
     new_id: i64,
 ) -> anyhow::Result<()> {

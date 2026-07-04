@@ -16,6 +16,14 @@ use std::sync::OnceLock;
 use backend::{config::Config, state::AppState};
 use sqlx::PgPool;
 use tokio::sync::{Mutex, MutexGuard};
+use uuid::Uuid;
+
+/// Map a small integer to a fixed, deterministic user UUID. Tests refer to users
+/// by tiny ids (1, 2, …) for readability; user PKs are now UUIDs, so both the
+/// fixtures and the direct backend calls funnel their id through here to agree.
+pub fn uid(n: i64) -> Uuid {
+    Uuid::from_u128(n as u128)
+}
 
 /// Serializes tests within the binary — they all share one database.
 static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -75,7 +83,7 @@ pub async fn clean(db: &PgPool) {
 pub async fn insert_user(db: &PgPool, id: i64, email: &str) {
     let hash = backend::auth::password::hash("Fixture123!pass").unwrap();
     sqlx::query("INSERT INTO app.users (id, screen_name, email, password_hash) VALUES ($1,$2,$3,$4)")
-        .bind(id)
+        .bind(uid(id))
         .bind(format!("user{id}"))
         .bind(email)
         .bind(hash)
@@ -141,7 +149,7 @@ pub async fn follow(db: &PgPool, user_id: i64, series_id: i64, followed: bool, f
     sqlx::query(
         "INSERT INTO app.user_show (user_id, series_id, is_followed, is_favorited) VALUES ($1,$2,$3,$4)",
     )
-    .bind(user_id)
+    .bind(uid(user_id))
     .bind(series_id)
     .bind(followed)
     .bind(favorited)
@@ -154,7 +162,7 @@ pub async fn follow(db: &PgPool, user_id: i64, series_id: i64, followed: bool, f
 pub async fn set_user_show(db: &PgPool, user_id: i64, series_id: i64, col: &str, sql_value: &str) {
     // `col` is a fixed identifier chosen by the test author (never user input).
     let q = format!("UPDATE app.user_show SET {col} = {sql_value} WHERE user_id=$1 AND series_id=$2");
-    sqlx::query(&q).bind(user_id).bind(series_id).execute(db).await.expect("update user_show");
+    sqlx::query(&q).bind(uid(user_id)).bind(series_id).execute(db).await.expect("update user_show");
 }
 
 pub async fn insert_episode(
@@ -225,7 +233,7 @@ pub async fn watch_se(
            (user_id, entity_type, series_id, episode_id, season_number, episode_number, source_uuid, watched_at) \
          VALUES ($1,'episode',$2,$3,$4,$5,$6, now())",
     )
-    .bind(user_id)
+    .bind(uid(user_id))
     .bind(series_id)
     .bind(episode_id)
     .bind(season)
@@ -249,7 +257,7 @@ pub async fn watch_ago(
         "INSERT INTO app.watch_event (user_id, entity_type, series_id, episode_id, source_uuid, watched_at) \
          VALUES ($1,'episode',$2,$3,$4, now() - make_interval(days => $5::int))",
     )
-    .bind(user_id)
+    .bind(uid(user_id))
     .bind(series_id)
     .bind(episode_id)
     .bind(source_uuid)

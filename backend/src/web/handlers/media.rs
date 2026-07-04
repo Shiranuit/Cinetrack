@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
@@ -49,7 +50,7 @@ fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
-async fn upload_image(state: &AppState, user_id: i64, kind: &str, mp: Multipart) -> AppResult<String> {
+async fn upload_image(state: &AppState, user_id: Uuid, kind: &str, mp: Multipart) -> AppResult<String> {
     let storage = state.storage.as_ref().ok_or_else(|| AppError::Storage("object storage not configured".into()))?;
     let (bytes, _client_ct) = first_file(mp).await?;
     if bytes.len() > MAX_IMAGE_BYTES {
@@ -79,7 +80,7 @@ pub async fn upload_cover(AuthUser(uid): AuthUser, State(state): State<AppState>
     Ok(Json(json!({ "cover_url": url })))
 }
 
-async fn serve(state: &AppState, user_id: i64, kind: &str) -> AppResult<Response> {
+async fn serve(state: &AppState, user_id: Uuid, kind: &str) -> AppResult<Response> {
     let storage = state.storage.as_ref().ok_or(AppError::NotFound)?;
     let (bytes, ct) = storage.get_with_type(&format!("users/{user_id}/{kind}")).await?;
     Ok((
@@ -96,10 +97,10 @@ async fn serve(state: &AppState, user_id: i64, kind: &str) -> AppResult<Response
 }
 
 /// Public: serve a user's avatar / cover image from storage.
-pub async fn serve_avatar(State(state): State<AppState>, Path(id): Path<i64>) -> AppResult<Response> {
+pub async fn serve_avatar(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
     serve(&state, id, "avatar").await
 }
-pub async fn serve_cover(State(state): State<AppState>, Path(id): Path<i64>) -> AppResult<Response> {
+pub async fn serve_cover(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
     serve(&state, id, "cover").await
 }
 

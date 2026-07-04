@@ -1,5 +1,7 @@
-use axum::{Json, extract::State, http::HeaderMap};
+use axum::{Json, extract::{Path, State}, http::HeaderMap};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use uuid::Uuid;
 
 use crate::{auth, auth::AuthUser, error::{AppError, AppResult}, state::AppState};
 
@@ -19,7 +21,8 @@ pub struct CreateInviteReq {
 
 #[derive(Serialize)]
 pub struct CreateInviteResp {
-    /// The one-time code — shown ONCE (we only store its hash). Embedded in `link`.
+    pub id: Uuid,
+    /// The one-time code, embedded in `link`.
     pub code: String,
     pub link: String,
     pub expires_at: String,
@@ -58,11 +61,15 @@ pub async fn create_invite(
     }
 
     let code = auth::random_token();
-    let expires_at: String = sqlx::query_scalar(&format!(
-        "INSERT INTO app.invitation (code_hash, created_by, email, expires_at) \
-         VALUES ($1, $2, $3, now() + interval '{INVITE_TTL}') RETURNING expires_at::text",
+    // Store the plaintext `code` (so the link can be copied later) alongside its
+    // hash (the source of truth validated at sign-up). Invites are single-use and
+    // low-sensitivity, so keeping the code is an acceptable tradeoff.
+    let (id, expires_at): (Uuid, String) = sqlx::query_as(&format!(
+        "INSERT INTO app.invitation (code_hash, code, created_by, email, expires_at) \
+         VALUES ($1, $2, $3, $4, now() + interval '{INVITE_TTL}') RETURNING id, expires_at::text",
     ))
     .bind(auth::token_hash(&code))
+    .bind(&code)
     .bind(me)
     .bind(&email)
     .fetch_one(&state.db)
@@ -71,12 +78,8 @@ pub async fn create_invite(
     let link = format!("{}/signup?invite={}", state.config.web_base_url, code);
 
     let emailed = if let Some(to) = &email {
-        let body = format!(
-            "You've been invited to Cinetrack.\n\n\
-             Create your account here (valid 14 days):\n{link}\n\n\
-             If you weren't expecting this, you can ignore it."
-        );
-        state.mailer.send(to, "Your Cinetrack invitation", &body).await;
+        let (subject, text, html) = crate::email_templates::invite(&link);
+        state.mailer.send_html(to, &subject, &text, &html).await;
         true
     } else {
         false
@@ -87,32 +90,70 @@ pub async fn create_invite(
         Some(me),
         crate::audit::event::INVITE_CREATED,
         &client_ip(&headers),
-        Some(serde_json::json!({ "emailed": emailed })),
+        Some(json!({ "emailed": emailed })),
     )
     .await;
-    Ok(Json(CreateInviteResp { code, link, expires_at, emailed }))
+    Ok(Json(CreateInviteResp { id, code, link, expires_at, emailed }))
 }
 
-#[derive(Serialize, sqlx::FromRow)]
-pub struct InviteRow {
+#[derive(Serialize)]
+pub struct InviteInfo {
+    pub id: Uuid,
     pub email: Option<String>,
     pub created_at: String,
     pub expires_at: String,
     pub used: bool,
+    /// Full sign-up link — present only for pending (unused, unexpired) invites that
+    /// still have a stored code; `None` for used/expired/legacy invites.
+    pub link: Option<String>,
 }
 
-/// List my invitations and their status (never reveals the code — only the hash
-/// is stored, so the code is shown once at creation).
+/// List my invitations and their status, with a copyable link for pending ones.
 pub async fn list_invites(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-) -> AppResult<Json<Vec<InviteRow>>> {
-    let rows = sqlx::query_as::<_, InviteRow>(
-        "SELECT email, created_at::text, expires_at::text, (used_by IS NOT NULL) AS used \
-         FROM app.invitation WHERE created_by = $1 ORDER BY created_at DESC",
+) -> AppResult<Json<Vec<InviteInfo>>> {
+    let rows: Vec<(Uuid, Option<String>, String, String, bool, Option<String>, bool)> =
+        sqlx::query_as(
+            "SELECT id, email, created_at::text, expires_at::text, \
+                    (used_by IS NOT NULL) AS used, code, (expires_at > now()) AS active \
+             FROM app.invitation WHERE created_by = $1 ORDER BY created_at DESC",
+        )
+        .bind(me)
+        .fetch_all(&state.db)
+        .await?;
+
+    let base = &state.config.web_base_url;
+    let list = rows
+        .into_iter()
+        .map(|(id, email, created_at, expires_at, used, code, active)| {
+            let link = (!used && active)
+                .then(|| code.map(|c| format!("{base}/signup?invite={c}")))
+                .flatten();
+            InviteInfo { id, email, created_at, expires_at, used, link }
+        })
+        .collect();
+    Ok(Json(list))
+}
+
+/// Revoke a pending invitation. Refuses once it's been accepted (`used_by` set) —
+/// at that point the account already exists, so it's too late to take it back.
+pub async fn revoke_invite(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<Value>> {
+    let affected = sqlx::query(
+        "DELETE FROM app.invitation WHERE id = $1 AND created_by = $2 AND used_by IS NULL",
     )
+    .bind(id)
     .bind(me)
-    .fetch_all(&state.db)
-    .await?;
-    Ok(Json(rows))
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if affected == 0 {
+        // Not found, not yours, or already accepted — nothing to revoke.
+        return Err(AppError::NotFound);
+    }
+    Ok(Json(json!({ "revoked": true })))
 }

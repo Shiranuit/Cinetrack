@@ -66,6 +66,10 @@ pub struct SmtpConfig {
     pub password: String,
     /// e.g. `Cinetrack <no-reply@cine-track.com>`
     pub from: String,
+    /// Use STARTTLS (default — external providers like Gmail/Scaleway on 587).
+    /// `false` (`SMTP_TLS=none`) = plain, unencrypted SMTP: only for a trusted relay
+    /// on the private network — the internal Postfix in prod, or Mailpit in dev.
+    pub starttls: bool,
 }
 
 /// Runtime configuration, loaded from environment (see `.env.example`).
@@ -125,6 +129,8 @@ impl Config {
             username: opt("SMTP_USER", ""),
             password: opt("SMTP_PASS", ""),
             from: opt("MAIL_FROM", "Cinetrack <no-reply@localhost>"),
+            // Default STARTTLS; `SMTP_TLS=none` selects a plain relay.
+            starttls: !opt("SMTP_TLS", "starttls").trim().eq_ignore_ascii_case("none"),
         });
 
         let allow_public_registration = env::var("ALLOW_PUBLIC_REGISTRATION")

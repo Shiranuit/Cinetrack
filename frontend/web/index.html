@@ -31,6 +31,21 @@
 
   <title>Cinetrack</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Stop the browser starting a native text selection on mouse-drag, which
+       otherwise steals pointer-move events from Flutter and breaks drag-to-scroll
+       of the horizontal poster rails on web. */
+    html, body { user-select: none; -webkit-user-select: none; }
+  </style>
+  <script>
+    // Prevent native drag-and-drop (image/element dragging). Without this, dragging
+    // a poster starts a browser image-drag: the pointer's button state flips to 0
+    // mid-drag and the browser captures further move events, so the rail never
+    // scrolls. Flutter's own drag (ReorderableListView etc.) doesn't use native DnD,
+    // so suppressing it here is safe.
+    window.addEventListener('dragstart', function (e) { e.preventDefault(); }, true);
+  </script>
 </head>
 <body>
   <!--

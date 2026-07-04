@@ -6,17 +6,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String, // user id
+    pub sub: String, // user id (uuid)
     pub sid: String, // session id
     pub exp: usize,
 }
 
-pub fn issue(secret: &str, user_id: i64, sid: &str, ttl_secs: i64) -> AppResult<String> {
+pub fn issue(secret: &str, user_id: Uuid, sid: &str, ttl_secs: i64) -> AppResult<String> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
     let claims = Claims {
         sub: user_id.to_string(),
@@ -28,7 +29,7 @@ pub fn issue(secret: &str, user_id: i64, sid: &str, ttl_secs: i64) -> AppResult<
 }
 
 /// Returns `(user_id, session_id)` on a valid, unexpired signature.
-pub fn verify(secret: &str, token: &str) -> AppResult<(i64, String)> {
+pub fn verify(secret: &str, token: &str) -> AppResult<(Uuid, String)> {
     let data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),

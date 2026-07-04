@@ -4,6 +4,7 @@
 //! episode counts) rather than scanning `raw` JSONB. Set `library_user` to scope
 //! the results to one user's tracked shows.
 
+use uuid::Uuid;
 use std::collections::HashSet;
 
 use serde_json::Value;
@@ -63,9 +64,9 @@ pub struct Filters {
     pub limit: i64,
     pub offset: i64,
     /// When set, restrict to this user's tracked (non-unavailable) shows.
-    pub library_user: Option<i64>,
+    pub library_user: Option<Uuid>,
     /// When set, EXCLUDE this user's tracked shows (Discover: show new shows only).
-    pub exclude_user: Option<i64>,
+    pub exclude_user: Option<Uuid>,
     /// Library-only: restrict to favorited shows.
     pub favorites_only: bool,
 }
@@ -228,7 +229,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
 
 /// Genres actually used by mirrored series (optionally only within one user's
 /// library). Falls back to TheTVDB's full list when the mirror is empty.
-pub async fn genres_in_catalog(state: &AppState, library_user: Option<i64>) -> AppResult<Vec<Genre>> {
+pub async fn genres_in_catalog(state: &AppState, library_user: Option<Uuid>) -> AppResult<Vec<Genre>> {
     let rows: Vec<(i64, String)> = match library_user {
         Some(uid) => sqlx::query_as(
             "SELECT DISTINCT g.id, g.name FROM catalog.genre g \
@@ -253,7 +254,7 @@ pub async fn genres_in_catalog(state: &AppState, library_user: Option<i64>) -> A
 }
 
 /// Themes/keywords present in the mirror (optionally scoped to a user's library).
-pub async fn tags_in_catalog(state: &AppState, library_user: Option<i64>) -> AppResult<Vec<Tag>> {
+pub async fn tags_in_catalog(state: &AppState, library_user: Option<Uuid>) -> AppResult<Vec<Tag>> {
     let rows = match library_user {
         Some(uid) => sqlx::query_as::<_, Tag>(
             "SELECT DISTINCT t.id, t.name, t.category FROM catalog.tag t \
@@ -278,7 +279,7 @@ pub async fn tags_in_catalog(state: &AppState, library_user: Option<i64>) -> App
 pub async fn companies_in_catalog(
     state: &AppState,
     kind: &str,
-    library_user: Option<i64>,
+    library_user: Option<Uuid>,
 ) -> AppResult<Vec<Company>> {
     let rows = match library_user {
         Some(uid) => sqlx::query_as::<_, Company>(
@@ -308,7 +309,7 @@ pub async fn companies_in_catalog(
 /// Distinct origin values (language or country) across series + movies, most
 /// common first, optionally scoped to a user's library. `column` is a fixed
 /// allow-listed identifier.
-async fn origin_values(state: &AppState, column: &str, library_user: Option<i64>) -> AppResult<Vec<String>> {
+async fn origin_values(state: &AppState, column: &str, library_user: Option<Uuid>) -> AppResult<Vec<String>> {
     let sql = match library_user {
         Some(_) => format!(
             "SELECT v, count(*) c FROM ( \
@@ -333,11 +334,11 @@ async fn origin_values(state: &AppState, column: &str, library_user: Option<i64>
     Ok(q.fetch_all(&state.db).await?.into_iter().map(|(v, _)| v).collect())
 }
 
-pub async fn languages_in_catalog(state: &AppState, library_user: Option<i64>) -> AppResult<Vec<String>> {
+pub async fn languages_in_catalog(state: &AppState, library_user: Option<Uuid>) -> AppResult<Vec<String>> {
     origin_values(state, "original_language", library_user).await
 }
 
-pub async fn countries_in_catalog(state: &AppState, library_user: Option<i64>) -> AppResult<Vec<String>> {
+pub async fn countries_in_catalog(state: &AppState, library_user: Option<Uuid>) -> AppResult<Vec<String>> {
     origin_values(state, "original_country", library_user).await
 }
 

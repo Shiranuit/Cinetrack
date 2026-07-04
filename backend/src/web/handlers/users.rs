@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -44,7 +45,7 @@ pub async fn feed(
 pub async fn follow(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
 ) -> AppResult<Json<Value>> {
     let status = tracking::follow_user(&state, user_id, target_id).await?;
     Ok(Json(json!({ "followee_id": target_id, "status": status })))
@@ -53,7 +54,7 @@ pub async fn follow(
 pub async fn unfollow(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
 ) -> AppResult<Json<Value>> {
     tracking::unfollow_user(&state, user_id, target_id).await?;
     Ok(Json(json!({ "followee_id": target_id, "status": "none" })))
@@ -63,7 +64,7 @@ pub async fn unfollow(
 pub async fn profile(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
 ) -> AppResult<Json<tracking::UserProfile>> {
     Ok(Json(tracking::user_profile(&state, me, target_id).await?))
 }
@@ -72,7 +73,7 @@ pub async fn profile(
 pub async fn user_shows(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
     Query(q): Query<crate::web::query::LangsQuery>,
 ) -> AppResult<Json<Vec<tracking::UserShowRow>>> {
     Ok(Json(tracking::user_shows(&state, me, target_id, &q.list()).await?))
@@ -82,7 +83,7 @@ pub async fn user_shows(
 pub async fn user_library(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
     Query(q): Query<crate::web::query::LangsQuery>,
 ) -> AppResult<Json<tracking::Library>> {
     Ok(Json(tracking::user_library(&state, me, target_id, &q.list()).await?))
@@ -92,7 +93,7 @@ pub async fn user_library(
 pub async fn user_stats(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
 ) -> AppResult<Json<tracking::Stats>> {
     if !tracking::profile_visible(&state, me, target_id).await? {
         return Ok(Json(tracking::Stats::default()));
@@ -104,7 +105,7 @@ pub async fn user_stats(
 pub async fn user_movies(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(target_id): Path<i64>,
+    Path(target_id): Path<Uuid>,
     Query(q): Query<crate::web::query::LangsQuery>,
 ) -> AppResult<Json<Vec<crate::tracking::movies::LibraryMovie>>> {
     if !tracking::profile_visible(&state, me, target_id).await? {
@@ -133,7 +134,7 @@ pub async fn followers(
 pub async fn remove_follower(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(follower_id): Path<i64>,
+    Path(follower_id): Path<Uuid>,
 ) -> AppResult<Json<Value>> {
     tracking::remove_follower(&state, me, follower_id).await?;
     Ok(Json(json!({ "removed": true })))
@@ -142,7 +143,7 @@ pub async fn remove_follower(
 pub async fn accept_request(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(follower_id): Path<i64>,
+    Path(follower_id): Path<Uuid>,
 ) -> AppResult<Json<Value>> {
     let ok = tracking::accept_request(&state, me, follower_id).await?;
     Ok(Json(json!({ "accepted": ok })))
@@ -151,7 +152,7 @@ pub async fn accept_request(
 pub async fn reject_request(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Path(follower_id): Path<i64>,
+    Path(follower_id): Path<Uuid>,
 ) -> AppResult<Json<Value>> {
     let ok = tracking::reject_request(&state, me, follower_id).await?;
     Ok(Json(json!({ "rejected": ok })))

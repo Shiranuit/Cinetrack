@@ -2,11 +2,11 @@
 // to validate the shape/types at the boundary: required fields are matched with
 // typed sub-patterns (so a wrong/missing type fails fast with a FormatException),
 // while optional fields are destructured with nullable casts. The backend sends
-// integers for all id/count fields and strings for text, so these patterns mirror
-// the Rust types exactly.
+// integers for catalog id/count fields and strings for text; user ids are UUID
+// strings. These patterns mirror the Rust types exactly.
 
 class Me {
-  final int id;
+  final String id;
   final String screenName;
   final String? email;
   final String? avatarUrl;
@@ -26,7 +26,7 @@ class Me {
   });
 
   factory Me.fromJson(Map<String, dynamic> j) => switch (j) {
-        {'id': final int id, 'screen_name': final String screenName} => Me(
+        {'id': final String id, 'screen_name': final String screenName} => Me(
             id: id,
             screenName: screenName,
             email: j['email'] as String?,
@@ -411,7 +411,7 @@ class MatchSuggestion {
 }
 
 class UserBrief {
-  final int id;
+  final String id;
   final String screenName;
   final String? avatarUrl;
   final bool isPrivate;
@@ -426,7 +426,7 @@ class UserBrief {
     this.requested = false,
   });
   factory UserBrief.fromJson(Map<String, dynamic> j) => UserBrief(
-        id: j['id'] as int,
+        id: j['id'] as String,
         screenName: j['screen_name'] as String? ?? 'user',
         avatarUrl: j['avatar_url'] as String?,
         isPrivate: j['is_private'] as bool? ?? false,
@@ -436,7 +436,7 @@ class UserBrief {
 }
 
 class UserProfile {
-  final int id;
+  final String id;
   final String screenName;
   final String? avatarUrl;
   final String? coverUrl;
@@ -465,7 +465,7 @@ class UserProfile {
     this.profileBlocks = const ['stats', 'favorites', 'shows'],
   });
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
-        id: j['id'] as int,
+        id: j['id'] as String,
         screenName: j['screen_name'] as String? ?? 'user',
         avatarUrl: j['avatar_url'] as String?,
         coverUrl: j['cover_url'] as String?,
@@ -483,7 +483,7 @@ class UserProfile {
 }
 
 class FeedItem {
-  final int userId;
+  final String userId;
   final String screenName;
   final String? avatarUrl;
   final int? seriesId;
@@ -506,7 +506,7 @@ class FeedItem {
     this.watchedAt,
   });
   factory FeedItem.fromJson(Map<String, dynamic> j) => FeedItem(
-        userId: j['user_id'] as int,
+        userId: j['user_id'] as String,
         screenName: j['screen_name'] as String? ?? 'user',
         avatarUrl: j['avatar_url'] as String?,
         seriesId: j['series_id'] as int?,
@@ -561,15 +561,27 @@ class InviteCreated {
 
 /// One of my invitations and its status (the code is never returned again).
 class InviteInfo {
+  final String id;
   final String? email;
   final String createdAt, expiresAt;
   final bool used;
-  InviteInfo({this.email, required this.createdAt, required this.expiresAt, required this.used});
+  /// Shareable sign-up link — only present for pending (unused, unexpired) invites.
+  final String? link;
+  InviteInfo({
+    required this.id,
+    this.email,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.used,
+    this.link,
+  });
   factory InviteInfo.fromJson(Map<String, dynamic> j) => InviteInfo(
+        id: j['id'] as String? ?? '',
         email: j['email'] as String?,
         createdAt: j['created_at'] as String? ?? '',
         expiresAt: j['expires_at'] as String? ?? '',
         used: j['used'] as bool? ?? false,
+        link: j['link'] as String?,
       );
 }
 

@@ -331,7 +331,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get createInvite => 'Créer';
 
   @override
-  String get noInvitesYet => 'Aucune invitation.';
+  String get inviteHelp =>
+      'Saisissez un e-mail pour envoyer l\'invitation directement, ou laissez vide pour obtenir un lien à partager.';
+
+  @override
+  String get noInvitesYet =>
+      'Aucune invitation — créez-en une ci-dessus pour inviter quelqu\'un.';
 
   @override
   String get inviteLink => 'Lien à partager';
@@ -344,6 +349,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get invitePending => 'En attente';
+
+  @override
+  String get revoke => 'Révoquer';
+
+  @override
+  String get revokeInviteConfirm =>
+      'Révoquer cette invitation ? Le lien cessera de fonctionner.';
+
+  @override
+  String get inviteRevoked => 'Invitation révoquée';
 
   @override
   String get securityActivity => 'Activité de sécurité';

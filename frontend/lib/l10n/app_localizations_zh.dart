@@ -330,7 +330,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get createInvite => 'Create';
 
   @override
-  String get noInvitesYet => 'No invitations yet.';
+  String get inviteHelp =>
+      'Enter an email to send the invite directly, or leave it blank to get a shareable link.';
+
+  @override
+  String get noInvitesYet =>
+      'No invitations yet — create one above to invite someone.';
 
   @override
   String get inviteLink => 'Shareable link';
@@ -343,6 +348,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get invitePending => 'Pending';
+
+  @override
+  String get revoke => 'Revoke';
+
+  @override
+  String get revokeInviteConfirm =>
+      'Revoke this invitation? The link will stop working.';
+
+  @override
+  String get inviteRevoked => 'Invitation revoked';
 
   @override
   String get securityActivity => 'Security activity';

@@ -33,14 +33,14 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, this.userId});
 
   /// The user to show; null means the authenticated user's own profile.
-  final int? userId;
+  final String? userId;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final int _targetId;
+  late final String _targetId;
   late Future<UserProfile> _profile;
   late Future<Stats> _stats;
   late Future<List<UserShow>> _shows;

@@ -2,6 +2,7 @@
 //! never fails the request it's recording (auditing must not break auth).
 
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::{error::AppResult, state::AppState};
 
@@ -19,7 +20,7 @@ pub mod event {
 
 /// Append one event. `user_id` is `None` for events not tied to a known account
 /// (e.g. a login attempt for an unknown email).
-pub async fn record(state: &AppState, user_id: Option<i64>, event: &str, ip: &str, detail: Option<Value>) {
+pub async fn record(state: &AppState, user_id: Option<Uuid>, event: &str, ip: &str, detail: Option<Value>) {
     let res = sqlx::query("INSERT INTO app.audit_log (user_id, event, ip, detail) VALUES ($1, $2, $3, $4)")
         .bind(user_id)
         .bind(event)
@@ -41,7 +42,7 @@ pub struct AuditEntry {
 }
 
 /// A user's recent security activity (for the account "security log" screen).
-pub async fn recent_for_user(state: &AppState, user_id: i64, limit: i64) -> AppResult<Vec<AuditEntry>> {
+pub async fn recent_for_user(state: &AppState, user_id: Uuid, limit: i64) -> AppResult<Vec<AuditEntry>> {
     Ok(sqlx::query_as::<_, AuditEntry>(
         "SELECT event, ip, detail, created_at::text FROM app.audit_log \
          WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2",

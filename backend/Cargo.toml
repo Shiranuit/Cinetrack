@@ -8,7 +8,7 @@ default-run = "backend"
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["multipart"] }
 sqlx = { version = "0.8", default-features = false, features = [
-    "runtime-tokio", "tls-rustls", "postgres", "json", "macros", "migrate",
+    "runtime-tokio", "tls-rustls", "postgres", "json", "macros", "migrate", "uuid",
 ] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
@@ -27,7 +27,7 @@ rand_core = { version = "0.6.4", features = ["getrandom"] }
 tower-http = { version = "0.6", features = ["cors"] }
 sha2 = "0.10"
 hex = "0.4"
-uuid = { version = "1", features = ["v7"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 lettre = { version = "0.11", default-features = false, features = [
     "smtp-transport", "tokio1", "tokio1-rustls-tls", "builder", "hostname",
 ] }
@@ -37,7 +37,8 @@ lettre = { version = "0.11", default-features = false, features = [
 # a throwaway Postgres (TEST_DATABASE_URL); they need these directly.
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 sqlx = { version = "0.8", default-features = false, features = [
-    "runtime-tokio", "tls-rustls", "postgres", "json", "macros",
+    "runtime-tokio", "tls-rustls", "postgres", "json", "macros", "uuid",
 ] }
 serde_json = "1"
 dotenvy = "0.15"
+uuid = { version = "1", features = ["v7"] }

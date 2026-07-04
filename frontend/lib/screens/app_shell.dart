@@ -38,13 +38,19 @@ class _AppShellState extends State<AppShell> {
     final t = AppLocalizations.of(context);
     final labels = [t.navLibrary, t.navDiscover, t.navCalendar];
     final wide = MediaQuery.sizeOf(context).width >= Breakpoints.medium;
+    // On wide layouts the rail adds a 4th (Friends) destination beyond the 3 body
+    // tabs, so `_index` can be one past `labels`/`_bodies` — fall back to Friends.
+    final title = _index < labels.length ? labels[_index] : t.friends;
+    // The narrow layout has no Friends tab (it's reached via the app-bar icon), so
+    // clamp into the 3 body tabs in case `_index` was left at Friends while wide.
+    final bodyIndex = _index < _bodies.length ? _index : 0;
     return Scaffold(
-      appBar: _AppBar(title: labels[_index], onFriends: _openFriends),
-      body: wide ? _wide(labels, t.friends) : _bodies[_index],
+      appBar: _AppBar(title: title, onFriends: _openFriends),
+      body: wide ? _wide(labels, t.friends) : _bodies[bodyIndex],
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
-              selectedIndex: _index,
+              selectedIndex: bodyIndex,
               onDestinationSelected: (i) => setState(() => _index = i),
               destinations: [
                 for (var i = 0; i < _icons.length; i++)

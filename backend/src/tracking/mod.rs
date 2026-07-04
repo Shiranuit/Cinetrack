@@ -2,6 +2,7 @@
 //! watch history (mark episodes seen), and the social graph (follow users).
 //! All functions operate on an already-authenticated `user_id`.
 
+use uuid::Uuid;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{catalog, error::AppResult, state::AppState};
@@ -48,7 +49,7 @@ pub struct WatchResult {
 
 /// List the shows the user tracks, joined with catalog names/posters, names
 /// resolved to the caller's preferred `langs`.
-pub async fn list_shows(state: &AppState, user_id: i64, langs: &[String]) -> AppResult<Vec<UserShowRow>> {
+pub async fn list_shows(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Vec<UserShowRow>> {
     let name = translated_name_sql("us.series_id", "$2");
     let sql = format!(
         "SELECT us.series_id, {name} AS name, s.image_url, us.is_followed, us.is_favorited, \
@@ -69,7 +70,7 @@ pub async fn list_shows(state: &AppState, user_id: i64, langs: &[String]) -> App
 /// The user's relationship to a single series, or `None` if not tracked yet.
 pub async fn get_show(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     series_id: i64,
     langs: &[String],
 ) -> AppResult<Option<UserShowRow>> {
@@ -94,7 +95,7 @@ pub async fn get_show(
 /// `user_show` row — rating a show you watched implicitly tracks it.
 pub async fn set_show_rating(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     series_id: i64,
     rating: Option<i16>,
 ) -> AppResult<()> {
@@ -119,7 +120,7 @@ pub async fn set_show_rating(
 /// can show a ×N badge and a seen state.
 pub async fn seen_episode_counts(
     state: &AppState,
-    user_id: i64,
+    user_id: Uuid,
     series_id: i64,
 ) -> AppResult<Vec<(i64, i64)>> {
     let rows = sqlx::query_as::<_, (i64, i64)>(
@@ -165,7 +166,7 @@ pub struct Library {
 const STALE_DAYS: i64 = 30;
 
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
-pub async fn library(state: &AppState, user_id: i64, langs: &[String]) -> AppResult<Library> {
+pub async fn library(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Library> {
     let name = translated_name_sql("us.series_id", "$2");
     let sql = format!(
         "SELECT us.series_id, {name} AS name, s.image_url, us.nb_episodes_seen, us.status, us.archived, us.is_favorited, \
@@ -233,7 +234,7 @@ pub struct Stats {
     pub favorites: i64,
 }
 
-pub async fn stats(state: &AppState, user_id: i64) -> AppResult<Stats> {
+pub async fn stats(state: &AppState, user_id: Uuid) -> AppResult<Stats> {
     // All figures derive from LIVE data so they update as you watch: episodes from
     // distinct watch rows, movies from `user_movie`, and watch time by summing each
     // watched episode's runtime (catalog episode runtime, else the series' average,
@@ -272,7 +273,7 @@ async fn ensure_series_cached(state: &AppState, series_id: i64) {
     }
 }
 
-pub async fn set_followed(state: &AppState, user_id: i64, series_id: i64, value: bool) -> AppResult<()> {
+pub async fn set_followed(state: &AppState, user_id: Uuid, series_id: i64, value: bool) -> AppResult<()> {
     if value {
         ensure_series_cached(state, series_id).await;
     }
@@ -288,7 +289,7 @@ pub async fn set_followed(state: &AppState, user_id: i64, series_id: i64, value:
     Ok(())
 }
 
-pub async fn set_favorited(state: &AppState, user_id: i64, series_id: i64, value: bool) -> AppResult<()> {
+pub async fn set_favorited(state: &AppState, user_id: Uuid, series_id: i64, value: bool) -> AppResult<()> {
     if value {
         ensure_series_cached(state, series_id).await;
     }
@@ -306,7 +307,7 @@ pub async fn set_favorited(state: &AppState, user_id: i64, series_id: i64, value
 
 /// Set the special status (`for_later`, `stopped`, or `None` to clear).
 /// `stopped` also flags the show archived ("stop watching").
-pub async fn set_status(state: &AppState, user_id: i64, series_id: i64, status: Option<&str>) -> AppResult<()> {
+pub async fn set_status(state: &AppState, user_id: Uuid, series_id: i64, status: Option<&str>) -> AppResult<()> {
     let archived = matches!(status, Some("stopped") | Some("archived"));
     sqlx::query(
         "INSERT INTO app.user_show (user_id, series_id, status, archived) VALUES ($1, $2, $3, $4) \
@@ -324,7 +325,7 @@ pub async fn set_status(state: &AppState, user_id: i64, series_id: i64, status: 
 /// Mark an episode seen: records a watch_event (flagged as a rewatch if already
 /// seen) and recomputes the show's progress. Read-through-fetches the episode so
 /// we know its series/season/number/runtime.
-pub async fn watch_episode(state: &AppState, user_id: i64, episode_id: i64) -> AppResult<WatchResult> {
+pub async fn watch_episode(state: &AppState, user_id: Uuid, episode_id: i64) -> AppResult<WatchResult> {
     let ep = catalog::episode::get(state, episode_id, None).await?;
 
     let seen_before: bool = sqlx::query_scalar(
@@ -367,7 +368,7 @@ pub async fn watch_episode(state: &AppState, user_id: i64, episode_id: i64) -> A
 
 /// Decrement a watch: removes the most recent watch event for the episode (so a
 /// ×N rewatch count goes down by one; hitting zero un-marks it as seen).
-pub async fn unwatch_episode(state: &AppState, user_id: i64, episode_id: i64) -> AppResult<WatchResult> {
+pub async fn unwatch_episode(state: &AppState, user_id: Uuid, episode_id: i64) -> AppResult<WatchResult> {
     let series_id: Option<i64> =
         sqlx::query_scalar("SELECT series_id FROM app.watch_event WHERE user_id = $1 AND episode_id = $2 LIMIT 1")
             .bind(user_id)
@@ -403,7 +404,7 @@ pub async fn unwatch_episode(state: &AppState, user_id: i64, episode_id: i64) ->
 
 /// Recompute `nb_episodes_seen` (distinct episodes) and `last_seen_episode_id`
 /// for a show from the watch history. Returns the new seen count.
-async fn recompute_progress(state: &AppState, user_id: i64, series_id: i64) -> AppResult<i32> {
+async fn recompute_progress(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
     sqlx::query(
         "INSERT INTO app.user_show (user_id, series_id, is_followed) VALUES ($1, $2, true) \
          ON CONFLICT (user_id, series_id) DO NOTHING",
@@ -433,7 +434,7 @@ async fn recompute_progress(state: &AppState, user_id: i64, series_id: i64) -> A
 
 /// Mark every not-yet-watched episode of a season as watched (×1). Returns the
 /// new distinct-seen count for the series.
-pub async fn watch_season(state: &AppState, user_id: i64, series_id: i64, season: i32) -> AppResult<i32> {
+pub async fn watch_season(state: &AppState, user_id: Uuid, series_id: i64, season: i32) -> AppResult<i32> {
     sqlx::query(
         "INSERT INTO app.watch_event \
            (user_id, entity_type, series_id, episode_id, season_number, episode_number, runtime, \
@@ -454,7 +455,7 @@ pub async fn watch_season(state: &AppState, user_id: i64, series_id: i64, season
 
 /// Rewatch a whole season: adds one watch event for EVERY episode (increments
 /// each episode's ×N count by one, regardless of prior state).
-pub async fn rewatch_season(state: &AppState, user_id: i64, series_id: i64, season: i32) -> AppResult<i32> {
+pub async fn rewatch_season(state: &AppState, user_id: Uuid, series_id: i64, season: i32) -> AppResult<i32> {
     sqlx::query(
         "INSERT INTO app.watch_event \
            (user_id, entity_type, series_id, episode_id, season_number, episode_number, runtime, \
@@ -473,7 +474,7 @@ pub async fn rewatch_season(state: &AppState, user_id: i64, series_id: i64, seas
 }
 
 /// Un-watch a whole season: removes all watch events for its episodes.
-pub async fn unwatch_season(state: &AppState, user_id: i64, series_id: i64, season: i32) -> AppResult<i32> {
+pub async fn unwatch_season(state: &AppState, user_id: Uuid, series_id: i64, season: i32) -> AppResult<i32> {
     sqlx::query(
         "DELETE FROM app.watch_event \
          WHERE user_id = $1 AND episode_id IN \
@@ -488,7 +489,7 @@ pub async fn unwatch_season(state: &AppState, user_id: i64, series_id: i64, seas
 }
 
 /// Remove a show from the user's library entirely (tracking row + watch history).
-pub async fn remove_show(state: &AppState, user_id: i64, series_id: i64) -> AppResult<()> {
+pub async fn remove_show(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<()> {
     let mut tx = state.db.begin().await?;
     sqlx::query("DELETE FROM app.watch_event WHERE user_id = $1 AND series_id = $2")
         .bind(user_id)
@@ -532,7 +533,7 @@ const CALENDAR_RECENT_DAYS: i32 = 30;
 /// Upcoming (next 90 days) and recently-aired (last 30 days) episodes for followed
 /// series — EVERY scheduled episode in the window (from the mirrored episode list),
 /// not just the single `nextAired`. Names resolved to `langs`.
-pub async fn calendar(state: &AppState, me: i64, langs: &[String]) -> AppResult<Calendar> {
+pub async fn calendar(state: &AppState, me: Uuid, langs: &[String]) -> AppResult<Calendar> {
     let name = translated_name_sql("us.series_id", "$2");
     // `cond` bounds e.aired; `dir` orders the window.
     let build = |cond: &str, dir: &str| {
@@ -570,7 +571,7 @@ pub async fn calendar(state: &AppState, me: i64, langs: &[String]) -> AppResult<
 }
 
 /// Delete the user's account and all their data.
-pub async fn delete_account(state: &AppState, user_id: i64) -> AppResult<()> {
+pub async fn delete_account(state: &AppState, user_id: Uuid) -> AppResult<()> {
     let mut tx = state.db.begin().await?;
     for q in [
         "DELETE FROM app.watch_event WHERE user_id = $1",
@@ -592,7 +593,7 @@ pub async fn delete_account(state: &AppState, user_id: i64) -> AppResult<()> {
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 pub struct UserBrief {
-    pub id: i64,
+    pub id: Uuid,
     pub screen_name: String,
     pub avatar_url: Option<String>,
     pub is_private: bool,
@@ -603,7 +604,7 @@ pub struct UserBrief {
 /// Another user's profile, with visibility respecting privacy.
 #[derive(serde::Serialize, sqlx::FromRow)]
 pub struct UserProfile {
-    pub id: i64,
+    pub id: Uuid,
     pub screen_name: String,
     pub avatar_url: Option<String>,
     pub cover_url: Option<String>,
@@ -620,7 +621,7 @@ pub struct UserProfile {
 
 #[derive(serde::Serialize, sqlx::FromRow)]
 pub struct FeedItem {
-    pub user_id: i64,
+    pub user_id: Uuid,
     pub screen_name: String,
     pub avatar_url: Option<String>,
     pub series_id: Option<i64>,
@@ -642,7 +643,7 @@ fn follow_flags_sql(target_col: &str) -> String {
 }
 
 /// Find users by (partial) screen name, flagged with our relationship to each.
-pub async fn search_users(state: &AppState, me: i64, q: &str) -> AppResult<Vec<UserBrief>> {
+pub async fn search_users(state: &AppState, me: Uuid, q: &str) -> AppResult<Vec<UserBrief>> {
     let flags = follow_flags_sql("u.id");
     let rows = sqlx::query_as::<_, UserBrief>(&format!(
         "SELECT u.id, u.screen_name, u.avatar_url, u.is_private, {flags} \
@@ -658,7 +659,7 @@ pub async fn search_users(state: &AppState, me: i64, q: &str) -> AppResult<Vec<U
 }
 
 /// Users the given user follows (accepted).
-pub async fn following(state: &AppState, me: i64) -> AppResult<Vec<UserBrief>> {
+pub async fn following(state: &AppState, me: Uuid) -> AppResult<Vec<UserBrief>> {
     let rows = sqlx::query_as::<_, UserBrief>(
         "SELECT u.id, u.screen_name, u.avatar_url, u.is_private, true AS following, false AS requested \
          FROM app.user_follow f JOIN app.users u ON u.id = f.followee_id \
@@ -671,7 +672,7 @@ pub async fn following(state: &AppState, me: i64) -> AppResult<Vec<UserBrief>> {
 }
 
 /// People who follow me (accepted), flagged with whether I follow them back.
-pub async fn followers(state: &AppState, me: i64) -> AppResult<Vec<UserBrief>> {
+pub async fn followers(state: &AppState, me: Uuid) -> AppResult<Vec<UserBrief>> {
     let flags = follow_flags_sql("u.id");
     let rows = sqlx::query_as::<_, UserBrief>(&format!(
         "SELECT u.id, u.screen_name, u.avatar_url, u.is_private, {flags} \
@@ -685,7 +686,7 @@ pub async fn followers(state: &AppState, me: i64) -> AppResult<Vec<UserBrief>> {
 }
 
 /// Remove one of my followers (delete their accepted follow of me).
-pub async fn remove_follower(state: &AppState, me: i64, follower: i64) -> AppResult<()> {
+pub async fn remove_follower(state: &AppState, me: Uuid, follower: Uuid) -> AppResult<()> {
     sqlx::query("DELETE FROM app.user_follow WHERE followee_id = $1 AND follower_id = $2")
         .bind(me)
         .bind(follower)
@@ -695,7 +696,7 @@ pub async fn remove_follower(state: &AppState, me: i64, follower: i64) -> AppRes
 }
 
 /// Incoming pending follow requests (people who want to follow me).
-pub async fn follow_requests(state: &AppState, me: i64) -> AppResult<Vec<UserBrief>> {
+pub async fn follow_requests(state: &AppState, me: Uuid) -> AppResult<Vec<UserBrief>> {
     let flags = follow_flags_sql("u.id");
     let rows = sqlx::query_as::<_, UserBrief>(&format!(
         "SELECT u.id, u.screen_name, u.avatar_url, u.is_private, {flags} \
@@ -709,7 +710,7 @@ pub async fn follow_requests(state: &AppState, me: i64) -> AppResult<Vec<UserBri
 }
 
 /// Accept a pending follow request from `follower`.
-pub async fn accept_request(state: &AppState, me: i64, follower: i64) -> AppResult<bool> {
+pub async fn accept_request(state: &AppState, me: Uuid, follower: Uuid) -> AppResult<bool> {
     let n = sqlx::query(
         "UPDATE app.user_follow SET status='accepted' \
          WHERE followee_id = $1 AND follower_id = $2 AND status = 'pending'",
@@ -723,7 +724,7 @@ pub async fn accept_request(state: &AppState, me: i64, follower: i64) -> AppResu
 }
 
 /// Reject/remove a pending follow request from `follower`.
-pub async fn reject_request(state: &AppState, me: i64, follower: i64) -> AppResult<bool> {
+pub async fn reject_request(state: &AppState, me: Uuid, follower: Uuid) -> AppResult<bool> {
     let n = sqlx::query(
         "DELETE FROM app.user_follow WHERE followee_id = $1 AND follower_id = $2 AND status = 'pending'",
     )
@@ -737,7 +738,7 @@ pub async fn reject_request(state: &AppState, me: i64, follower: i64) -> AppResu
 
 /// Another user's profile, respecting privacy: a private user's details are only
 /// `visible` to themselves and accepted followers.
-pub async fn user_profile(state: &AppState, me: i64, target: i64) -> AppResult<UserProfile> {
+pub async fn user_profile(state: &AppState, me: Uuid, target: Uuid) -> AppResult<UserProfile> {
     let flags = follow_flags_sql("$2");
     let mut p = sqlx::query_as::<_, UserProfile>(&format!(
         "SELECT u.id, u.screen_name, u.avatar_url, u.cover_url, u.bio, u.is_private, \
@@ -762,7 +763,7 @@ pub async fn user_profile(state: &AppState, me: i64, target: i64) -> AppResult<U
 }
 
 /// Whether `me` may see `target`'s profile details (public, self, or accepted follower).
-pub async fn profile_visible(state: &AppState, me: i64, target: i64) -> AppResult<bool> {
+pub async fn profile_visible(state: &AppState, me: Uuid, target: Uuid) -> AppResult<bool> {
     if me == target {
         return Ok(true);
     }
@@ -785,7 +786,7 @@ pub async fn profile_visible(state: &AppState, me: i64, target: i64) -> AppResul
 }
 
 /// Another user's tracked shows — only when their profile is visible to `me`.
-pub async fn user_shows(state: &AppState, me: i64, target: i64, langs: &[String]) -> AppResult<Vec<UserShowRow>> {
+pub async fn user_shows(state: &AppState, me: Uuid, target: Uuid, langs: &[String]) -> AppResult<Vec<UserShowRow>> {
     if !profile_visible(state, me, target).await? {
         return Ok(vec![]);
     }
@@ -794,7 +795,7 @@ pub async fn user_shows(state: &AppState, me: i64, target: i64, langs: &[String]
 
 /// Another user's categorized library (watching / up-to-date / stale / …) with
 /// progress — only when their profile is visible to `me`.
-pub async fn user_library(state: &AppState, me: i64, target: i64, langs: &[String]) -> AppResult<Library> {
+pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[String]) -> AppResult<Library> {
     if !profile_visible(state, me, target).await? {
         return Ok(Library::default());
     }
@@ -802,7 +803,7 @@ pub async fn user_library(state: &AppState, me: i64, target: i64, langs: &[Strin
 }
 
 /// Recent watch activity from the people the user follows.
-pub async fn feed(state: &AppState, me: i64) -> AppResult<Vec<FeedItem>> {
+pub async fn feed(state: &AppState, me: Uuid) -> AppResult<Vec<FeedItem>> {
     let rows = sqlx::query_as::<_, FeedItem>(
         "SELECT we.user_id, u.screen_name, u.avatar_url, we.series_id, \
                 s.name AS series_name, s.image_url AS series_image, \
@@ -823,7 +824,7 @@ pub async fn feed(state: &AppState, me: i64) -> AppResult<Vec<FeedItem>> {
 
 /// Follow a user. Public users are followed immediately ('accepted'); private
 /// users get a 'pending' request. Returns the resulting status.
-pub async fn follow_user(state: &AppState, follower_id: i64, followee_id: i64) -> AppResult<String> {
+pub async fn follow_user(state: &AppState, follower_id: Uuid, followee_id: Uuid) -> AppResult<String> {
     if follower_id == followee_id {
         return Err(crate::error::AppError::BadRequest("cannot follow yourself".into()));
     }
@@ -853,7 +854,7 @@ pub async fn follow_user(state: &AppState, follower_id: i64, followee_id: i64) -
 }
 
 /// Set the current user's profile privacy.
-pub async fn set_private(state: &AppState, user_id: i64, is_private: bool) -> AppResult<()> {
+pub async fn set_private(state: &AppState, user_id: Uuid, is_private: bool) -> AppResult<()> {
     sqlx::query("UPDATE app.users SET is_private = $2, updated_at = now() WHERE id = $1")
         .bind(user_id)
         .bind(is_private)
@@ -863,7 +864,7 @@ pub async fn set_private(state: &AppState, user_id: i64, is_private: bool) -> Ap
 }
 
 /// Persist the user's profile showcase layout (block keys, in display order).
-pub async fn set_profile_blocks(state: &AppState, user_id: i64, blocks: &[String]) -> AppResult<()> {
+pub async fn set_profile_blocks(state: &AppState, user_id: Uuid, blocks: &[String]) -> AppResult<()> {
     sqlx::query("UPDATE app.users SET profile_blocks = $2, updated_at = now() WHERE id = $1")
         .bind(user_id)
         .bind(blocks)
@@ -872,7 +873,7 @@ pub async fn set_profile_blocks(state: &AppState, user_id: i64, blocks: &[String
     Ok(())
 }
 
-pub async fn unfollow_user(state: &AppState, follower_id: i64, followee_id: i64) -> AppResult<()> {
+pub async fn unfollow_user(state: &AppState, follower_id: Uuid, followee_id: Uuid) -> AppResult<()> {
     sqlx::query("DELETE FROM app.user_follow WHERE follower_id = $1 AND followee_id = $2")
         .bind(follower_id)
         .bind(followee_id)

@@ -1,6 +1,8 @@
 //! Per-user movie tracking (watched / favorite / library), mirroring the series
 //! tracking in the parent module.
 
+use uuid::Uuid;
+
 use crate::{catalog, error::AppResult, state::AppState};
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -23,7 +25,7 @@ pub struct LibraryMovie {
 }
 
 /// The user's relationship to a movie (defaults to "not tracked").
-pub async fn relation(state: &AppState, user_id: i64, movie_id: i64) -> AppResult<MovieRelation> {
+pub async fn relation(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<MovieRelation> {
     let row: Option<(bool, bool, i32)> = sqlx::query_as(
         "SELECT is_favorited, watched, watched_count FROM app.user_movie WHERE user_id = $1 AND movie_id = $2",
     )
@@ -36,7 +38,7 @@ pub async fn relation(state: &AppState, user_id: i64, movie_id: i64) -> AppResul
 }
 
 /// Mark a movie watched (each call is one watch; increments the rewatch count).
-pub async fn watch(state: &AppState, user_id: i64, movie_id: i64) -> AppResult<MovieRelation> {
+pub async fn watch(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<MovieRelation> {
     // Cache the movie so the library has its name/poster.
     let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
 
@@ -66,7 +68,7 @@ pub async fn watch(state: &AppState, user_id: i64, movie_id: i64) -> AppResult<M
 }
 
 /// Undo one watch (decrements; hitting zero un-marks watched).
-pub async fn unwatch(state: &AppState, user_id: i64, movie_id: i64) -> AppResult<MovieRelation> {
+pub async fn unwatch(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<MovieRelation> {
     sqlx::query(
         "UPDATE app.user_movie SET \
            watched_count = GREATEST(watched_count - 1, 0), \
@@ -80,7 +82,7 @@ pub async fn unwatch(state: &AppState, user_id: i64, movie_id: i64) -> AppResult
     relation(state, user_id, movie_id).await
 }
 
-pub async fn set_favorite(state: &AppState, user_id: i64, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
+pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
     let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
     sqlx::query(
         "INSERT INTO app.user_movie (user_id, movie_id, is_favorited, updated_at) \
@@ -96,7 +98,7 @@ pub async fn set_favorite(state: &AppState, user_id: i64, movie_id: i64, value: 
 }
 
 /// The user's tracked movies (watched or favorited), newest-watched first.
-pub async fn list(state: &AppState, user_id: i64, langs: &[String]) -> AppResult<Vec<LibraryMovie>> {
+pub async fn list(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Vec<LibraryMovie>> {
     let rows = sqlx::query_as::<_, LibraryMovie>(
         "SELECT um.movie_id, \
                 COALESCE((SELECT tr.name FROM catalog.translation tr \

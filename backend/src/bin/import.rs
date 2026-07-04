@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     })?;
     // Optional 2nd arg: import into an existing user id (repair/refresh) instead
     // of creating a fresh account from the export's original id.
-    let target_user: Option<i64> = std::env::args().nth(2).map(|a| a.parse()).transpose()?;
+    let target_user: Option<uuid::Uuid> = std::env::args().nth(2).map(|a| a.parse()).transpose()?;
 
     let config = Config::from_env()?;
     let state = AppState::bootstrap(config).await?;

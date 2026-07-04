@@ -7,10 +7,12 @@ use axum::{
     http::{header::AUTHORIZATION, request::Parts},
 };
 
+use uuid::Uuid;
+
 use crate::{auth, error::AppError, state::AppState};
 
 /// `(user_id, session_id)` for a valid access token whose session is still active.
-async fn authenticate(parts: &Parts, state: &AppState) -> Result<(i64, String), AppError> {
+async fn authenticate(parts: &Parts, state: &AppState) -> Result<(Uuid, String), AppError> {
     let token = parts
         .headers
         .get(AUTHORIZATION)
@@ -28,7 +30,7 @@ async fn authenticate(parts: &Parts, state: &AppState) -> Result<(i64, String), 
 }
 
 /// Require authentication; yields the user id.
-pub struct AuthUser(pub i64);
+pub struct AuthUser(pub Uuid);
 
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = AppError;
@@ -41,7 +43,7 @@ impl FromRequestParts<AppState> for AuthUser {
 /// Like [`AuthUser`] but also yields the session id, for handlers that manage the
 /// session itself (logout, password change).
 pub struct AuthSession {
-    pub user_id: i64,
+    pub user_id: Uuid,
     pub sid: String,
 }
 

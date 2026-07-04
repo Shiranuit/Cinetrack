@@ -60,7 +60,7 @@ async fn library_categorizes_and_hides_unavailable() {
     common::follow(&state.db, 1, 60, true, false).await;
     common::set_user_show(&state.db, 1, 60, "unavailable", "true").await;
 
-    let lib = tracking::library(&state, 1, &langs()).await.unwrap();
+    let lib = tracking::library(&state, common::uid(1), &langs()).await.unwrap();
 
     let names = |v: &[tracking::LibraryShow]| v.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>();
     assert_eq!(names(&lib.not_started), vec!["NotStarted"]);
@@ -152,17 +152,17 @@ async fn library_filter_scopes_to_tracked_shows() {
     let ids = |v: &[backend::catalog::search::SearchResult]| v.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>();
 
     // No filters → both tracked shows, not the untracked one.
-    let f = Filters { library_user: Some(1), ..filters("series") };
+    let f = Filters { library_user: Some(common::uid(1)), ..filters("series") };
     let mut got = ids(&discover::search_db(&state, &f, &langs()).await.unwrap());
     got.sort();
     assert_eq!(got, vec![10, 11]);
 
     // Genre = Action → only the tracked action show (untracked Action excluded by scope).
-    let f = Filters { library_user: Some(1), genres_include: vec![19], ..filters("series") };
+    let f = Filters { library_user: Some(common::uid(1)), genres_include: vec![19], ..filters("series") };
     assert_eq!(ids(&discover::search_db(&state, &f, &langs()).await.unwrap()), vec![10]);
 
     // episodes >= 100 → only the 300-episode show.
-    let f = Filters { library_user: Some(1), episodes_min: Some(100), ..filters("series") };
+    let f = Filters { library_user: Some(common::uid(1)), episodes_min: Some(100), ..filters("series") };
     assert_eq!(ids(&discover::search_db(&state, &f, &langs()).await.unwrap()), vec![10]);
 }
 
@@ -182,7 +182,7 @@ async fn calendar_enriches_upcoming_episode() {
     common::insert_episode_in_days(&state.db, 2002, 200, 4, 13, 12, "The One After").await;
     common::insert_episode_in_days(&state.db, 2003, 200, 4, 14, 200, "Far Future").await;
 
-    let cal = tracking::calendar(&state, 1, &langs()).await.unwrap();
+    let cal = tracking::calendar(&state, common::uid(1), &langs()).await.unwrap();
     assert_eq!(cal.upcoming.len(), 2, "both in-window episodes, not the 200-day-out one");
     let it = &cal.upcoming[0]; // soonest first
     assert_eq!(it.series_id, 200);
@@ -215,21 +215,21 @@ async fn remap_moves_tracking_and_history_to_live_id() {
     common::insert_episode(&state.db, 111, 74796, 1, 1, "2004-10-05", "Ep1").await;
     common::insert_episode(&state.db, 112, 74796, 1, 2, "2004-10-12", "Ep2").await;
 
-    backend::import::remap_user_series(&state, 1, 999, 74796).await.unwrap();
+    backend::import::remap_user_series(&state, common::uid(1), 999, 74796).await.unwrap();
 
     // The dead row is gone; the user now tracks the live id (available, flags kept).
-    let dead: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id=1 AND series_id=999")
+    let dead: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=999")
         .fetch_one(&state.db).await.unwrap();
     assert_eq!(dead, 0);
     let (followed, favorited, unavailable, nb): (bool, bool, bool, i32) = sqlx::query_as(
-        "SELECT is_followed, is_favorited, unavailable, nb_episodes_seen FROM app.user_show WHERE user_id=1 AND series_id=74796",
+        "SELECT is_followed, is_favorited, unavailable, nb_episodes_seen FROM app.user_show WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=74796",
     ).fetch_one(&state.db).await.unwrap();
     assert!(followed && favorited && !unavailable);
     assert_eq!(nb, 2, "both watched episodes should count after remap");
 
     // Watch events now point at the live series + its episode ids (matched by S/E).
     let eps: Vec<i64> = sqlx::query_scalar(
-        "SELECT episode_id FROM app.watch_event WHERE user_id=1 AND series_id=74796 ORDER BY episode_id",
+        "SELECT episode_id FROM app.watch_event WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=74796 ORDER BY episode_id",
     ).fetch_all(&state.db).await.unwrap();
     assert_eq!(eps, vec![111, 112]);
     let old_left: i64 = sqlx::query_scalar("SELECT count(*) FROM app.watch_event WHERE series_id=999")
@@ -260,23 +260,23 @@ async fn confirm_and_reject_match_suggestions() {
     // A pending suggestion (as resolve_unavailable would have recorded).
     let sug_id: i64 = sqlx::query_scalar(
         "INSERT INTO app.import_match (user_id, dead_series_id, import_name, suggested_series_id, suggested_name, distance) \
-         VALUES (1, 999, 'Dead', 74796, 'Live', 1) RETURNING id",
+         VALUES ('00000000-0000-0000-0000-000000000001', 999, 'Dead', 74796, 'Live', 1) RETURNING id",
     ).fetch_one(&state.db).await.unwrap();
 
     // Confirm → remapped + marked confirmed.
-    assert!(backend::import::confirm_suggestion(&state, 1, sug_id).await.unwrap());
+    assert!(backend::import::confirm_suggestion(&state, common::uid(1), sug_id).await.unwrap());
     let status: String = sqlx::query_scalar("SELECT status FROM app.import_match WHERE id=$1")
         .bind(sug_id).fetch_one(&state.db).await.unwrap();
     assert_eq!(status, "confirmed");
-    let live_present: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id=1 AND series_id=74796 AND NOT unavailable")
+    let live_present: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=74796 AND NOT unavailable")
         .fetch_one(&state.db).await.unwrap();
     assert_eq!(live_present, 1, "dead series should now be the live one, visible");
-    let ep: Option<i64> = sqlx::query_scalar("SELECT episode_id FROM app.watch_event WHERE user_id=1 AND series_id=74796")
+    let ep: Option<i64> = sqlx::query_scalar("SELECT episode_id FROM app.watch_event WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=74796")
         .fetch_one(&state.db).await.unwrap();
     assert_eq!(ep, Some(111), "watch event remapped to the live episode");
 
     // Confirming again is a no-op (already confirmed → not pending).
-    assert!(!backend::import::confirm_suggestion(&state, 1, sug_id).await.unwrap());
+    assert!(!backend::import::confirm_suggestion(&state, common::uid(1), sug_id).await.unwrap());
 
     // A second dead series with a suggestion we reject.
     common::insert_series(&state.db, 888, "Dead2", None, None, None, None, serde_json::json!({})).await;
@@ -284,12 +284,12 @@ async fn confirm_and_reject_match_suggestions() {
     common::set_user_show(&state.db, 1, 888, "unavailable", "true").await;
     let rej_id: i64 = sqlx::query_scalar(
         "INSERT INTO app.import_match (user_id, dead_series_id, import_name, suggested_series_id, distance) \
-         VALUES (1, 888, 'Dead2', 74796, 2) RETURNING id",
+         VALUES ('00000000-0000-0000-0000-000000000001', 888, 'Dead2', 74796, 2) RETURNING id",
     ).fetch_one(&state.db).await.unwrap();
-    assert!(backend::import::reject_suggestion(&state, 1, rej_id).await.unwrap());
+    assert!(backend::import::reject_suggestion(&state, common::uid(1), rej_id).await.unwrap());
     let (status2, still_hidden): (String, bool) = (
         sqlx::query_scalar("SELECT status FROM app.import_match WHERE id=$1").bind(rej_id).fetch_one(&state.db).await.unwrap(),
-        sqlx::query_scalar("SELECT unavailable FROM app.user_show WHERE user_id=1 AND series_id=888").fetch_one(&state.db).await.unwrap(),
+        sqlx::query_scalar("SELECT unavailable FROM app.user_show WHERE user_id='00000000-0000-0000-0000-000000000001' AND series_id=888").fetch_one(&state.db).await.unwrap(),
     );
     assert_eq!(status2, "rejected");
     assert!(still_hidden, "rejected dead series stays hidden");
@@ -307,11 +307,11 @@ async fn delete_account_removes_everything() {
     common::follow(&state.db, 1, 300, true, true).await;
     common::watch(&state.db, 1, 300, 3001, "w-del").await;
 
-    tracking::delete_account(&state, 1).await.unwrap();
+    tracking::delete_account(&state, common::uid(1)).await.unwrap();
 
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM app.users WHERE id=1").fetch_one(&state.db).await.unwrap();
-    let shows: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id=1").fetch_one(&state.db).await.unwrap();
-    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM app.watch_event WHERE user_id=1").fetch_one(&state.db).await.unwrap();
+    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM app.users WHERE id='00000000-0000-0000-0000-000000000001'").fetch_one(&state.db).await.unwrap();
+    let shows: i64 = sqlx::query_scalar("SELECT count(*) FROM app.user_show WHERE user_id='00000000-0000-0000-0000-000000000001'").fetch_one(&state.db).await.unwrap();
+    let events: i64 = sqlx::query_scalar("SELECT count(*) FROM app.watch_event WHERE user_id='00000000-0000-0000-0000-000000000001'").fetch_one(&state.db).await.unwrap();
     assert_eq!((users, shows, events), (0, 0, 0));
 
     // Catalog (shared cache) is untouched by an account deletion.

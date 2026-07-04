@@ -39,6 +39,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/refresh", post(handlers::auth::refresh))
         .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/invites", post(handlers::invites::create_invite).get(handlers::invites::list_invites))
+        .route("/api/invites/{id}", axum::routing::delete(handlers::invites::revoke_invite))
         .route("/api/me", get(handlers::auth::me).delete(handlers::auth::delete_me).put(handlers::auth::update_profile))
         .route("/api/me/password", put(handlers::auth::update_password))
         .route("/api/me/security-log", get(handlers::auth::security_log))
@@ -151,7 +152,7 @@ async fn gate(State(state): State<AppState>, req: Request, next: Next) -> Respon
 }
 
 /// Validate the access token + session, returning the user id.
-async fn authenticate(state: &AppState, token: &str) -> Option<i64> {
+async fn authenticate(state: &AppState, token: &str) -> Option<uuid::Uuid> {
     let (user_id, sid) = crate::auth::token::verify(&state.config.jwt_secret, token).ok()?;
     crate::auth::session::is_active(state, &sid).await.unwrap_or(false).then_some(user_id)
 }

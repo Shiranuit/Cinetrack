@@ -22,7 +22,7 @@ enum _Tab { series, movies, all }
 /// search inside their shows. Read-only; privacy-gated on the backend.
 class UserLibraryScreen extends StatefulWidget {
   const UserLibraryScreen({super.key, required this.userId, required this.title});
-  final int userId;
+  final String userId;
   final String title;
   @override
   State<UserLibraryScreen> createState() => _UserLibraryScreenState();

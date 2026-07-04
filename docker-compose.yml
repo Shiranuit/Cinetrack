@@ -46,6 +46,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local mail catcher: the backend sends here (with SMTP_TLS=none) and you read the
+  # captured emails — including the reset/invite links — at http://localhost:8025.
+  # Nothing is delivered to the internet, so it's safe for testing the mail flow.
+  # From the HOST backend (scripts/run-local.sh) use SMTP_HOST=localhost SMTP_PORT=1025.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP (plain)
+      - "8025:8025"   # web inbox UI
+
   garage:
     image: dxflrs/garage:v1.0.1
     restart: unless-stopped
@@ -70,6 +81,8 @@ services:
         condition: service_healthy
       garage:
         condition: service_started
+      mailpit:
+        condition: service_started
     environment:
       DATABASE_URL: ${DATABASE_URL}
       S3_ENDPOINT: ${S3_ENDPOINT}
@@ -81,6 +94,12 @@ services:
       THETVDB_BASE_URL: ${THETVDB_BASE_URL}
       BACKEND_BIND_ADDR: ${BACKEND_BIND_ADDR}
       RUST_LOG: ${RUST_LOG}
+      # Dev mail → Mailpit (see the mailpit service). Read messages at :8025.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_TLS: ${SMTP_TLS:-none}
+      MAIL_FROM: ${MAIL_FROM:-Cinetrack <no-reply@cine-track.com>}
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:8080}
     ports:
       - "8080:8080"
 

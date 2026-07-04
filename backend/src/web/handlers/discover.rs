@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use axum::{
     Json,
     extract::{Query, State},
@@ -48,7 +49,7 @@ pub struct DiscoverQuery {
     pub langs: Option<String>,
 }
 
-fn build_filters(q: &DiscoverQuery, library_user: Option<i64>, exclude_user: Option<i64>) -> Filters {
+fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>) -> Filters {
     Filters {
         kind: q.kind.clone().unwrap_or_else(|| "series".to_string()),
         genres_include: csv_ids(q.genres.as_deref()),
@@ -104,7 +105,7 @@ pub async fn library_filter(
 pub async fn user_filter(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    axum::extract::Path(target): axum::extract::Path<i64>,
+    axum::extract::Path(target): axum::extract::Path<Uuid>,
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     if !tracking::profile_visible(&state, me, target).await? {

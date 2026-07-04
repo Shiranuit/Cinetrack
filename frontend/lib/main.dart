@@ -13,6 +13,7 @@ import 'screens/login_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'state/auth.dart';
 import 'state/settings.dart';
+import 'util/native_drag.dart';
 import 'widgets/android_install_banner.dart';
 
 void main() {
@@ -21,6 +22,9 @@ void main() {
   if (kIsWeb) {
     WidgetsFlutterBinding.ensureInitialized();
     BrowserContextMenu.disableContextMenu();
+    // Stop the browser hijacking mouse-drags as native drag-and-drop, which
+    // otherwise withholds pointermove events and breaks rail drag-scrolling.
+    preventNativeDrag();
   }
   final api = ApiClient();
   final auth = AuthController(api)..restore();
@@ -59,6 +63,10 @@ class CinetrackApp extends StatelessWidget {
       // Above every route: an install-the-app nudge that only renders on
       // web-Android (no-op otherwise), pointing at the matching-version APK.
       builder: (context, child) => Column(
+        // Stretch so routes get a tight, finite width. Without this the Column
+        // hands children a loose/unbounded width, which makes Rows with Expanded
+        // children (e.g. the invites screen) throw "infinite width" on layout.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const AndroidInstallBanner(),
           Expanded(child: child ?? const SizedBox.shrink()),
