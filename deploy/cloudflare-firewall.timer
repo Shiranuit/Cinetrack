@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly refresh of the Cloudflare firewall IP ranges
+Documentation=https://github.com/Shiranuit/Cinetrack/blob/main/deploy/README.md
+
+[Timer]
+# Re-run cloudflare-firewall.service weekly to pick up any changes to Cloudflare's
+# published IP ranges. Persistent=true runs a missed refresh after downtime.
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Restrict web ports (80/443) to Cloudflare's edge via DOCKER-USER
+Documentation=https://github.com/Shiranuit/Cinetrack/blob/main/deploy/README.md
+# Docker sets up the DOCKER-USER chain, so run after it; network for the CF IP fetch.
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Adjust the path if your checkout isn't at /home/deploy/cinetrack (or install the
+# script to /usr/local/sbin and point here — see deploy/README.md). No RemainAfterExit:
+# the weekly timer must be able to re-trigger it to refresh the Cloudflare ranges.
+ExecStart=/home/deploy/cinetrack/scripts/firewall-cloudflare.sh
+
+[Install]
+WantedBy=multi-user.target
