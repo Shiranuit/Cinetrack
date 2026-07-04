@@ -178,7 +178,7 @@ jobs:
           key: ${{ secrets.DEDIBOX_SSH_KEY }}
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEDIBOX_APP_DIR }}"
+            cd "${{ vars.DEDIBOX_APP_DIR }}"
             git fetch --tags --prune
             git checkout --force "${{ github.ref_name }}"
             export IMAGE_TAG="${{ github.ref_name }}"
