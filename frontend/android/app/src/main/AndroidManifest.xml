@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for network access. Flutter auto-adds this to the debug/profile
+         manifests only, so WITHOUT it here the RELEASE APK has no internet access and
+         every request fails at DNS with "Failed host lookup ... errno = 7". -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Cinetrack"
         android:name="${applicationName}"
