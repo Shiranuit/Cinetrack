@@ -160,6 +160,13 @@ class ApiClient {
         _ => throw ApiException(500, 'expected a list, got $data'),
       };
 
+  /// Public server feature flags (no auth). Falls through to defaults on the caller
+  /// side if this throws (e.g. backend unreachable).
+  Future<ServerConfig> serverConfig() async {
+    final j = await _request(() => _client.get(_uri('/api/config'), headers: _headers()), auth: false);
+    return ServerConfig.fromJson(j as Map<String, dynamic>);
+  }
+
   // ---- auth ---- (login/register/forgot/reset are unauthenticated: a 401 means
   // bad credentials, not an expired token, so they don't trigger a refresh.)
   Future<String> login(String email, String password) async {

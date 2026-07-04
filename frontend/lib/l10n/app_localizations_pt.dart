@@ -284,108 +284,108 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filterOrigCountry => 'País de origem';
 
   @override
-  String get installAndroidBanner => 'Cinetrack runs better as an app.';
+  String get installAndroidBanner => 'O Cinetrack funciona melhor como app.';
 
   @override
-  String get installAndroidCta => 'Get the Android app';
+  String get installAndroidCta => 'Baixar o app para Android';
 
   @override
-  String get forgotPassword => 'Forgot password?';
+  String get forgotPassword => 'Esqueceu a senha?';
 
   @override
-  String get resetPassword => 'Reset password';
+  String get resetPassword => 'Redefinir senha';
 
   @override
   String get resetLinkSent =>
-      'If an account exists for that address, a reset link has been sent.';
+      'Se existir uma conta para esse endereço, um link de redefinição foi enviado.';
 
   @override
-  String get passwordUpdated => 'Password updated.';
+  String get passwordUpdated => 'Senha atualizada.';
 
   @override
-  String get newPassword => 'New password';
+  String get newPassword => 'Nova senha';
 
   @override
-  String get currentPassword => 'Current password';
+  String get currentPassword => 'Senha atual';
 
   @override
-  String get inviteCode => 'Invite code';
+  String get inviteCode => 'Código de convite';
 
   @override
-  String get invites => 'Invitations';
+  String get invites => 'Convites';
 
   @override
-  String get inviteSent => 'Invitation sent.';
+  String get inviteSent => 'Convite enviado.';
 
   @override
-  String get copied => 'Copied to clipboard';
+  String get copied => 'Copiado para a área de transferência';
 
   @override
-  String get copyLink => 'Copy link';
+  String get copyLink => 'Copiar link';
 
   @override
-  String get sendInviteByEmail => 'Email (optional)';
+  String get sendInviteByEmail => 'E-mail (opcional)';
 
   @override
-  String get createInvite => 'Create';
+  String get createInvite => 'Criar';
 
   @override
   String get inviteHelp =>
-      'Enter an email to send the invite directly, or leave it blank to get a shareable link.';
+      'Digite um e-mail para enviar o convite diretamente, ou deixe em branco para obter um link compartilhável.';
 
   @override
   String get noInvitesYet =>
-      'No invitations yet — create one above to invite someone.';
+      'Ainda não há convites — crie um acima para convidar alguém.';
 
   @override
-  String get inviteLink => 'Shareable link';
+  String get inviteLink => 'Link compartilhável';
 
   @override
-  String get expires => 'Expires';
+  String get expires => 'Expira';
 
   @override
-  String get inviteUsed => 'Used';
+  String get inviteUsed => 'Usado';
 
   @override
-  String get invitePending => 'Pending';
+  String get invitePending => 'Pendente';
 
   @override
-  String get revoke => 'Revoke';
+  String get revoke => 'Revogar';
 
   @override
   String get revokeInviteConfirm =>
-      'Revoke this invitation? The link will stop working.';
+      'Revogar este convite? O link deixará de funcionar.';
 
   @override
-  String get inviteRevoked => 'Invitation revoked';
+  String get inviteRevoked => 'Convite revogado';
 
   @override
-  String get securityActivity => 'Security activity';
+  String get securityActivity => 'Atividade de segurança';
 
   @override
-  String get noActivityYet => 'No activity yet.';
+  String get noActivityYet => 'Ainda não há atividade.';
 
   @override
-  String get evLoginOk => 'Signed in';
+  String get evLoginOk => 'Sessão iniciada';
 
   @override
-  String get evLoginFail => 'Failed sign-in attempt';
+  String get evLoginFail => 'Tentativa de login malsucedida';
 
   @override
-  String get evPasswordChanged => 'Password changed';
+  String get evPasswordChanged => 'Senha alterada';
 
   @override
-  String get evResetRequested => 'Password reset requested';
+  String get evResetRequested => 'Redefinição de senha solicitada';
 
   @override
-  String get evResetCompleted => 'Password reset completed';
+  String get evResetCompleted => 'Redefinição de senha concluída';
 
   @override
-  String get evRegistered => 'Account created';
+  String get evRegistered => 'Conta criada';
 
   @override
-  String get evInviteCreated => 'Invitation created';
+  String get evInviteCreated => 'Convite criado';
 
   @override
-  String get evAccountDeleted => 'Account deleted';
+  String get evAccountDeleted => 'Conta excluída';
 }

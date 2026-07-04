@@ -19,11 +19,20 @@ class AuthController extends ChangeNotifier {
   Me? me;
   bool loading = true;
 
+  /// Whether the backend allows self-registration (fetched at startup). Defaults to
+  /// true so the UI stays usable if the flag can't be read; the login screen hides
+  /// the "create an account" toggle when this is false.
+  bool registrationEnabled = true;
+
   bool get isAuthed => me != null;
 
   /// Restore a session on startup: try to mint an access token from the refresh
   /// token (web cookie / native secure storage). Succeeds silently or drops to login.
   Future<void> restore() async {
+    // Feature flags — best-effort; a failure just keeps the defaults.
+    try {
+      registrationEnabled = (await api.serverConfig()).registrationEnabled;
+    } catch (_) {}
     try {
       if (await api.tryRestore()) {
         me = await api.me();

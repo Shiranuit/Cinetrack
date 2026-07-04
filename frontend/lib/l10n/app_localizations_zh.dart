@@ -284,108 +284,104 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filterOrigCountry => '出品国家';
 
   @override
-  String get installAndroidBanner => 'Cinetrack runs better as an app.';
+  String get installAndroidBanner => 'Cinetrack 作为应用运行更流畅。';
 
   @override
-  String get installAndroidCta => 'Get the Android app';
+  String get installAndroidCta => '获取 Android 应用';
 
   @override
-  String get forgotPassword => 'Forgot password?';
+  String get forgotPassword => '忘记密码？';
 
   @override
-  String get resetPassword => 'Reset password';
+  String get resetPassword => '重置密码';
 
   @override
-  String get resetLinkSent =>
-      'If an account exists for that address, a reset link has been sent.';
+  String get resetLinkSent => '如果该地址存在账户，我们已发送重置链接。';
 
   @override
-  String get passwordUpdated => 'Password updated.';
+  String get passwordUpdated => '密码已更新。';
 
   @override
-  String get newPassword => 'New password';
+  String get newPassword => '新密码';
 
   @override
-  String get currentPassword => 'Current password';
+  String get currentPassword => '当前密码';
 
   @override
-  String get inviteCode => 'Invite code';
+  String get inviteCode => '邀请码';
 
   @override
-  String get invites => 'Invitations';
+  String get invites => '邀请';
 
   @override
-  String get inviteSent => 'Invitation sent.';
+  String get inviteSent => '邀请已发送。';
 
   @override
-  String get copied => 'Copied to clipboard';
+  String get copied => '已复制到剪贴板';
 
   @override
-  String get copyLink => 'Copy link';
+  String get copyLink => '复制链接';
 
   @override
-  String get sendInviteByEmail => 'Email (optional)';
+  String get sendInviteByEmail => '电子邮件（可选）';
 
   @override
-  String get createInvite => 'Create';
+  String get createInvite => '创建';
 
   @override
-  String get inviteHelp =>
-      'Enter an email to send the invite directly, or leave it blank to get a shareable link.';
+  String get inviteHelp => '输入电子邮件以直接发送邀请，或留空以获取可分享的链接。';
 
   @override
-  String get noInvitesYet =>
-      'No invitations yet — create one above to invite someone.';
+  String get noInvitesYet => '还没有邀请——在上方创建一个来邀请他人。';
 
   @override
-  String get inviteLink => 'Shareable link';
+  String get inviteLink => '可分享链接';
 
   @override
-  String get expires => 'Expires';
+  String get expires => '到期';
 
   @override
-  String get inviteUsed => 'Used';
+  String get inviteUsed => '已使用';
 
   @override
-  String get invitePending => 'Pending';
+  String get invitePending => '待处理';
 
   @override
-  String get revoke => 'Revoke';
+  String get revoke => '撤销';
 
   @override
-  String get revokeInviteConfirm =>
-      'Revoke this invitation? The link will stop working.';
+  String get revokeInviteConfirm => '撤销此邀请？该链接将失效。';
 
   @override
-  String get inviteRevoked => 'Invitation revoked';
+  String get inviteRevoked => '邀请已撤销';
 
   @override
-  String get securityActivity => 'Security activity';
+  String get securityActivity => '安全活动';
 
   @override
-  String get noActivityYet => 'No activity yet.';
+  String get noActivityYet => '暂无活动。';
 
   @override
-  String get evLoginOk => 'Signed in';
+  String get evLoginOk => '已登录';
 
   @override
-  String get evLoginFail => 'Failed sign-in attempt';
+  String get evLoginFail => '登录尝试失败';
 
   @override
-  String get evPasswordChanged => 'Password changed';
+  String get evPasswordChanged => '密码已更改';
 
   @override
-  String get evResetRequested => 'Password reset requested';
+  String get evResetRequested => '已请求重置密码';
 
   @override
-  String get evResetCompleted => 'Password reset completed';
+  String get evResetCompleted => '密码重置已完成';
 
   @override
-  String get evRegistered => 'Account created';
+  String get evRegistered => '账户已创建';
 
   @override
-  String get evInviteCreated => 'Invitation created';
+  String get evInviteCreated => '邀请已创建';
 
   @override
-  String get evAccountDeleted => 'Account deleted';
+  String get evAccountDeleted => '账户已删除';
 }

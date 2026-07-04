@@ -284,108 +284,104 @@ class AppLocalizationsKo extends AppLocalizations {
   String get filterOrigCountry => '제작 국가';
 
   @override
-  String get installAndroidBanner => 'Cinetrack runs better as an app.';
+  String get installAndroidBanner => 'Cinetrack는 앱에서 더 잘 작동합니다.';
 
   @override
-  String get installAndroidCta => 'Get the Android app';
+  String get installAndroidCta => 'Android 앱 받기';
 
   @override
-  String get forgotPassword => 'Forgot password?';
+  String get forgotPassword => '비밀번호를 잊으셨나요?';
 
   @override
-  String get resetPassword => 'Reset password';
+  String get resetPassword => '비밀번호 재설정';
 
   @override
-  String get resetLinkSent =>
-      'If an account exists for that address, a reset link has been sent.';
+  String get resetLinkSent => '해당 주소로 등록된 계정이 있으면 재설정 링크를 보냈습니다.';
 
   @override
-  String get passwordUpdated => 'Password updated.';
+  String get passwordUpdated => '비밀번호가 업데이트되었습니다.';
 
   @override
-  String get newPassword => 'New password';
+  String get newPassword => '새 비밀번호';
 
   @override
-  String get currentPassword => 'Current password';
+  String get currentPassword => '현재 비밀번호';
 
   @override
-  String get inviteCode => 'Invite code';
+  String get inviteCode => '초대 코드';
 
   @override
-  String get invites => 'Invitations';
+  String get invites => '초대';
 
   @override
-  String get inviteSent => 'Invitation sent.';
+  String get inviteSent => '초대를 보냈습니다.';
 
   @override
-  String get copied => 'Copied to clipboard';
+  String get copied => '클립보드에 복사됨';
 
   @override
-  String get copyLink => 'Copy link';
+  String get copyLink => '링크 복사';
 
   @override
-  String get sendInviteByEmail => 'Email (optional)';
+  String get sendInviteByEmail => '이메일 (선택 사항)';
 
   @override
-  String get createInvite => 'Create';
+  String get createInvite => '만들기';
 
   @override
-  String get inviteHelp =>
-      'Enter an email to send the invite directly, or leave it blank to get a shareable link.';
+  String get inviteHelp => '초대를 바로 보내려면 이메일을 입력하고, 공유 링크를 받으려면 비워 두세요.';
 
   @override
-  String get noInvitesYet =>
-      'No invitations yet — create one above to invite someone.';
+  String get noInvitesYet => '아직 초대가 없습니다. 위에서 하나 만들어 누군가를 초대하세요.';
 
   @override
-  String get inviteLink => 'Shareable link';
+  String get inviteLink => '공유 링크';
 
   @override
-  String get expires => 'Expires';
+  String get expires => '만료';
 
   @override
-  String get inviteUsed => 'Used';
+  String get inviteUsed => '사용됨';
 
   @override
-  String get invitePending => 'Pending';
+  String get invitePending => '대기 중';
 
   @override
-  String get revoke => 'Revoke';
+  String get revoke => '취소';
 
   @override
-  String get revokeInviteConfirm =>
-      'Revoke this invitation? The link will stop working.';
+  String get revokeInviteConfirm => '이 초대를 취소하시겠습니까? 링크가 작동하지 않게 됩니다.';
 
   @override
-  String get inviteRevoked => 'Invitation revoked';
+  String get inviteRevoked => '초대가 취소됨';
 
   @override
-  String get securityActivity => 'Security activity';
+  String get securityActivity => '보안 활동';
 
   @override
-  String get noActivityYet => 'No activity yet.';
+  String get noActivityYet => '아직 활동이 없습니다.';
 
   @override
-  String get evLoginOk => 'Signed in';
+  String get evLoginOk => '로그인함';
 
   @override
-  String get evLoginFail => 'Failed sign-in attempt';
+  String get evLoginFail => '로그인 시도 실패';
 
   @override
-  String get evPasswordChanged => 'Password changed';
+  String get evPasswordChanged => '비밀번호 변경됨';
 
   @override
-  String get evResetRequested => 'Password reset requested';
+  String get evResetRequested => '비밀번호 재설정 요청됨';
 
   @override
-  String get evResetCompleted => 'Password reset completed';
+  String get evResetCompleted => '비밀번호 재설정 완료됨';
 
   @override
-  String get evRegistered => 'Account created';
+  String get evRegistered => '계정 생성됨';
 
   @override
-  String get evInviteCreated => 'Invitation created';
+  String get evInviteCreated => '초대 생성됨';
 
   @override
-  String get evAccountDeleted => 'Account deleted';
+  String get evAccountDeleted => '계정 삭제됨';
 }

@@ -31,6 +31,8 @@ const READ_RPS: usize = 20;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(handlers::health::health))
+        // Public feature flags for the frontend (no auth — read before login).
+        .route("/api/config", get(handlers::meta::config))
         // ---- auth ----
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
@@ -159,7 +161,7 @@ async fn authenticate(state: &AppState, token: &str) -> Option<uuid::Uuid> {
 
 /// Endpoints reachable WITHOUT a session.
 fn is_public(method: &Method, path: &str) -> bool {
-    if path == "/health" {
+    if path == "/health" || path == "/api/config" {
         return true;
     }
     if matches!(

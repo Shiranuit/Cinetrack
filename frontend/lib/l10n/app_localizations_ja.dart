@@ -284,108 +284,104 @@ class AppLocalizationsJa extends AppLocalizations {
   String get filterOrigCountry => '制作国';
 
   @override
-  String get installAndroidBanner => 'Cinetrack runs better as an app.';
+  String get installAndroidBanner => 'Cinetrack はアプリの方が快適に動作します。';
 
   @override
-  String get installAndroidCta => 'Get the Android app';
+  String get installAndroidCta => 'Android アプリを入手';
 
   @override
-  String get forgotPassword => 'Forgot password?';
+  String get forgotPassword => 'パスワードをお忘れですか？';
 
   @override
-  String get resetPassword => 'Reset password';
+  String get resetPassword => 'パスワードをリセット';
 
   @override
-  String get resetLinkSent =>
-      'If an account exists for that address, a reset link has been sent.';
+  String get resetLinkSent => 'そのアドレスのアカウントが存在する場合、リセットリンクを送信しました。';
 
   @override
-  String get passwordUpdated => 'Password updated.';
+  String get passwordUpdated => 'パスワードを更新しました。';
 
   @override
-  String get newPassword => 'New password';
+  String get newPassword => '新しいパスワード';
 
   @override
-  String get currentPassword => 'Current password';
+  String get currentPassword => '現在のパスワード';
 
   @override
-  String get inviteCode => 'Invite code';
+  String get inviteCode => '招待コード';
 
   @override
-  String get invites => 'Invitations';
+  String get invites => '招待';
 
   @override
-  String get inviteSent => 'Invitation sent.';
+  String get inviteSent => '招待を送信しました。';
 
   @override
-  String get copied => 'Copied to clipboard';
+  String get copied => 'クリップボードにコピーしました';
 
   @override
-  String get copyLink => 'Copy link';
+  String get copyLink => 'リンクをコピー';
 
   @override
-  String get sendInviteByEmail => 'Email (optional)';
+  String get sendInviteByEmail => 'メール（任意）';
 
   @override
-  String get createInvite => 'Create';
+  String get createInvite => '作成';
 
   @override
-  String get inviteHelp =>
-      'Enter an email to send the invite directly, or leave it blank to get a shareable link.';
+  String get inviteHelp => '招待を直接送るにはメールアドレスを入力し、共有リンクを取得するには空欄のままにします。';
 
   @override
-  String get noInvitesYet =>
-      'No invitations yet — create one above to invite someone.';
+  String get noInvitesYet => '招待はまだありません。上で作成して誰かを招待しましょう。';
 
   @override
-  String get inviteLink => 'Shareable link';
+  String get inviteLink => '共有リンク';
 
   @override
-  String get expires => 'Expires';
+  String get expires => '有効期限';
 
   @override
-  String get inviteUsed => 'Used';
+  String get inviteUsed => '使用済み';
 
   @override
-  String get invitePending => 'Pending';
+  String get invitePending => '保留中';
 
   @override
-  String get revoke => 'Revoke';
+  String get revoke => '取り消し';
 
   @override
-  String get revokeInviteConfirm =>
-      'Revoke this invitation? The link will stop working.';
+  String get revokeInviteConfirm => 'この招待を取り消しますか？リンクは無効になります。';
 
   @override
-  String get inviteRevoked => 'Invitation revoked';
+  String get inviteRevoked => '招待を取り消しました';
 
   @override
-  String get securityActivity => 'Security activity';
+  String get securityActivity => 'セキュリティアクティビティ';
 
   @override
-  String get noActivityYet => 'No activity yet.';
+  String get noActivityYet => 'アクティビティはまだありません。';
 
   @override
-  String get evLoginOk => 'Signed in';
+  String get evLoginOk => 'サインインしました';
 
   @override
-  String get evLoginFail => 'Failed sign-in attempt';
+  String get evLoginFail => 'サインインの試行に失敗しました';
 
   @override
-  String get evPasswordChanged => 'Password changed';
+  String get evPasswordChanged => 'パスワードを変更しました';
 
   @override
-  String get evResetRequested => 'Password reset requested';
+  String get evResetRequested => 'パスワードのリセットを要求しました';
 
   @override
-  String get evResetCompleted => 'Password reset completed';
+  String get evResetCompleted => 'パスワードのリセットが完了しました';
 
   @override
-  String get evRegistered => 'Account created';
+  String get evRegistered => 'アカウントを作成しました';
 
   @override
-  String get evInviteCreated => 'Invitation created';
+  String get evInviteCreated => '招待を作成しました';
 
   @override
-  String get evAccountDeleted => 'Account deleted';
+  String get evAccountDeleted => 'アカウントを削除しました';
 }

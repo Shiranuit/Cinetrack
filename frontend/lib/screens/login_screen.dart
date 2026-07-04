@@ -88,6 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final registrationEnabled = context.watch<AuthController>().registrationEnabled;
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -173,16 +174,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text(_register ? t.createAccount : t.logIn),
                 ),
-                TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() {
-                            _register = !_register;
-                            _confirm.clear();
-                            _error = null;
-                          }),
-                  child: Text(_register ? t.haveAccountLogIn : t.newHereCreate),
-                ),
+                // Hide the sign-up toggle when the server is invite-only — unless we
+                // arrived via an invite deep link (_register already true), so those
+                // users can still switch back to log in.
+                if (registrationEnabled || _register)
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                              _register = !_register;
+                              _confirm.clear();
+                              _error = null;
+                            }),
+                    child: Text(_register ? t.haveAccountLogIn : t.newHereCreate),
+                  ),
                 if (!_register)
                   TextButton(
                     onPressed: _busy

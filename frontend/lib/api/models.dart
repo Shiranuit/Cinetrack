@@ -5,6 +5,19 @@
 // integers for catalog id/count fields and strings for text; user ids are UUID
 // strings. These patterns mirror the Rust types exactly.
 
+/// Public server feature flags (`GET /api/config`). Read at startup to tailor the
+/// UI to how the backend is configured.
+class ServerConfig {
+  /// Visitors can self-register without an invite. When false, sign-up is
+  /// invite-only and the "create an account" toggle is hidden.
+  final bool registrationEnabled;
+  const ServerConfig({this.registrationEnabled = true});
+
+  factory ServerConfig.fromJson(Map<String, dynamic> j) => ServerConfig(
+        registrationEnabled: j['registration_enabled'] as bool? ?? true,
+      );
+}
+
 class Me {
   final String id;
   final String screenName;
