@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInput;
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
@@ -54,10 +55,22 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       _error = null;
     });
     try {
-      await context.read<ApiClient>().resetPassword(widget.token, _password.text);
+      await context.read<ApiClient>().resetPassword(
+        widget.token,
+        _password.text,
+      );
+      // Let the password manager offer to update the stored credential.
+      TextInput.finishAutofillContext();
       if (mounted) setState(() => _done = true);
     } catch (e) {
-      if (mounted) setState(() => _error = '$e'.replaceFirst(RegExp(r'^ApiException\(\d+\):\s*'), ''));
+      if (mounted) {
+        setState(
+          () => _error = '$e'.replaceFirst(
+            RegExp(r'^ApiException\(\d+\):\s*'),
+            '',
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -74,56 +87,90 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: _done
-                ? Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.check_circle_rounded, size: 56, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(height: Insets.md),
-                    Text(t.passwordUpdated, textAlign: TextAlign.center),
-                    const SizedBox(height: Insets.lg),
-                    FilledButton(onPressed: () => widget.onDone?.call(), child: Text(t.logIn)),
-                  ])
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextField(
-                        controller: _password,
-                        obscureText: _obscure,
-                        autofocus: true,
-                        decoration: InputDecoration(
-                          labelText: t.newPassword,
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 56,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: Insets.md),
-                      TextField(
-                        controller: _confirm,
-                        obscureText: _obscure,
-                        onSubmitted: (_) => _ok ? _submit() : null,
-                        decoration: InputDecoration(
-                          labelText: t.fieldConfirmPassword,
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          errorText: (_confirm.text.isNotEmpty && _confirm.text != _password.text)
-                              ? t.passwordsDontMatch
-                              : null,
-                        ),
-                      ),
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: Insets.md),
-                          child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                        ),
+                      Text(t.passwordUpdated, textAlign: TextAlign.center),
                       const SizedBox(height: Insets.lg),
                       FilledButton(
-                        onPressed: (_busy || !_ok) ? null : _submit,
-                        child: _busy
-                            ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                            : Text(t.resetPassword),
+                        onPressed: () => widget.onDone?.call(),
+                        child: Text(t.logIn),
                       ),
                     ],
+                  )
+                // AutofillGroup makes Flutter web emit a real <form>/<input> so
+                // password managers (Bitwarden, etc.) can offer to save the new one.
+                : AutofillGroup(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: _password,
+                          obscureText: _obscure,
+                          autofocus: true,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: InputDecoration(
+                            labelText: t.newPassword,
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: Insets.md),
+                        TextField(
+                          controller: _confirm,
+                          obscureText: _obscure,
+                          onSubmitted: (_) => _ok ? _submit() : null,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: InputDecoration(
+                            labelText: t.fieldConfirmPassword,
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            errorText:
+                                (_confirm.text.isNotEmpty &&
+                                    _confirm.text != _password.text)
+                                ? t.passwordsDontMatch
+                                : null,
+                          ),
+                        ),
+                        if (_error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: Insets.md),
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: Insets.lg),
+                        FilledButton(
+                          onPressed: (_busy || !_ok) ? null : _submit,
+                          child: _busy
+                              ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(t.resetPassword),
+                        ),
+                      ],
+                    ),
                   ),
           ),
         ),
