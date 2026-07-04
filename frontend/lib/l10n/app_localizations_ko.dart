@@ -400,4 +400,37 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get updateFailed => '업데이트에 실패했습니다. 다시 시도해 주세요.';
+
+  @override
+  String get catWatching => '시청 중';
+
+  @override
+  String get catStale => '한동안 보지 않음';
+
+  @override
+  String get catNotStarted => '시작 안 함';
+
+  @override
+  String get catUpToDate => '최신';
+
+  @override
+  String get catStopped => '중단됨';
+
+  @override
+  String get libSelectKinds => '시리즈, 애니메이션 또는 영화를 선택하여\n라이브러리를 확인하세요.';
+
+  @override
+  String get libEmpty => '아직 아무것도 없습니다.\n시청하는 프로그램과 영화를 검색하여 추가하세요.';
+
+  @override
+  String get libNoShows => '프로그램이 없습니다.';
+
+  @override
+  String get nothingHereYet => '아직 아무것도 없습니다.';
+
+  @override
+  String get filterNoMatch => '이 필터와 일치하는 프로그램이 없습니다.';
+
+  @override
+  String get noTrackedMovies => '추적 중인 영화가 없습니다.';
 }

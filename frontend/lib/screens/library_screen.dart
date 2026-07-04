@@ -349,7 +349,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: InfiniteGrid(
             resetKey: _filterToken,
             fetchPage: _filterPage,
-            empty: const MessageView(icon: Icons.filter_alt_off_rounded, message: 'No shows match these filters.'),
+            empty: MessageView(
+                icon: Icons.filter_alt_off_rounded, message: AppLocalizations.of(context).filterNoMatch),
             itemBuilder: (context, r) => ShowCard(
               title: r.name ?? 'Series ${r.tvdbId}',
               imageUrl: r.imageUrl,
@@ -375,15 +376,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   /// series categories (filtered by the Series/Anime toggles) and, if Movies is
   /// on, a Movies section. Respects the rails/grid layout preference.
   Widget _libraryBody() {
+    final t = AppLocalizations.of(context);
     final wantSeries = _filter.contains(_Filter.series);
     final wantAnime = _filter.contains(_Filter.anime);
     final wantMovies = _filter.contains(_Filter.movies);
 
     if (_filter.isEmpty) {
-      return const _Scroll(
+      return _Scroll(
         child: MessageView(
           icon: Icons.filter_list_rounded,
-          message: 'Select Series, Anime or Movies\nto view your library.',
+          message: t.libSelectKinds,
         ),
       );
     }
@@ -413,10 +415,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           final movieList = wantMovies ? movies : const <LibraryMovie>[];
 
           if (cats.isEmpty && movieList.isEmpty) {
-            return const _Scroll(
+            return _Scroll(
               child: MessageView(
                 icon: Icons.video_library_rounded,
-                message: 'Nothing here yet.\nSearch to add shows and movies you watch.',
+                message: t.libEmpty,
               ),
             );
           }
@@ -427,7 +429,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               for (final (cat, shows) in cats)
-                ..._section(cat.title, cat.icon, cat.accent(context), shows.length, grid, section++,
+                ..._section(cat.title(t), cat.icon, cat.accent(context), shows.length, grid, section++,
                     (j) => _libraryCard(shows[j])),
               if (movieList.isNotEmpty)
                 ..._section('Movies', Icons.theaters_rounded, context.scheme.tertiary, movieList.length, grid,
@@ -518,17 +520,17 @@ typedef _AccentFn = Color Function(BuildContext);
 
 class _Cat {
   const _Cat(this.title, this.icon, this.accent);
-  final String title;
+  final String Function(AppLocalizations) title;
   final IconData icon;
   final _AccentFn accent;
 }
 
 final _cats = <_Cat>[
-  _Cat('Watching', Icons.play_circle_rounded, (c) => c.scheme.primary),
-  _Cat('Up to date', Icons.check_circle_rounded, (c) => c.colors.seen),
-  _Cat("Haven't watched in a while", Icons.history_rounded, (c) => c.colors.warning),
-  _Cat("Haven't started", Icons.playlist_add_rounded, (c) => c.scheme.secondary),
-  _Cat('Stopped', Icons.pause_circle_rounded, (c) => c.scheme.onSurfaceVariant),
+  _Cat((t) => t.catWatching, Icons.play_circle_rounded, (c) => c.scheme.primary),
+  _Cat((t) => t.catUpToDate, Icons.check_circle_rounded, (c) => c.colors.seen),
+  _Cat((t) => t.catStale, Icons.history_rounded, (c) => c.colors.warning),
+  _Cat((t) => t.catNotStarted, Icons.playlist_add_rounded, (c) => c.scheme.secondary),
+  _Cat((t) => t.catStopped, Icons.pause_circle_rounded, (c) => c.scheme.onSurfaceVariant),
 ];
 
 class _Scroll extends StatelessWidget {

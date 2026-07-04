@@ -400,4 +400,37 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get updateFailed => 'アップデートに失敗しました。もう一度お試しください。';
+
+  @override
+  String get catWatching => '視聴中';
+
+  @override
+  String get catStale => 'しばらく視聴していません';
+
+  @override
+  String get catNotStarted => '未開始';
+
+  @override
+  String get catUpToDate => '最新まで視聴済み';
+
+  @override
+  String get catStopped => '視聴停止';
+
+  @override
+  String get libSelectKinds => 'シリーズ、アニメ、映画のいずれかを選択して\nライブラリを表示します。';
+
+  @override
+  String get libEmpty => 'まだ何もありません。\n視聴する番組や映画を検索して追加しましょう。';
+
+  @override
+  String get libNoShows => '番組がありません。';
+
+  @override
+  String get nothingHereYet => 'まだ何もありません。';
+
+  @override
+  String get filterNoMatch => 'これらのフィルターに一致する番組はありません。';
+
+  @override
+  String get noTrackedMovies => '追跡中の映画はありません。';
 }

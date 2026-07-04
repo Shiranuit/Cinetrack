@@ -404,4 +404,39 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get updateFailed => 'La actualización falló. Inténtalo de nuevo.';
+
+  @override
+  String get catWatching => 'Viendo';
+
+  @override
+  String get catStale => 'Sin ver desde hace tiempo';
+
+  @override
+  String get catNotStarted => 'Sin empezar';
+
+  @override
+  String get catUpToDate => 'Al día';
+
+  @override
+  String get catStopped => 'Detenido';
+
+  @override
+  String get libSelectKinds =>
+      'Selecciona Series, Anime o Películas\npara ver tu biblioteca.';
+
+  @override
+  String get libEmpty =>
+      'Todavía no hay nada.\nBusca para añadir series y películas que ves.';
+
+  @override
+  String get libNoShows => 'Sin series.';
+
+  @override
+  String get nothingHereYet => 'Todavía no hay nada.';
+
+  @override
+  String get filterNoMatch => 'Ninguna serie coincide con estos filtros.';
+
+  @override
+  String get noTrackedMovies => 'Sin películas seguidas.';
 }

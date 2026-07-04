@@ -136,5 +136,16 @@
   "update": "Update",
   "updateRequired": "Update required",
   "updateRequiredBody": "This version is no longer supported. Please update to keep using Cinetrack.",
-  "updateFailed": "Update failed. Please try again."
+  "updateFailed": "Update failed. Please try again.",
+  "catWatching": "Watching",
+  "catStale": "Haven't watched in a while",
+  "catNotStarted": "Haven't started",
+  "catUpToDate": "Up to date",
+  "catStopped": "Stopped",
+  "libSelectKinds": "Select Series, Anime or Movies\nto view your library.",
+  "libEmpty": "Nothing here yet.\nSearch to add shows and movies you watch.",
+  "libNoShows": "No shows.",
+  "nothingHereYet": "Nothing here yet.",
+  "filterNoMatch": "No shows match these filters.",
+  "noTrackedMovies": "No tracked movies."
 }

@@ -399,4 +399,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateFailed => '更新失败。请重试。';
+
+  @override
+  String get catWatching => '观看中';
+
+  @override
+  String get catStale => '有段时间没看了';
+
+  @override
+  String get catNotStarted => '未开始';
+
+  @override
+  String get catUpToDate => '已看完最新';
+
+  @override
+  String get catStopped => '已停止';
+
+  @override
+  String get libSelectKinds => '选择剧集、动画或电影\n以查看你的库。';
+
+  @override
+  String get libEmpty => '这里还没有内容。\n搜索以添加你观看的剧集和电影。';
+
+  @override
+  String get libNoShows => '没有剧集。';
+
+  @override
+  String get nothingHereYet => '这里还没有内容。';
+
+  @override
+  String get filterNoMatch => '没有符合这些筛选条件的剧集。';
+
+  @override
+  String get noTrackedMovies => '没有追踪的电影。';
 }

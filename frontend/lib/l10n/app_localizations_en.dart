@@ -404,4 +404,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateFailed => 'Update failed. Please try again.';
+
+  @override
+  String get catWatching => 'Watching';
+
+  @override
+  String get catStale => 'Haven\'t watched in a while';
+
+  @override
+  String get catNotStarted => 'Haven\'t started';
+
+  @override
+  String get catUpToDate => 'Up to date';
+
+  @override
+  String get catStopped => 'Stopped';
+
+  @override
+  String get libSelectKinds =>
+      'Select Series, Anime or Movies\nto view your library.';
+
+  @override
+  String get libEmpty =>
+      'Nothing here yet.\nSearch to add shows and movies you watch.';
+
+  @override
+  String get libNoShows => 'No shows.';
+
+  @override
+  String get nothingHereYet => 'Nothing here yet.';
+
+  @override
+  String get filterNoMatch => 'No shows match these filters.';
+
+  @override
+  String get noTrackedMovies => 'No tracked movies.';
 }

@@ -129,5 +129,16 @@
   "update": "Aktualisieren",
   "updateRequired": "Update erforderlich",
   "updateRequiredBody": "Diese Version wird nicht mehr unterstützt. Bitte aktualisiere, um Cinetrack weiter zu nutzen.",
-  "updateFailed": "Update fehlgeschlagen. Bitte versuche es erneut."
+  "updateFailed": "Update fehlgeschlagen. Bitte versuche es erneut.",
+  "catWatching": "Wird angesehen",
+  "catStale": "Länger nicht gesehen",
+  "catNotStarted": "Noch nicht begonnen",
+  "catUpToDate": "Aktuell",
+  "catStopped": "Gestoppt",
+  "libSelectKinds": "Wähle Serien, Anime oder Filme,\num deine Bibliothek zu sehen.",
+  "libEmpty": "Noch nichts hier.\nSuche, um Serien und Filme hinzuzufügen, die du schaust.",
+  "libNoShows": "Keine Serien.",
+  "nothingHereYet": "Noch nichts hier.",
+  "filterNoMatch": "Keine Serien entsprechen diesen Filtern.",
+  "noTrackedMovies": "Keine verfolgten Filme."
 }

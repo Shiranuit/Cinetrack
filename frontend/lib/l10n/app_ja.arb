@@ -129,5 +129,16 @@
   "update": "更新",
   "updateRequired": "アップデートが必要です",
   "updateRequiredBody": "このバージョンはサポートされていません。Cinetrack を使い続けるには更新してください。",
-  "updateFailed": "アップデートに失敗しました。もう一度お試しください。"
+  "updateFailed": "アップデートに失敗しました。もう一度お試しください。",
+  "catWatching": "視聴中",
+  "catStale": "しばらく視聴していません",
+  "catNotStarted": "未開始",
+  "catUpToDate": "最新まで視聴済み",
+  "catStopped": "視聴停止",
+  "libSelectKinds": "シリーズ、アニメ、映画のいずれかを選択して\nライブラリを表示します。",
+  "libEmpty": "まだ何もありません。\n視聴する番組や映画を検索して追加しましょう。",
+  "libNoShows": "番組がありません。",
+  "nothingHereYet": "まだ何もありません。",
+  "filterNoMatch": "これらのフィルターに一致する番組はありません。",
+  "noTrackedMovies": "追跡中の映画はありません。"
 }

@@ -129,5 +129,16 @@
   "update": "Mettre à jour",
   "updateRequired": "Mise à jour requise",
   "updateRequiredBody": "Cette version n'est plus prise en charge. Veuillez mettre à jour pour continuer à utiliser Cinetrack.",
-  "updateFailed": "Échec de la mise à jour. Veuillez réessayer."
+  "updateFailed": "Échec de la mise à jour. Veuillez réessayer.",
+  "catWatching": "En cours",
+  "catStale": "Pas regardé depuis un moment",
+  "catNotStarted": "Pas commencé",
+  "catUpToDate": "À jour",
+  "catStopped": "Arrêté",
+  "libSelectKinds": "Sélectionnez Séries, Animés ou Films\npour voir votre bibliothèque.",
+  "libEmpty": "Rien pour l'instant.\nRecherchez pour ajouter des séries et films que vous regardez.",
+  "libNoShows": "Aucune série.",
+  "nothingHereYet": "Rien pour l'instant.",
+  "filterNoMatch": "Aucune série ne correspond à ces filtres.",
+  "noTrackedMovies": "Aucun film suivi."
 }

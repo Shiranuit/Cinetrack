@@ -6,6 +6,7 @@ import '../api/filters.dart';
 import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/poster_grid.dart';
@@ -126,14 +127,15 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
         if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
         final lib = snap.data!;
+        final t = AppLocalizations.of(context);
         final cats = <(String, IconData, Color, List<LibraryShow>)>[
-          ('Watching', Icons.play_circle_rounded, context.scheme.primary, lib.watching),
-          ("Haven't watched in a while", Icons.history_rounded, context.colors.warning, lib.stale),
-          ("Haven't started", Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
-          ('Up to date', Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
-          ('Stopped', Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
+          (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, lib.watching),
+          (t.catStale, Icons.history_rounded, context.colors.warning, lib.stale),
+          (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
+          (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
+          (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
         ].where((e) => e.$4.isNotEmpty).toList();
-        if (cats.isEmpty) return const MessageView(icon: Icons.video_library_rounded, message: 'No shows.');
+        if (cats.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
         return ListView(
           padding: const EdgeInsets.only(bottom: Insets.xxl),
           children: [
@@ -167,7 +169,10 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
         if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: _openFilters);
         final items = snap.data ?? [];
-        if (items.isEmpty) return const MessageView(icon: Icons.filter_alt_off_rounded, message: 'No shows match these filters.');
+        if (items.isEmpty) {
+          return MessageView(
+              icon: Icons.filter_alt_off_rounded, message: AppLocalizations.of(context).filterNoMatch);
+        }
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
           gridDelegate: posterGridDelegate(context),
@@ -193,7 +198,10 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
         if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
         final movies = snap.data ?? [];
-        if (movies.isEmpty) return const MessageView(icon: Icons.theaters_rounded, message: 'No tracked movies.');
+        if (movies.isEmpty) {
+          return MessageView(
+              icon: Icons.theaters_rounded, message: AppLocalizations.of(context).noTrackedMovies);
+        }
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
           gridDelegate: posterGridDelegate(context),
@@ -225,10 +233,11 @@ class ShowsGridScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: shows.isEmpty
-          ? const MessageView(icon: Icons.favorite_border_rounded, message: 'Nothing here yet.')
+          ? MessageView(icon: Icons.favorite_border_rounded, message: t.nothingHereYet)
           : GridView.builder(
               padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
               gridDelegate: posterGridDelegate(context),

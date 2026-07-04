@@ -129,5 +129,16 @@
   "update": "업데이트",
   "updateRequired": "업데이트가 필요합니다",
   "updateRequiredBody": "이 버전은 더 이상 지원되지 않습니다. Cinetrack을 계속 사용하려면 업데이트하세요.",
-  "updateFailed": "업데이트에 실패했습니다. 다시 시도해 주세요."
+  "updateFailed": "업데이트에 실패했습니다. 다시 시도해 주세요.",
+  "catWatching": "시청 중",
+  "catStale": "한동안 보지 않음",
+  "catNotStarted": "시작 안 함",
+  "catUpToDate": "최신",
+  "catStopped": "중단됨",
+  "libSelectKinds": "시리즈, 애니메이션 또는 영화를 선택하여\n라이브러리를 확인하세요.",
+  "libEmpty": "아직 아무것도 없습니다.\n시청하는 프로그램과 영화를 검색하여 추가하세요.",
+  "libNoShows": "프로그램이 없습니다.",
+  "nothingHereYet": "아직 아무것도 없습니다.",
+  "filterNoMatch": "이 필터와 일치하는 프로그램이 없습니다.",
+  "noTrackedMovies": "추적 중인 영화가 없습니다."
 }

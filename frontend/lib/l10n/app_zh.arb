@@ -129,5 +129,16 @@
   "update": "更新",
   "updateRequired": "需要更新",
   "updateRequiredBody": "此版本已不再受支持。请更新以继续使用 Cinetrack。",
-  "updateFailed": "更新失败。请重试。"
+  "updateFailed": "更新失败。请重试。",
+  "catWatching": "观看中",
+  "catStale": "有段时间没看了",
+  "catNotStarted": "未开始",
+  "catUpToDate": "已看完最新",
+  "catStopped": "已停止",
+  "libSelectKinds": "选择剧集、动画或电影\n以查看你的库。",
+  "libEmpty": "这里还没有内容。\n搜索以添加你观看的剧集和电影。",
+  "libNoShows": "没有剧集。",
+  "nothingHereYet": "这里还没有内容。",
+  "filterNoMatch": "没有符合这些筛选条件的剧集。",
+  "noTrackedMovies": "没有追踪的电影。"
 }

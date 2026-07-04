@@ -891,6 +891,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update failed. Please try again.'**
   String get updateFailed;
+
+  /// No description provided for @catWatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Watching'**
+  String get catWatching;
+
+  /// No description provided for @catStale.
+  ///
+  /// In en, this message translates to:
+  /// **'Haven\'t watched in a while'**
+  String get catStale;
+
+  /// No description provided for @catNotStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Haven\'t started'**
+  String get catNotStarted;
+
+  /// No description provided for @catUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get catUpToDate;
+
+  /// No description provided for @catStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get catStopped;
+
+  /// No description provided for @libSelectKinds.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Series, Anime or Movies\nto view your library.'**
+  String get libSelectKinds;
+
+  /// No description provided for @libEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet.\nSearch to add shows and movies you watch.'**
+  String get libEmpty;
+
+  /// No description provided for @libNoShows.
+  ///
+  /// In en, this message translates to:
+  /// **'No shows.'**
+  String get libNoShows;
+
+  /// No description provided for @nothingHereYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet.'**
+  String get nothingHereYet;
+
+  /// No description provided for @filterNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No shows match these filters.'**
+  String get filterNoMatch;
+
+  /// No description provided for @noTrackedMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'No tracked movies.'**
+  String get noTrackedMovies;
 }
 
 class _AppLocalizationsDelegate
