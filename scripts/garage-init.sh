@@ -2,7 +2,11 @@
 # Bootstrap a fresh single-node Garage: assign a storage layout, create the
 # artwork bucket, create an S3 key, and grant access. Run once after the first
 # `docker compose up -d garage`. Prints the S3 access/secret keys — paste them
-# into .env (S3_ACCESS_KEY / S3_SECRET_KEY), then start the backend.
+# into your env file (S3_ACCESS_KEY / S3_SECRET_KEY), then start the backend.
+#
+# Targets whatever stack `docker compose` resolves. In PRODUCTION, point it at the
+# prod file (docker compose reads COMPOSE_FILE natively) and paste into .env.production:
+#   COMPOSE_FILE=production.docker-compose.yaml scripts/garage-init.sh
 set -euo pipefail
 
 SVC=garage
