@@ -41,3 +41,4 @@ key.properties
 
 # Local database dump (large; may contain data) — never commit.
 /dump.sql
+catalog-backup.sql.gz
