@@ -10,6 +10,7 @@ pub mod email;
 pub mod email_templates;
 pub mod error;
 pub mod import;
+pub mod profile;
 pub mod state;
 pub mod storage;
 pub mod sync;

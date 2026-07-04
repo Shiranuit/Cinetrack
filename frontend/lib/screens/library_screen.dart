@@ -139,7 +139,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() {
       if (q.isNotEmpty) _searchOpen = true;
     });
-    if (q.isEmpty) {
+    // Require >= 3 characters before searching (matches the backend, which returns
+    // nothing for shorter queries) — so typing on the way to a real term doesn't fire
+    // a request per keystroke.
+    if (q.trim().runes.length < 3) {
       setState(() {
         _results = null;
         _searchBusy = false;

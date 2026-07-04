@@ -167,38 +167,79 @@ const STALE_DAYS: i64 = 30;
 
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
 pub async fn library(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Library> {
-    let name = translated_name_sql("us.series_id", "$2");
-    let sql = format!(
-        "SELECT us.series_id, {name} AS name, s.image_url, us.nb_episodes_seen, us.status, us.archived, us.is_favorited, \
-                (SELECT extract(epoch FROM max(we.watched_at))::bigint FROM app.watch_event we \
-                 WHERE we.user_id = us.user_id AND we.series_id = us.series_id) AS last_watched, \
-                EXISTS ( \
-                   SELECT 1 FROM catalog.episode ce \
-                   WHERE ce.series_id = us.series_id AND NOT ce.deleted AND ce.season_number > 0 \
-                     AND ce.aired IS NOT NULL AND ce.aired <= current_date \
-                     AND ce.aired = (SELECT max(e2.aired) FROM catalog.episode e2 \
-                                     WHERE e2.series_id = us.series_id AND NOT e2.deleted \
-                                       AND e2.season_number > 0 AND e2.aired IS NOT NULL AND e2.aired <= current_date) \
-                     AND EXISTS (SELECT 1 FROM app.watch_event we2 \
-                                 WHERE we2.user_id = us.user_id AND we2.episode_id = ce.id)) AS caught_up, \
-                (SELECT count(*) FROM catalog.episode te \
-                 WHERE te.series_id = us.series_id AND NOT te.deleted AND te.season_number > 0 \
-                   AND te.aired IS NOT NULL AND te.aired <= current_date)::bigint AS total_episodes, \
-                (SELECT count(DISTINCT se.episode_id) FROM app.watch_event se \
-                 JOIN catalog.episode ce4 ON ce4.id = se.episode_id AND ce4.season_number > 0 \
-                 WHERE se.user_id = us.user_id AND se.series_id = us.series_id)::bigint AS seen_episodes, \
-                COALESCE(s.original_language IN ('jpn','ja'), false) AS is_anime \
-         FROM app.user_show us \
-         LEFT JOIN catalog.series s ON s.id = us.series_id \
-         WHERE us.user_id = $1 AND NOT us.unavailable \
-               AND (us.is_followed OR us.is_favorited OR us.archived OR us.status IS NOT NULL) \
-         ORDER BY last_watched DESC NULLS LAST, name NULLS LAST"
-    );
-    let rows = sqlx::query_as::<_, LibraryShow>(&sql)
+    // Every per-series metric is aggregated ONCE (grouped by series_id) in a CTE
+    // instead of as a correlated subquery evaluated per tracked show. The old
+    // per-row `caught_up` EXISTS made Postgres re-scan the user's entire watch
+    // history once per show (e.g. 313 shows × 5.5k watches ≈ 1.7M episode probes),
+    // which measured ~3.3 s; this bulk form runs in ~45 ms for the same result.
+    // `$1` = user_id, `$2` = preferred languages (text[]).
+    let sql = "\
+        WITH lib AS ( \
+            SELECT us.series_id, us.nb_episodes_seen, us.status, us.archived, us.is_favorited, \
+                   s.name AS base_name, s.image_url, s.original_language \
+            FROM app.user_show us \
+            LEFT JOIN catalog.series s ON s.id = us.series_id \
+            WHERE us.user_id = $1 AND NOT us.unavailable \
+                  AND (us.is_followed OR us.is_favorited OR us.archived OR us.status IS NOT NULL) \
+        ), \
+        ep AS ( \
+            SELECT e.series_id, count(*) AS total_episodes, max(e.aired) AS max_aired \
+            FROM catalog.episode e \
+            WHERE e.series_id IN (SELECT series_id FROM lib) \
+              AND NOT e.deleted AND e.season_number > 0 AND e.aired IS NOT NULL AND e.aired <= current_date \
+            GROUP BY e.series_id \
+        ), \
+        latest_eps AS ( \
+            SELECT e.series_id, e.id AS episode_id FROM catalog.episode e \
+            JOIN ep ON ep.series_id = e.series_id AND e.aired = ep.max_aired \
+            WHERE NOT e.deleted AND e.season_number > 0 \
+        ), \
+        lw AS ( \
+            SELECT w.series_id, max(w.watched_at) AS last_watched FROM app.watch_event w \
+            WHERE w.user_id = $1 AND w.series_id IN (SELECT series_id FROM lib) \
+            GROUP BY w.series_id \
+        ), \
+        seen AS ( \
+            SELECT w.series_id, count(DISTINCT w.episode_id) AS seen_episodes \
+            FROM app.watch_event w \
+            JOIN catalog.episode ce ON ce.id = w.episode_id AND ce.season_number > 0 \
+            WHERE w.user_id = $1 AND w.series_id IN (SELECT series_id FROM lib) \
+            GROUP BY w.series_id \
+        ), \
+        caught AS ( \
+            SELECT DISTINCT le.series_id FROM latest_eps le \
+            JOIN app.watch_event w ON w.user_id = $1 AND w.episode_id = le.episode_id \
+        ) \
+        SELECT lib.series_id, \
+               COALESCE((SELECT tr.name FROM catalog.translation tr \
+                         WHERE tr.entity_type = 'series' AND tr.entity_id = lib.series_id AND tr.name IS NOT NULL \
+                           AND tr.language = ANY($2) \
+                         ORDER BY array_position($2, tr.language) LIMIT 1), lib.base_name) AS name, \
+               lib.image_url, lib.nb_episodes_seen, lib.status, lib.archived, lib.is_favorited, \
+               extract(epoch FROM lw.last_watched)::bigint AS last_watched, \
+               (caught.series_id IS NOT NULL) AS caught_up, \
+               COALESCE(ep.total_episodes, 0)::bigint AS total_episodes, \
+               COALESCE(seen.seen_episodes, 0)::bigint AS seen_episodes, \
+               COALESCE(lib.original_language IN ('jpn','ja'), false) AS is_anime \
+        FROM lib \
+        LEFT JOIN ep ON ep.series_id = lib.series_id \
+        LEFT JOIN lw ON lw.series_id = lib.series_id \
+        LEFT JOIN seen ON seen.series_id = lib.series_id \
+        LEFT JOIN caught ON caught.series_id = lib.series_id \
+        ORDER BY last_watched DESC NULLS LAST, name NULLS LAST";
+    let started = std::time::Instant::now();
+    let rows = sqlx::query_as::<_, LibraryShow>(sql)
         .bind(user_id)
         .bind(langs)
         .fetch_all(&state.db)
         .await?;
+    // Expensive query: log its EXPLAIN plan, but only when this run actually exceeded
+    // the profiling threshold — so a fast request stays quiet.
+    if state.config.db_profile && started.elapsed().as_millis() as u64 >= state.config.db_profile_min_ms {
+        let esql = crate::profile::explain_sql(sql);
+        let eq = sqlx::query(&esql).bind(user_id).bind(langs);
+        crate::profile::explain(&state.db, "tracking::library", eq).await;
+    }
 
     let stale_cutoff = now_unix() - STALE_DAYS * 86400;
     let mut lib = Library::default();

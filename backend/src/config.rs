@@ -106,6 +106,22 @@ pub struct Config {
     /// Number of concurrent in-flight enrichment fetches (bounds queue drain
     /// parallelism; the rate pacer still caps total throughput). Default 8.
     pub enrich_concurrency: usize,
+    /// `DB_PROFILE=1`: log every SQL statement with its elapsed time, and
+    /// `EXPLAIN (ANALYZE, BUFFERS)` the expensive read queries. Dev/diagnostics only.
+    pub db_profile: bool,
+    /// `BACKEND_PROFILE=1`: per-request timing + connection-pool stats, and raise
+    /// app log verbosity to debug. Dev/diagnostics only.
+    pub backend_profile: bool,
+    /// Under `DB_PROFILE`, only statements at least this slow are logged (and the
+    /// expensive queries EXPLAIN-ed), so fast queries don't spam the log. Default 50 ms.
+    pub db_profile_min_ms: u64,
+}
+
+/// Truthy env flag: `1`/`true`/`yes`/`on` (case-insensitive) → true, else false.
+pub fn env_flag(key: &str) -> bool {
+    env::var(key)
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 impl Config {
@@ -158,6 +174,9 @@ impl Config {
             thetvdb_max_rps: env::var("THETVDB_MAX_RPS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(35),
             enrich_interval_secs: env::var("ENRICH_INTERVAL_SECS").ok().and_then(|v| v.parse().ok()),
             enrich_concurrency: env::var("ENRICH_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(8),
+            db_profile: env_flag("DB_PROFILE"),
+            backend_profile: env_flag("BACKEND_PROFILE"),
+            db_profile_min_ms: env::var("DB_PROFILE_MIN_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(50),
         })
     }
 }

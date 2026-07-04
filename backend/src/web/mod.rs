@@ -113,7 +113,7 @@ pub fn router(state: AppState) -> Router {
         .layer(middleware::from_fn(security_headers))
         .layer(middleware::from_fn_with_state(state.clone(), gate))
         .layer(build_cors(&state.config))
-        .layer(middleware::from_fn(log_requests))
+        .layer(middleware::from_fn_with_state(state.clone(), log_requests))
 }
 
 /// Default-deny gate: every request needs a valid session EXCEPT a small public
@@ -231,16 +231,25 @@ async fn security_headers(req: Request, next: Next) -> Response {
     res
 }
 
-/// Logs each request's method, path, status and latency at INFO.
-async fn log_requests(req: Request, next: Next) -> Response {
+/// Logs each request's method, path, status and latency at INFO. Under
+/// `BACKEND_PROFILE`, also reports connection-pool occupancy (total/idle) so pool
+/// saturation — a common cause of latency under load — is visible per request.
+async fn log_requests(State(state): State<AppState>, req: Request, next: Next) -> Response {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
     let start = Instant::now();
     let res = next.run(req).await;
-    tracing::info!(
-        "{method} {path} -> {} ({} ms)",
-        res.status().as_u16(),
-        start.elapsed().as_millis()
-    );
+    let ms = start.elapsed().as_millis();
+    let status = res.status().as_u16();
+    if state.config.backend_profile {
+        // size = open connections, num_idle = free ones; size-idle ≈ in-flight.
+        tracing::info!(
+            "{method} {path} -> {status} ({ms} ms) [pool size={} idle={}]",
+            state.db.size(),
+            state.db.num_idle()
+        );
+    } else {
+        tracing::info!("{method} {path} -> {status} ({ms} ms)");
+    }
     res
 }

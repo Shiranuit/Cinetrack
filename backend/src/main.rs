@@ -16,9 +16,14 @@ async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::from_filename(".env.local");
     let _ = dotenvy::dotenv();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-        .init();
+    // Base filter from RUST_LOG, else info. DB_PROFILE's slow-query logs come through
+    // sqlx at WARN (configured on the pool, see `db`), so they're visible at the
+    // default level without widening here. BACKEND_PROFILE raises our own logs to debug.
+    let mut filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    if backend::config::env_flag("BACKEND_PROFILE") {
+        filter = filter.add_directive("backend=debug".parse().expect("static directive"));
+    }
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     let config = Config::from_env()?;
     let bind_addr = config.bind_addr.clone();

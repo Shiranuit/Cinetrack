@@ -188,6 +188,7 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "lettre",
+ "log",
  "rand_core 0.6.4",
  "reqwest",
  "rust-s3",

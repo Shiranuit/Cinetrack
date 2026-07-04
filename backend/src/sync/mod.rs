@@ -392,6 +392,9 @@ mod tests {
             thetvdb_max_rps: 35,
             enrich_interval_secs: None,
             enrich_concurrency: 8,
+            db_profile: false,
+            backend_profile: false,
+            db_profile_min_ms: 50,
         };
         Some(AppState::bootstrap(config).await.expect("bootstrap test AppState"))
     }

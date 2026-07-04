@@ -31,6 +31,13 @@ pub struct SearchResult {
 /// Search the catalog. `langs` is the caller's language preference order (used
 /// only to pick the display name; matching spans all languages).
 pub async fn search(state: &AppState, query: &str, kind: Option<&str>, langs: &[String]) -> AppResult<Vec<SearchResult>> {
+    // Require at least 3 characters before running anything: shorter queries have no
+    // usable trigram (so they'd seq-scan the catalog) and match far too broadly to be
+    // useful. Return nothing — no local query, no remote call — so typing "st" on the
+    // way to "stone" doesn't hammer the DB or TheTVDB.
+    if query.trim().chars().count() < 3 {
+        return Ok(Vec::new());
+    }
     let mode = state.config.catalog_mode;
 
     // Proxy: pure passthrough.
@@ -145,21 +152,28 @@ async fn search_table(
     qb.push_bind(langs.clone());
     qb.push(", tr.language) LIMIT 1), x.name) AS name, x.year, x.image_url, x.overview FROM ");
     qb.push(table);
-    // Match on: exact substring (ILIKE, covers short queries) OR fuzzy trigram
-    // word-similarity (`<%`, catches punctuation/spelling drift like
-    // "Dr STONE" vs "Dr.STONE") — both are GIN-trigram indexable — OR a
-    // translation name in any language.
-    qb.push(" x WHERE NOT x.deleted AND (x.search_text ILIKE ");
+    // Match the query against the title/alias doc OR a translation name as a UNION of
+    // index-friendly branches (each hits a GIN trigram index) instead of OR-ing a
+    // cross-table EXISTS, which defeats the indexes and seq-scans the 170k+ row table
+    // (~900ms → ~25ms). Callers guarantee `query` is >= 3 chars (see `search`), so
+    // `ILIKE '%q%'` always yields an extractable trigram the index can use.
+    // Branch 1: substring (ILIKE) OR fuzzy word-similarity (`<%`, catches drift like
+    // "Dr STONE" vs "Dr.STONE"). Branch 2: a translation name in any language.
+    qb.push(" x JOIN (SELECT s.id FROM ");
+    qb.push(table);
+    qb.push(" s WHERE NOT s.deleted AND (s.search_text ILIKE ");
     qb.push_bind(like.clone());
     qb.push(" OR ");
     qb.push_bind(query.to_string());
-    qb.push(" <% x.search_text OR EXISTS (SELECT 1 FROM catalog.translation t WHERE t.entity_type = ");
+    qb.push(" <% s.search_text) UNION SELECT t.entity_id FROM catalog.translation t JOIN ");
+    qb.push(table);
+    qb.push(" s2 ON s2.id = t.entity_id AND NOT s2.deleted WHERE t.entity_type = ");
     qb.push_bind(etype);
-    qb.push(" AND t.entity_id = x.id AND t.name ILIKE ");
+    qb.push(" AND t.name ILIKE ");
     qb.push_bind(like.clone());
-    qb.push("))");
+    qb.push(") m ON m.id = x.id");
     if anime_only {
-        qb.push(" AND x.original_language IN ('jpn','ja')");
+        qb.push(" WHERE x.original_language IN ('jpn','ja')");
     }
     // Rank by trigram word-similarity of the query against the searchable doc,
     // taking the best of the base/alias text and any translation name.
