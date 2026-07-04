@@ -201,3 +201,24 @@ jobs:
             $COMPOSE pull backend web
             $COMPOSE up -d --remove-orphans
             docker image prune -f
+
+      - name: Purge Cloudflare cache
+        # Complements the no-cache headers on the Flutter entry files: flips
+        # Cloudflare's EDGE cache instantly instead of waiting for its TTL, so new
+        # visitors get the new bundle immediately. (Browsers that already cached the
+        # old bundle are handled by the no-cache header, not by this purge.)
+        # No-ops until CF_API_TOKEN + CF_ZONE_ID repository secrets are set.
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ZONE_ID" ]; then
+            echo "CF_API_TOKEN / CF_ZONE_ID not set — skipping Cloudflare purge."
+            exit 0
+          fi
+          curl -fsS -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}'
+          echo

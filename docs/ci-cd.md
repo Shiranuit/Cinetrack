@@ -39,6 +39,8 @@ Set these in your repo under **Settings → Secrets and variables → Actions**.
 | `DEDIBOX_HOST` | deploy | For deploy | Server hostname/IP to SSH into. |
 | `DEDIBOX_USER` | deploy | For deploy | SSH user (a non-sudo deploy user is recommended). |
 | `DEDIBOX_SSH_KEY` | deploy | For deploy | Private SSH key for that user. |
+| `CF_API_TOKEN` | deploy | Optional | Cloudflare API token with the **Zone > Cache Purge** permission. When set (with `CF_ZONE_ID`), the deploy purges Cloudflare's edge cache so new visitors get the new web bundle immediately. Skipped if unset. |
+| `CF_ZONE_ID` | deploy | Optional | The Cloudflare Zone ID for your domain (Overview page in the dashboard). Required alongside `CF_API_TOKEN` for the purge. |
 
 > `GITHUB_TOKEN` is provided automatically and is used to push images to GHCR - no setup
 > needed. (The `image`/`web-image` jobs request `packages: write`.)
