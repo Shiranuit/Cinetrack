@@ -17,7 +17,10 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "io.github.shiranuit.cinetrack"
-    compileSdk = flutter.compileSdkVersion
+    // Some plugins (e.g. flutter_plugin_android_lifecycle via file_picker) require
+    // compiling against API 36, which is newer than Flutter's default
+    // (flutter.compileSdkVersion == 35 as of Flutter 3.44). Pin it explicitly.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

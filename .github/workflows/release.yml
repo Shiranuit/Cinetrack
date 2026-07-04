@@ -23,7 +23,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Pin to the dev Flutter — `channel: stable` + cache can reuse a stale
+          # stable (older compileSdk / Dart). Bump when you upgrade Flutter locally.
+          flutter-version: 3.44.4
           cache: true
 
       - name: Configure release signing
