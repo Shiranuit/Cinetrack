@@ -182,6 +182,14 @@ jobs:
             git fetch --tags --prune
             git checkout --force "${{ github.ref_name }}"
             export IMAGE_TAG="${{ github.ref_name }}"
+            # Persist the deployed tag into .env.production so manual admin commands
+            # (db-migrate.sh / create-user.sh, which use `docker compose run/exec`) use
+            # THIS image, not a stale local :latest.
+            if grep -q '^IMAGE_TAG=' .env.production 2>/dev/null; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env.production
+            else
+              printf 'IMAGE_TAG=%s\n' "${IMAGE_TAG}" >> .env.production
+            fi
             COMPOSE="docker compose -f production.docker-compose.yaml --env-file .env.production"
             $COMPOSE pull backend web
             $COMPOSE up -d --remove-orphans
