@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInput;
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
@@ -8,6 +9,7 @@ import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/auth.dart';
 import '../state/settings.dart';
+import '../widgets/password_strength.dart';
 import '../widgets/section.dart';
 import 'import_matches_screen.dart';
 import 'invites_screen.dart';
@@ -42,18 +44,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _refreshSuggestions() {
-    context.read<ApiClient>().importSuggestions(langs: context.read<SettingsController>().langsParam).then((s) {
-      if (mounted) setState(() => _suggestions = s.length);
-    }).catchError((_) {});
+    context
+        .read<ApiClient>()
+        .importSuggestions(langs: context.read<SettingsController>().langsParam)
+        .then((s) {
+          if (mounted) setState(() => _suggestions = s.length);
+        })
+        .catchError((_) {});
   }
 
   Future<void> _openMatches() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ImportMatchesScreen()));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ImportMatchesScreen()));
     _refreshSuggestions();
   }
 
   Future<void> _importGdpr() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['zip'], withData: true);
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+      withData: true,
+    );
     final f = res?.files.firstOrNull;
     if (f?.bytes == null || !mounted) return;
     final api = context.read<ApiClient>();
@@ -61,10 +73,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _busy = true);
     try {
       final s = await api.importGdpr(f!.bytes!, f.name);
-      messenger.showSnackBar(SnackBar(
-        content: Text('Imported ${s['shows']} shows · ${s['watch_events']} watches · ${s['favorites']} favorites.\n'
-            'Matching missing shows in the background — check "Review import matches" shortly.'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Imported ${s['shows']} shows · ${s['watch_events']} watches · ${s['favorites']} favorites.\n'
+            'Matching missing shows in the background — check "Review import matches" shortly.',
+          ),
+        ),
+      );
       // The background prefetch resolves dead ids; poll a few times for suggestions.
       for (final delay in [8, 20, 40]) {
         Future.delayed(Duration(seconds: delay), () {
@@ -94,7 +110,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: context.scheme.onSurfaceVariant),
+            style: TextButton.styleFrom(
+              foregroundColor: context.scheme.onSurfaceVariant,
+            ),
             child: const Text('Delete anyway'),
           ),
           FilledButton(
@@ -170,10 +188,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(ctx, ctrl.text.trim());
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, ctrl.text.trim());
+              }
             },
             child: const Text('Save'),
           ),
@@ -191,7 +214,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       label: 'Name',
       initial: me?.screenName ?? '',
       keyboard: TextInputType.name,
-      validator: (v) => (v == null || v.trim().isEmpty) ? 'Name cannot be empty' : null,
+      validator: (v) =>
+          (v == null || v.trim().isEmpty) ? 'Name cannot be empty' : null,
     );
     if (name == null || !mounted) return;
     await _saveProfile(screenName: name);
@@ -204,7 +228,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       label: 'Email',
       initial: me?.email ?? '',
       keyboard: TextInputType.emailAddress,
-      validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+      validator: (v) =>
+          (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
     );
     if (email == null || !mounted) return;
     await _saveProfile(email: email);
@@ -233,49 +258,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cur = TextEditingController();
     final p1 = TextEditingController();
     final p2 = TextEditingController();
-    final formKey = GlobalKey<FormState>();
     final result = await showDialog<(String, String)>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.changePassword),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: cur,
-                obscureText: true,
-                autofocus: true,
-                decoration: InputDecoration(labelText: t.currentPassword),
-                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+      // StatefulBuilder so the checklist and the Update button react live as the
+      // fields change. Gate the button on the SAME policy as sign-up/reset
+      // (isStrongPassword) instead of the old length-only check.
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final strong = isStrongPassword(p1.text);
+          final match = p2.text == p1.text;
+          final canSubmit = cur.text.isNotEmpty && strong && match;
+          return AlertDialog(
+            title: Text(t.changePassword),
+            content: AutofillGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: cur,
+                    obscureText: true,
+                    autofocus: true,
+                    autofillHints: const [AutofillHints.password],
+                    onChanged: (_) => setLocal(() {}),
+                    decoration: InputDecoration(labelText: t.currentPassword),
+                  ),
+                  const SizedBox(height: Insets.sm),
+                  TextField(
+                    controller: p1,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onChanged: (_) => setLocal(() {}),
+                    decoration: InputDecoration(labelText: t.newPassword),
+                  ),
+                  const SizedBox(height: Insets.sm),
+                  PasswordChecklist(password: p1.text),
+                  const SizedBox(height: Insets.sm),
+                  TextField(
+                    controller: p2,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onChanged: (_) => setLocal(() {}),
+                    decoration: InputDecoration(
+                      labelText: t.fieldConfirmPassword,
+                      errorText: (p2.text.isNotEmpty && !match)
+                          ? t.passwordsDontMatch
+                          : null,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: Insets.sm),
-              TextFormField(
-                controller: p1,
-                obscureText: true,
-                decoration: InputDecoration(labelText: t.newPassword),
-                validator: (v) => (v == null || v.length < 12) ? 'At least 12 characters' : null,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
               ),
-              const SizedBox(height: Insets.sm),
-              TextFormField(
-                controller: p2,
-                obscureText: true,
-                decoration: InputDecoration(labelText: t.fieldConfirmPassword),
-                validator: (v) => v != p1.text ? t.passwordsDontMatch : null,
+              FilledButton(
+                onPressed: canSubmit
+                    ? () => Navigator.pop(ctx, (cur.text, p1.text))
+                    : null,
+                child: const Text('Update'),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(ctx, (cur.text, p1.text));
-            },
-            child: const Text('Update'),
-          ),
-        ],
+          );
+        },
       ),
     );
     cur.dispose();
@@ -287,7 +333,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      await api.changePassword(result.$1, result.$2); // this session stays valid
+      await api.changePassword(
+        result.$1,
+        result.$2,
+      ); // this session stays valid
+      TextInput.finishAutofillContext(); // let the manager update the stored password
       messenger.showSnackBar(SnackBar(content: Text(t.passwordUpdated)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
@@ -302,12 +352,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = context.watch<SettingsController>();
     final me = context.watch<AuthController>().me;
     final isPrivate = me?.isPrivate ?? false;
-    final available = kLanguages.keys.where((k) => !settings.languages.contains(k)).toList();
+    final available = kLanguages.keys
+        .where((k) => !settings.languages.contains(k))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
         title: Text(t.settings),
-        bottom: _busy ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator()) : null,
+        bottom: _busy
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(),
+              )
+            : null,
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: Insets.xxl),
@@ -338,46 +395,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.card_giftcard_rounded),
             title: Text(t.invites),
             trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InvitesScreen())),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const InvitesScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.shield_outlined),
             title: Text(t.securityActivity),
             trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SecurityLogScreen())),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SecurityLogScreen()),
+            ),
           ),
-          SectionHeader(title: t.sectionPrivacy, icon: Icons.lock_outline_rounded),
+          SectionHeader(
+            title: t.sectionPrivacy,
+            icon: Icons.lock_outline_rounded,
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.lock_person_rounded),
             title: Text(t.privateProfile),
-            subtitle: const Text('Only accepted followers can see your profile and activity'),
+            subtitle: const Text(
+              'Only accepted followers can see your profile and activity',
+            ),
             value: isPrivate,
             onChanged: _busy ? null : _setPrivacy,
           ),
-          SectionHeader(title: t.sectionAppearance, icon: Icons.palette_rounded),
+          SectionHeader(
+            title: t.sectionAppearance,
+            icon: Icons.palette_rounded,
+          ),
           Padding(
             padding: Insets.pageH,
             child: SegmentedButton<ThemeMode>(
               segments: [
-                ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode_rounded), label: Text(t.themeDark)),
-                ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode_rounded), label: Text(t.themeLight)),
-                ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto_rounded), label: Text(t.themeAuto)),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  icon: const Icon(Icons.dark_mode_rounded),
+                  label: Text(t.themeDark),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  icon: const Icon(Icons.light_mode_rounded),
+                  label: Text(t.themeLight),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  icon: const Icon(Icons.brightness_auto_rounded),
+                  label: Text(t.themeAuto),
+                ),
               ],
               selected: {settings.themeMode},
               onSelectionChanged: (s) => settings.setThemeMode(s.first),
             ),
           ),
-          SectionHeader(title: t.sectionLanguages, icon: Icons.translate_rounded),
+          SectionHeader(
+            title: t.sectionLanguages,
+            icon: Icons.translate_rounded,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
-            child: Text('Drag to set translation priority. The first available translation is used.',
-                style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+            child: Text(
+              'Drag to set translation priority. The first available translation is used.',
+              style: context.text.labelMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
+            ),
           ),
           ReorderableListView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             buildDefaultDragHandles: false,
-            padding: const EdgeInsets.symmetric(horizontal: Insets.lg, vertical: Insets.sm),
+            padding: const EdgeInsets.symmetric(
+              horizontal: Insets.lg,
+              vertical: Insets.sm,
+            ),
             onReorderItem: (oldIndex, newIndex) {
               final langs = List<String>.from(settings.languages);
               langs.insert(newIndex, langs.removeAt(oldIndex));
@@ -390,14 +481,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   margin: const EdgeInsets.only(bottom: Insets.sm),
                   color: context.scheme.surfaceContainerHighest,
                   child: ListTile(
-                    leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle_rounded)),
-                    title: Text(kLanguages[settings.languages[i]] ?? settings.languages[i]),
-                    subtitle: i == 0 ? Text('Primary', style: TextStyle(color: context.scheme.primary)) : null,
+                    leading: ReorderableDragStartListener(
+                      index: i,
+                      child: const Icon(Icons.drag_handle_rounded),
+                    ),
+                    title: Text(
+                      kLanguages[settings.languages[i]] ??
+                          settings.languages[i],
+                    ),
+                    subtitle: i == 0
+                        ? Text(
+                            'Primary',
+                            style: TextStyle(color: context.scheme.primary),
+                          )
+                        : null,
                     trailing: settings.languages.length > 1
                         ? IconButton(
-                            icon: const Icon(Icons.remove_circle_outline_rounded),
+                            icon: const Icon(
+                              Icons.remove_circle_outline_rounded,
+                            ),
                             onPressed: () {
-                              final langs = List<String>.from(settings.languages)..removeAt(i);
+                              final langs = List<String>.from(
+                                settings.languages,
+                              )..removeAt(i);
                               settings.setLanguages(langs);
                             },
                           )
@@ -408,8 +514,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           if (available.isNotEmpty) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
-              child: Text('Add a language', style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+              padding: const EdgeInsets.fromLTRB(
+                Insets.lg,
+                0,
+                Insets.lg,
+                Insets.sm,
+              ),
+              child: Text(
+                'Add a language',
+                style: context.text.labelMedium?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
+              ),
             ),
             Padding(
               padding: Insets.pageH,
@@ -421,7 +537,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ActionChip(
                       avatar: const Icon(Icons.add_rounded, size: 18),
                       label: Text(kLanguages[k]!),
-                      onPressed: () => settings.setLanguages([...settings.languages, k]),
+                      onPressed: () =>
+                          settings.setLanguages([...settings.languages, k]),
                     ),
                 ],
               ),
@@ -436,17 +553,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           if (_suggestions > 0)
             ListTile(
-              leading: Badge(label: Text('$_suggestions'), child: const Icon(Icons.rule_rounded)),
+              leading: Badge(
+                label: Text('$_suggestions'),
+                child: const Icon(Icons.rule_rounded),
+              ),
               title: const Text('Review import matches'),
-              subtitle: Text('$_suggestions show${_suggestions == 1 ? '' : 's'} need confirming'),
+              subtitle: Text(
+                '$_suggestions show${_suggestions == 1 ? '' : 's'} need confirming',
+              ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: _busy ? null : _openMatches,
             ),
-          SectionHeader(title: t.sectionDangerZone, icon: Icons.person_off_rounded, accent: context.scheme.error),
+          SectionHeader(
+            title: t.sectionDangerZone,
+            icon: Icons.person_off_rounded,
+            accent: context.scheme.error,
+          ),
           ListTile(
-            leading: Icon(Icons.delete_forever_rounded, color: context.scheme.error),
-            title: Text('Delete account', style: TextStyle(color: context.scheme.error)),
-            subtitle: const Text('Permanently remove your account and all data'),
+            leading: Icon(
+              Icons.delete_forever_rounded,
+              color: context.scheme.error,
+            ),
+            title: Text(
+              'Delete account',
+              style: TextStyle(color: context.scheme.error),
+            ),
+            subtitle: const Text(
+              'Permanently remove your account and all data',
+            ),
             onTap: _busy ? null : _deleteAccount,
           ),
         ],

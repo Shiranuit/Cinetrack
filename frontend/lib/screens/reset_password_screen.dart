@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/password_strength.dart';
 
 /// Complete a password reset from an emailed token (opened via the web deep link
 /// `/reset-password?token=...`). On success, hands control back via [onDone].
@@ -39,15 +40,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     super.dispose();
   }
 
-  bool get _ok {
-    final p = _password.text;
-    return p.length >= 12 &&
-        p.contains(RegExp(r'[a-z]')) &&
-        p.contains(RegExp(r'[A-Z]')) &&
-        p.contains(RegExp(r'\d')) &&
-        p.contains(RegExp(r'[^A-Za-z0-9]')) &&
-        _confirm.text == p;
-  }
+  bool get _ok =>
+      isStrongPassword(_password.text) && _confirm.text == _password.text;
 
   Future<void> _submit() async {
     setState(() {
@@ -130,6 +124,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: Insets.sm),
+                        PasswordChecklist(password: _password.text),
                         const SizedBox(height: Insets.md),
                         TextField(
                           controller: _confirm,

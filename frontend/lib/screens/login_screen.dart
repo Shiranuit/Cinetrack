@@ -6,6 +6,7 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/auth.dart';
+import '../widgets/password_strength.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -49,14 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  bool get _passwordOk {
-    final p = _password.text;
-    return p.length >= 12 &&
-        p.contains(RegExp(r'[a-z]')) &&
-        p.contains(RegExp(r'[A-Z]')) &&
-        p.contains(RegExp(r'\d')) &&
-        p.contains(RegExp(r'[^A-Za-z0-9]'));
-  }
+  bool get _passwordOk => isStrongPassword(_password.text);
 
   /// Confirm field non-empty and equal to the password (register only).
   bool get _passwordsMatch =>
@@ -279,47 +273,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _strength() {
-    final t = AppLocalizations.of(context);
-    final p = _password.text;
-    final checks = <(String, bool)>[
-      (t.pw12chars, p.length >= 12),
-      (t.pwUppercase, p.contains(RegExp(r'[A-Z]'))),
-      (t.pwLowercase, p.contains(RegExp(r'[a-z]'))),
-      (t.pwNumber, p.contains(RegExp(r'\d'))),
-      (t.pwSpecial, p.contains(RegExp(r'[^A-Za-z0-9]'))),
-    ];
-    return Padding(
-      padding: const EdgeInsets.only(top: Insets.md),
-      child: Wrap(
-        spacing: Insets.sm,
-        runSpacing: Insets.xs,
-        children: [
-          for (final (label, ok) in checks)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  ok ? Icons.check_circle_rounded : Icons.circle_outlined,
-                  size: 15,
-                  color: ok
-                      ? context.colors.seen
-                      : context.scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: context.text.labelSmall?.copyWith(
-                    color: ok
-                        ? context.colors.seen
-                        : context.scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: Insets.sm),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _strength() => Padding(
+    padding: const EdgeInsets.only(top: Insets.md),
+    child: PasswordChecklist(password: _password.text),
+  );
 }
