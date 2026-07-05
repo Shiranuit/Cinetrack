@@ -19,9 +19,9 @@ small server, with no external SaaS dependencies. Metadata comes from
 
 </div>
 
-<!-- --- -->
+---
 
-<!-- ## Screenshots
+## Screenshots
 
 <div align="center">
 
@@ -29,11 +29,11 @@ small server, with no external SaaS dependencies. Metadata comes from
 | :---------------------------------: | :-----------------------------------------: | :-----------------------------------: |
 | ![Library](docs/images/library.png) | ![Show detail](docs/images/show-detail.png) | ![Discover](docs/images/discover.png) |
 
-|               Calendar                |           Profile & stats           |              Mobile               |
-| :-----------------------------------: | :---------------------------------: | :-------------------------------: |
-| ![Calendar](docs/images/calendar.png) | ![Profile](docs/images/profile.png) | ![Mobile](docs/images/mobile.png) |
+|               Calendar                |           Profile & stats           |
+| :-----------------------------------: | :---------------------------------: |
+| ![Calendar](docs/images/calendar.png) | ![Profile](docs/images/profile.png) |
 
-</div> -->
+</div>
 
 ---
 
