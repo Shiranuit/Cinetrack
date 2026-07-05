@@ -67,7 +67,15 @@ jobs:
             VERSION_ARGS="--build-name=$NAME --build-number=$CODE"
             echo "Building APK versionName=$NAME versionCode=$CODE"
           fi
-          API_ARG="--dart-define=API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }}"
+          # Bake the release tag into the Dart Config.appVersion. Without this the app
+          # thinks it is "dev" and the update check silently no-ops (dev builds never
+          # nag), so no update banner or forced-update screen ever appears. This is the
+          # Dart-level version the update logic compares; --build-name above is a
+          # SEPARATE Android versionName for the system app-info screen.
+          APP_VER="${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}"
+          DEFINES="--dart-define=API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }}"
+          DEFINES="$DEFINES --dart-define=APP_VERSION=${APP_VER}"
+          DEFINES="$DEFINES --dart-define=GITHUB_REPO=${{ github.repository }}"
 
           VERSION="${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
           mkdir -p ../dist
@@ -79,12 +87,12 @@ jobs:
 
           # 1) Fat APK (all ABIs) — the web install button hands this out because a
           #    browser can't probe the visitor's phone CPU.
-          flutter build apk --release $API_ARG $VERSION_ARGS
+          flutter build apk --release $DEFINES $VERSION_ARGS
           cp build/app/outputs/flutter-apk/app-release.apk "../dist/cinetrack-${VERSION}.apk"
 
           # 2) Per-ABI splits — ~a third the size; the in-app updater downloads the one
           #    matching the device's ABI.
-          flutter build apk --release --split-per-abi $API_ARG $VERSION_ARGS
+          flutter build apk --release --split-per-abi $DEFINES $VERSION_ARGS
           for ABI in arm64-v8a armeabi-v7a x86_64; do
             cp "build/app/outputs/flutter-apk/app-${ABI}-release.apk" "../dist/cinetrack-${VERSION}-${ABI}.apk"
           done
