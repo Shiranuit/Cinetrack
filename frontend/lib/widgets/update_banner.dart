@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +7,7 @@ import '../config.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../services/apk_updater.dart';
 import '../state/auth.dart';
 
 /// On Android (native app, or a browser on Android) we can offer a one-tap APK
@@ -50,12 +51,19 @@ class _UpdateBannerState extends State<UpdateBanner> {
                 child: Text(t.updateAvailable,
                     style: context.text.bodyMedium?.copyWith(color: context.scheme.onTertiaryContainer)),
               ),
-              if (_isAndroid)
+              if (_isAndroid && auth.serverVersion != null)
                 TextButton(
-                  // Latest (not this build's own version); browser downloads it, the
-                  // forced-update screen does the one-tap in-app install instead.
-                  onPressed: () =>
-                      launchUrl(Uri.parse(Config.latestApkUrl), mode: LaunchMode.externalApplication),
+                  // The backend reports the newest version (deployed in lockstep), so
+                  // we build an exact link to it. Browser downloads it; the forced
+                  // screen does the one-tap in-app install instead. Native apps probe
+                  // the CPU for the small per-ABI split; web-on-Android gets the fat APK.
+                  onPressed: () async {
+                    final v = auth.serverVersion!;
+                    final url = kIsWeb
+                        ? Config.fatApkUrl(v)
+                        : Config.apkUrl(v, abi: await deviceApkAbi());
+                    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  },
                   child: Text(t.update),
                 ),
               IconButton(

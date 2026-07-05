@@ -18,19 +18,28 @@ class Config {
   static const githubRepo =
       String.fromEnvironment('GITHUB_REPO', defaultValue: 'Shiranuit/Cinetrack');
 
-  /// A DIRECT link to the Android APK — the browser downloads it immediately, it
-  /// does NOT open a GitHub page. For a tagged build it points at the APK for THIS
-  /// exact release (so the web app hands out the version it is running); for an
-  /// untagged/dev build it falls back to the stable-named asset on the latest
-  /// release (`releases/latest/download/...` 302s straight to the newest APK).
-  static String get androidApkUrl => appVersion.startsWith('v')
-      ? 'https://github.com/$githubRepo/releases/download/$appVersion/cinetrack-$appVersion.apk'
-      : 'https://github.com/$githubRepo/releases/latest/download/cinetrack.apk';
+  /// The Android ABIs we publish a SEPARATE (split-per-abi) APK for, in DESCENDING
+  /// preference order. Each is ~a third the size of the fat multi-ABI build, so a
+  /// device downloads only the native code it can actually run. arm64 comes first
+  /// because it fits effectively every phone since ~2017.
+  static const apkAbis = ['arm64-v8a', 'armeabi-v7a', 'x86_64'];
 
-  /// Always the NEWEST published APK, version-independent. Used by the in-app updater
-  /// — an outdated build must NOT re-download its own (`androidApkUrl`) version.
-  static String get latestApkUrl =>
-      'https://github.com/$githubRepo/releases/latest/download/cinetrack.apk';
+  /// ABI assumed when the running platform can't be probed for its CPU. Only reached
+  /// on native Android if detection fails; the web path uses the fat APK instead.
+  static const defaultApkAbi = 'arm64-v8a';
+
+  /// Direct link to the per-ABI split APK for [version] (a git tag like "v0.5.0").
+  /// The backend is deployed in lockstep with releases, so the version it reports
+  /// over /api/config is always the newest one — the updater builds an exact link
+  /// from it and we never publish (or need) a floating "latest" alias.
+  static String apkUrl(String version, {String abi = defaultApkAbi}) =>
+      'https://github.com/$githubRepo/releases/download/$version/cinetrack-$version-$abi.apk';
+
+  /// Direct link to the FAT (all-ABIs) APK for [version] — used by the web install
+  /// button, where the visitor's phone CPU can't be probed, so it installs on any
+  /// device. The browser downloads it immediately; it does NOT open a GitHub page.
+  static String fatApkUrl(String version) =>
+      'https://github.com/$githubRepo/releases/download/$version/cinetrack-$version.apk';
 }
 
 /// Parses a "MAJOR.MINOR.PATCH" release tag into `[major, minor, patch]`. The leading

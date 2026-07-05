@@ -56,6 +56,9 @@ dependencies:
   # to the system package installer (open_filex). Android sideload only.
   path_provider: ^2.1.4
   open_filex: ^4.5.0
+  # Reads the device's supported CPU ABIs so the updater fetches the matching
+  # split APK (arm64-v8a / armeabi-v7a / x86_64) instead of a fat build.
+  device_info_plus: ^11.1.0
 
 dev_dependencies:
   flutter_test:

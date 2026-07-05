@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../services/apk_updater.dart';
+import '../state/auth.dart';
 
 /// Full-screen, NON-DISMISSIBLE block shown when this build is older than the
 /// backend's MIN_APP_VERSION. The only way forward is to install the new version:
@@ -20,13 +22,21 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
   String? _error;
 
   Future<void> _update() async {
+    // The newest version to install, as reported by the backend over /api/config
+    // (deployed in lockstep with releases, so it's always the latest).
+    final version = context.read<AuthController>().serverVersion;
+    if (version == null) {
+      setState(() => _error = AppLocalizations.of(context).updateFailed);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
       _progress = null;
     });
     try {
-      await downloadAndInstallLatestApk(
+      await downloadAndInstallApk(
+        version,
         onProgress: (p) {
           if (mounted) setState(() => _progress = p);
         },

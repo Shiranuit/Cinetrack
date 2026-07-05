@@ -44,8 +44,11 @@ class _AndroidInstallBannerState extends State<AndroidInstallBanner> {
                     style: context.text.bodyMedium?.copyWith(color: context.scheme.onPrimaryContainer)),
               ),
               TextButton(
+                // Web can't probe the visitor's CPU, so hand out the fat (all-ABIs)
+                // APK that installs on any device — pinned to the version this web
+                // build is (equals the latest release, since they deploy in lockstep).
                 onPressed: () =>
-                    launchUrl(Uri.parse(Config.androidApkUrl), mode: LaunchMode.externalApplication),
+                    launchUrl(Uri.parse(Config.fatApkUrl(Config.appVersion)), mode: LaunchMode.externalApplication),
                 child: Text(t.installAndroidCta),
               ),
               IconButton(
