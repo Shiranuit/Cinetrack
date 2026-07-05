@@ -187,3 +187,19 @@ pub async fn set_profile_blocks(
     tracking::set_profile_blocks(&state, me, &req.blocks).await?;
     Ok(Json(json!({ "blocks": req.blocks })))
 }
+
+#[derive(Deserialize)]
+pub struct LanguagesReq {
+    pub languages: Vec<String>,
+}
+
+/// Update the current user's preferred content languages (priority order). Stored on
+/// the user so the choice follows them across devices.
+pub async fn set_languages(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<LanguagesReq>,
+) -> AppResult<Json<Value>> {
+    tracking::set_languages(&state, me, &req.languages).await?;
+    Ok(Json(json!({ "languages": req.languages })))
+}

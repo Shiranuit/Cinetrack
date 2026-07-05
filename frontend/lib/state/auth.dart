@@ -36,6 +36,10 @@ class AuthController extends ChangeNotifier {
   /// reload), so we never dead-end a browser.
   bool updateRequired = false;
 
+  /// Fired whenever the current user profile is (re)loaded, so dependents (e.g.
+  /// SettingsController) can sync server-stored preferences. Set by main.dart.
+  void Function(Me me)? onMe;
+
   bool get isAuthed => me != null;
 
   /// Restore a session on startup: try to mint an access token from the refresh
@@ -54,6 +58,7 @@ class AuthController extends ChangeNotifier {
     try {
       if (await api.tryRestore()) {
         me = await api.me();
+        if (me != null) onMe?.call(me!);
       }
     } catch (_) {
       await api.clearLocalSession();
@@ -65,12 +70,14 @@ class AuthController extends ChangeNotifier {
   Future<void> login(String email, String password) async {
     await api.login(email, password);
     me = await api.me();
+    onMe?.call(me!);
     notifyListeners();
   }
 
   Future<void> register(String email, String password, String screenName, {String? inviteCode}) async {
     await api.register(email, password, screenName, inviteCode: inviteCode);
     me = await api.me();
+    onMe?.call(me!);
     notifyListeners();
   }
 
@@ -78,6 +85,7 @@ class AuthController extends ChangeNotifier {
   Future<void> reloadMe() async {
     try {
       me = await api.me();
+      onMe?.call(me!);
       notifyListeners();
     } catch (_) {}
   }

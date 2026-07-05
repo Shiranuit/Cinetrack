@@ -37,6 +37,9 @@ class Me {
   final String? bio;
   final bool isPrivate;
   final List<String> profileBlocks;
+
+  /// Preferred content languages in priority order (server-synced across devices).
+  final List<String> languages;
   const Me({
     required this.id,
     required this.screenName,
@@ -46,6 +49,7 @@ class Me {
     this.bio,
     this.isPrivate = false,
     this.profileBlocks = const ['stats', 'favorites', 'shows'],
+    this.languages = const ['eng'],
   });
 
   factory Me.fromJson(Map<String, dynamic> j) => switch (j) {
@@ -59,6 +63,7 @@ class Me {
             isPrivate: j['is_private'] as bool? ?? false,
             profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ??
                 const ['stats', 'favorites', 'shows'],
+            languages: (j['languages'] as List?)?.cast<String>() ?? const ['eng'],
           ),
         _ => throw FormatException('Me: bad payload $j'),
       };

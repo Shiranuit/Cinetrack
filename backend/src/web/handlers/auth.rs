@@ -304,11 +304,13 @@ pub struct Me {
     pub cover_url: Option<String>,
     pub is_private: bool,
     pub profile_blocks: Vec<String>,
+    /// Preferred content languages in priority order (synced across the user's devices).
+    pub languages: Vec<String>,
 }
 
 pub async fn me(AuthUser(user_id): AuthUser, State(state): State<AppState>) -> AppResult<Json<Me>> {
     sqlx::query_as::<_, Me>(
-        "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks \
+        "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks, languages \
          FROM app.users WHERE id = $1",
     )
     .bind(user_id)
@@ -517,7 +519,7 @@ pub async fn update_profile(
     result?;
 
     sqlx::query_as::<_, Me>(
-        "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks \
+        "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks, languages \
          FROM app.users WHERE id = $1",
     )
     .bind(user_id)

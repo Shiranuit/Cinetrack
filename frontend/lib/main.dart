@@ -22,18 +22,27 @@ import 'widgets/android_install_banner.dart';
 import 'widgets/update_banner.dart';
 
 void main() {
-  // On web, suppress the browser's native context menu so a long-press / right
-  // click on a card shows only our own action sheet, not the browser's menu.
+  // Must run before any plugin used pre-runApp: SharedPreferences in
+  // SettingsController.load() and secure storage in AuthController.restore().
+  // On ALL platforms, not just web — without it on mobile, load()/restore() fire
+  // before the binding is ready, throw silently, and the persisted language/theme
+  // selection (and session) are lost on restart.
+  WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
-    WidgetsFlutterBinding.ensureInitialized();
+    // On web, suppress the browser's native context menu so a long-press / right
+    // click on a card shows only our own action sheet, not the browser's menu.
     BrowserContextMenu.disableContextMenu();
     // Stop the browser hijacking mouse-drags as native drag-and-drop, which
     // otherwise withholds pointermove events and breaks rail drag-scrolling.
     preventNativeDrag();
   }
   final api = ApiClient();
-  final auth = AuthController(api)..restore();
-  final settings = SettingsController()..load();
+  final settings = SettingsController(api)..load();
+  final auth = AuthController(api)
+    // Server-stored languages follow the user across devices: hydrate the local
+    // cache from the profile whenever it (re)loads.
+    ..onMe = ((me) => settings.hydrateFromServer(me.languages))
+    ..restore();
   runApp(
     MultiProvider(
       providers: [

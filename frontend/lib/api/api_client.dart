@@ -347,6 +347,7 @@ class ApiClient {
   Future<void> rejectRequest(String followerId) => _send('POST', '/api/users/requests/$followerId/reject');
   Future<void> setPrivacy(bool isPrivate) => _send('PUT', '/api/me/privacy', body: {'is_private': isPrivate});
   Future<void> setProfileBlocks(List<String> blocks) => _send('PUT', '/api/me/profile-blocks', body: {'blocks': blocks});
+  Future<void> setLanguages(List<String> languages) => _send('PUT', '/api/me/languages', body: {'languages': languages});
 
   Future<UserShow> showRelation(int seriesId, {String? langs}) async =>
       UserShow.fromJson(await _get('/api/shows/$seriesId', {'langs': ?langs}));

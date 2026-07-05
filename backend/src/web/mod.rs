@@ -96,6 +96,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/requests/{id}/reject", post(handlers::users::reject_request))
         .route("/api/me/privacy", put(handlers::users::set_privacy))
         .route("/api/me/profile-blocks", put(handlers::users::set_profile_blocks))
+        .route("/api/me/languages", put(handlers::users::set_languages))
         .route("/api/feed", get(handlers::users::feed))
         .route("/api/users/{id}", get(handlers::users::profile))
         .route("/api/users/{id}/shows", get(handlers::users::user_shows))

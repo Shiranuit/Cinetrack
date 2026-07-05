@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../api/api_client.dart';
 
 /// App-wide preferences: theme mode (dark by default) and preferred content
 /// languages (used for search translation ordering).
@@ -7,6 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum LibraryLayout { rails, grid }
 
 class SettingsController extends ChangeNotifier {
+  SettingsController([this.api]);
+
+  /// Optional API client. When present, the language preference is synced to the
+  /// server so it follows the user across devices. Null in tests / pure-local use.
+  final ApiClient? api;
+
   ThemeMode themeMode = ThemeMode.dark;
   List<String> languages = ['eng'];
   LibraryLayout libraryLayout = LibraryLayout.rails;
@@ -64,6 +73,22 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> setLanguages(List<String> langs) async {
     languages = langs.isEmpty ? ['eng'] : langs;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('languages', languages);
+    // Sync to the server so the choice follows the user across devices (best-effort;
+    // the local cache stays the offline fallback).
+    try {
+      await api?.setLanguages(languages);
+    } catch (_) {}
+  }
+
+  /// Adopt the server's languages (from `/api/me`) as the source of truth and cache
+  /// them locally. Does NOT push back to the server, so it can't echo-loop.
+  Future<void> hydrateFromServer(List<String> serverLangs) async {
+    final langs = serverLangs.isEmpty ? ['eng'] : serverLangs;
+    if (listEquals(langs, languages)) return;
+    languages = langs;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('languages', languages);

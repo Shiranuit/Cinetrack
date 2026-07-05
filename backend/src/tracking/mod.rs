@@ -914,6 +914,19 @@ pub async fn set_profile_blocks(state: &AppState, user_id: Uuid, blocks: &[Strin
     Ok(())
 }
 
+/// Set the user's preferred content languages (priority order). An empty list falls
+/// back to English so a user is never left with no content language.
+pub async fn set_languages(state: &AppState, user_id: Uuid, languages: &[String]) -> AppResult<()> {
+    let langs: Vec<String> =
+        if languages.is_empty() { vec!["eng".to_string()] } else { languages.to_vec() };
+    sqlx::query("UPDATE app.users SET languages = $2, updated_at = now() WHERE id = $1")
+        .bind(user_id)
+        .bind(&langs)
+        .execute(&state.db)
+        .await?;
+    Ok(())
+}
+
 pub async fn unfollow_user(state: &AppState, follower_id: Uuid, followee_id: Uuid) -> AppResult<()> {
     sqlx::query("DELETE FROM app.user_follow WHERE follower_id = $1 AND followee_id = $2")
         .bind(follower_id)
