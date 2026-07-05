@@ -44,3 +44,5 @@ key.properties
 catalog-backup.sql.gz
 architecture
 gdpr-data
+# local backup FTP credentials/config
+scripts/backup.env
