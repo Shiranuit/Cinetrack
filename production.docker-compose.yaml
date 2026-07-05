@@ -48,7 +48,7 @@ services:
       - -c
       - work_mem=32MB
       - -c
-      - max_connections=100
+      - max_connections=200
       - -c
       - max_wal_size=4GB
       - -c
@@ -133,6 +133,9 @@ services:
       SYNC_INTERVAL_SECS: ${SYNC_INTERVAL_SECS:-300}
       ENRICH_INTERVAL_SECS: ${ENRICH_INTERVAL_SECS:-30}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-64}
+      # Concurrency of the one-off `backfill_episode_translations` bin (ignored by
+      # the server). Kept modest by default because the bin uses its own DB pool.
+      BACKFILL_CONCURRENCY: ${BACKFILL_CONCURRENCY:-8}
       RUST_LOG: ${RUST_LOG:-info}
     # Migrations run automatically on boot (AppState::bootstrap).
     healthcheck:

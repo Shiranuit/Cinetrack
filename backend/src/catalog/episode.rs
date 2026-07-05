@@ -1,5 +1,8 @@
 //! Read-through access to episodes.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+
 use serde_json::Value;
 
 use crate::{
@@ -7,6 +10,18 @@ use crate::{
     error::{AppError, AppResult},
     state::AppState,
 };
+
+/// Timing accumulators for the episode-translation backfill, so its logs show
+/// where wall-clock goes: TheTVDB fetches vs DB upserts. Microseconds, summed
+/// across all concurrent workers.
+#[derive(Default)]
+pub struct Metrics {
+    fetch_us: AtomicU64,
+    fetch_count: AtomicU64,
+    insert_us: AtomicU64,
+    insert_count: AtomicU64,
+    rows: AtomicU64,
+}
 
 pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<EpisodeRow> {
     let fresh: Option<bool> = sqlx::query_scalar(&format!(
@@ -49,7 +64,11 @@ pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<Epi
 /// pulls the bulk episodes-by-language endpoint (which returns translated
 /// name/overview) once per language. Direct client calls — meant to run from
 /// enrichment / the backfill bin, so it mirrors regardless of `CATALOG_MODE`.
-pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<()> {
+pub async fn mirror_translations(
+    state: &AppState,
+    series_id: i64,
+    metrics: Option<&Metrics>,
+) -> AppResult<()> {
     // The base episode records already hold the original language; only mirror the
     // OTHER languages any episode of this series actually has a translation for.
     let original: Option<String> =
@@ -78,7 +97,13 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
     for lang in &langs {
         let mut page = 0u32;
         loop {
-            let data = match state.tvdb.series_episodes(series_id, "default", Some(lang), page).await {
+            let fetch_started = Instant::now();
+            let result = state.tvdb.series_episodes(series_id, "default", Some(lang), page).await;
+            if let Some(m) = metrics {
+                m.fetch_us.fetch_add(fetch_started.elapsed().as_micros() as u64, Ordering::Relaxed);
+                m.fetch_count.fetch_add(1, Ordering::Relaxed);
+            }
+            let data = match result {
                 Ok(d) => d,
                 Err(AppError::NotFound) => break, // language not served for this series
                 Err(e) => return Err(e),
@@ -88,7 +113,10 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
                 break;
             }
             // Collect the page and write it in one bulk upsert (one DB round-trip
-            // per page instead of one per episode).
+            // per page instead of one per episode). Dedupe by episode id: the
+            // "default" ordering can list an episode more than once, and a bulk
+            // ON CONFLICT can't update the same row twice in one statement.
+            let mut seen = std::collections::HashSet::new();
             let mut ids = Vec::new();
             let mut names = Vec::new();
             let mut overviews = Vec::new();
@@ -98,14 +126,22 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
                     let overview = e["overview"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
                     // Skip episodes the language has no actual text for (the endpoint
                     // returns nulls for those) so we don't write empty rows.
-                    if name.is_some() || overview.is_some() {
+                    if (name.is_some() || overview.is_some()) && seen.insert(id) {
                         ids.push(id);
                         names.push(name);
                         overviews.push(overview);
                     }
                 }
             }
-            translation::store_many(state, "episode", lang, &ids, &names, &overviews).await?;
+            if !ids.is_empty() {
+                let insert_started = Instant::now();
+                translation::store_many(state, "episode", lang, &ids, &names, &overviews).await?;
+                if let Some(m) = metrics {
+                    m.insert_us.fetch_add(insert_started.elapsed().as_micros() as u64, Ordering::Relaxed);
+                    m.insert_count.fetch_add(1, Ordering::Relaxed);
+                    m.rows.fetch_add(ids.len() as u64, Ordering::Relaxed);
+                }
+            }
             if episodes.len() < 500 {
                 break; // last page
             }
@@ -121,64 +157,79 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
 /// can't stall the sweep. Re-run to retry anything still unmarked. Returns the
 /// number of series processed this run.
 pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    };
+    use std::sync::Arc;
+    use tokio::sync::Semaphore;
 
-    // Process several series at once so the TheTVDB client's global rate pacer
-    // stays fed and the sweep runs at up to THETVDB_MAX_RPS (never above it — the
-    // pacer caps total throughput regardless of concurrency). Kept modest by
-    // default: this bin runs as a SEPARATE process with its OWN DB pool, so it must
-    // not consume so many connections that it (plus the live server) exhausts
-    // Postgres. Tune with BACKFILL_CONCURRENCY.
+    // Kept modest by default: this bin runs as a SEPARATE process with its OWN DB
+    // pool, so it must not consume so many connections that it (plus the live
+    // server) exhausts Postgres. Tune with BACKFILL_CONCURRENCY. The TheTVDB
+    // client's global rate pacer caps total rps regardless of concurrency.
     let concurrency = std::env::var("BACKFILL_CONCURRENCY")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|&n| n > 0)
         .unwrap_or(8);
+
+    let metrics = Arc::new(Metrics::default());
     let done = Arc::new(AtomicU64::new(0));
+    // Continuous worker pool: a permit is acquired BEFORE spawning each series, so
+    // exactly `concurrency` run at once and the NEXT series starts the instant one
+    // finishes. A slow, many-language series holds one permit but never idles the
+    // other slots (unlike a per-batch barrier, which waits for the slowest).
+    let sem = Arc::new(Semaphore::new(concurrency));
     let mut cursor = 0i64;
     loop {
+        // Large page: the only barrier is per-page (fetch the next 2000 ids), which
+        // is negligible against 2000 series of work.
         let ids: Vec<i64> = sqlx::query_scalar(
             "SELECT id FROM catalog.series \
              WHERE id > $1 AND NOT deleted AND episode_translations_synced_at IS NULL \
-             ORDER BY id LIMIT $2",
+             ORDER BY id LIMIT 2000",
         )
         .bind(cursor)
-        .bind((concurrency as i64) * 8)
         .fetch_all(&state.db)
         .await?;
         if ids.is_empty() {
             break;
         }
-        cursor = *ids.last().unwrap(); // advance past the batch so failures don't loop this run
+        cursor = *ids.last().unwrap(); // advance past the page so failures don't loop this run
 
-        for chunk in ids.chunks(concurrency) {
-            let mut set = tokio::task::JoinSet::new();
-            for &id in chunk {
-                let st = state.clone();
-                let done = done.clone();
-                set.spawn(async move {
-                    match mirror_translations(&st, id).await {
-                        Ok(()) => {
-                            let _ = sqlx::query(
-                                "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
-                            )
-                            .bind(id)
-                            .execute(&st.db)
-                            .await;
-                        }
-                        Err(e) => tracing::warn!("episode-translation backfill: series {id} failed: {e}"),
+        let mut set = tokio::task::JoinSet::new();
+        for id in ids {
+            let permit = sem.clone().acquire_owned().await.expect("semaphore closed");
+            let st = state.clone();
+            let done = done.clone();
+            let metrics = metrics.clone();
+            set.spawn(async move {
+                let _permit = permit; // released when this series finishes → next starts
+                match mirror_translations(&st, id, Some(&metrics)).await {
+                    Ok(()) => {
+                        let _ = sqlx::query(
+                            "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
+                        )
+                        .bind(id)
+                        .execute(&st.db)
+                        .await;
                     }
-                    let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                    if n % 100 == 0 {
-                        tracing::info!("episode-translation backfill: {n} series processed");
-                    }
-                });
-            }
-            while set.join_next().await.is_some() {}
+                    Err(e) => tracing::warn!("episode-translation backfill: series {id} failed: {e}"),
+                }
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 100 == 0 {
+                    let fc = metrics.fetch_count.load(Ordering::Relaxed).max(1);
+                    let ic = metrics.insert_count.load(Ordering::Relaxed).max(1);
+                    tracing::info!(
+                        "episode-translation backfill: {n} series | api: {} calls, avg {} ms | \
+                         insert: {} stmts, avg {} ms, {} rows",
+                        metrics.fetch_count.load(Ordering::Relaxed),
+                        metrics.fetch_us.load(Ordering::Relaxed) / fc / 1000,
+                        metrics.insert_count.load(Ordering::Relaxed),
+                        metrics.insert_us.load(Ordering::Relaxed) / ic / 1000,
+                        metrics.rows.load(Ordering::Relaxed),
+                    );
+                }
+            });
         }
+        while set.join_next().await.is_some() {}
     }
     Ok(done.load(Ordering::Relaxed))
 }
