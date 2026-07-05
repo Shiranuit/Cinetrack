@@ -33,6 +33,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get searchHint => '検索…';
 
   @override
+  String get searchYourShows => '自分の作品を検索';
+
+  @override
+  String get searchAllShows => 'すべての作品を検索';
+
+  @override
+  String get libraryNoMatchDiscover => 'ライブラリに一致なし。「見つける」で新しい作品を探せます。';
+
+  @override
   String get typeSeries => 'シリーズ';
 
   @override

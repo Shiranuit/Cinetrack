@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,6 +27,8 @@ class DiscoverScreen extends StatefulWidget {
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
   final _f = AdvancedFilters();
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
   FilterOptions _options = const FilterOptions();
   // Bumping this resets the infinite grid to the first page (kinds/filters changed).
   int _reloadToken = 0;
@@ -41,6 +45,25 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           if (mounted) setState(() => _options = o);
         })
         .catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // Name search composes with the facet filters (both go into `_f`). Debounced,
+  // and only fires once the query clears the backend's 2-char minimum.
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final q = _searchCtrl.text.trim();
+      if (q == _f.query) return;
+      _f.query = q;
+      _reload();
+    });
   }
 
   /// The backend kinds to query for the current selection. "series" already
@@ -91,51 +114,73 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         };
     return Column(
       children: [
+        // Row 1: search bar + filter icon (same layout as the Library).
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Insets.lg,
-            Insets.sm,
-            Insets.lg,
-            Insets.sm,
-          ),
+          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 0),
           child: Row(
             children: [
               Expanded(
-                child: SegmentedButton<String>(
-                  multiSelectionEnabled: true,
-                  emptySelectionAllowed: true,
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  segments: [
-                    for (final e in _types.entries)
-                      ButtonSegment(
-                        value: e.key,
-                        label: Text(typeLabel(e.key),
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.fade),
-                      ),
-                  ],
-                  selected: _kinds,
-                  onSelectionChanged: (s) {
-                    setState(() => _kinds = s);
-                    _reload();
+                child: TextField(
+                  controller: _searchCtrl,
+                  textInputAction: TextInputAction.search,
+                  onChanged: (_) {
+                    setState(() {}); // refresh the clear button
+                    _onSearchChanged();
                   },
+                  decoration: InputDecoration(
+                    hintText: t.searchAllShows,
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searchCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              _debounce?.cancel();
+                              if (_f.query.isNotEmpty) {
+                                _f.query = '';
+                                _reload();
+                              } else {
+                                setState(() {});
+                              }
+                            },
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(width: Insets.sm),
               Badge(
                 isLabelVisible: _f.activeCount > 0,
                 label: Text('${_f.activeCount}'),
-                child: OutlinedButton.icon(
+                child: IconButton.filledTonal(
+                  tooltip: t.filters,
+                  icon: const Icon(Icons.tune_rounded),
                   onPressed: _openFilters,
-                  icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: Text(t.filters),
                 ),
               ),
             ],
+          ),
+        ),
+        // Row 2: type toggles (no layout toggle here — that's Library-only).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
+          child: SegmentedButton<String>(
+            multiSelectionEnabled: true,
+            emptySelectionAllowed: true,
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              for (final e in _types.entries)
+                ButtonSegment(
+                  value: e.key,
+                  label: Text(typeLabel(e.key), maxLines: 1, softWrap: false, overflow: TextOverflow.fade),
+                ),
+            ],
+            selected: _kinds,
+            onSelectionChanged: (s) {
+              setState(() => _kinds = s);
+              _reload();
+            },
           ),
         ),
         Expanded(

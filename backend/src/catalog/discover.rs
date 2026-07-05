@@ -41,6 +41,8 @@ pub struct Company {
 /// Advanced filters. Empty vecs / `None` mean "no constraint".
 #[derive(Debug, Default)]
 pub struct Filters {
+    /// Optional name substring (title/aliases); combined with the facet filters.
+    pub query: Option<String>,
     pub kind: String, // "series" | "movie" | "anime"
     pub genres_include: Vec<i64>,
     pub genres_exclude: Vec<i64>,
@@ -183,6 +185,13 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
     if !f.original_countries.is_empty() {
         qb.push(" AND x.original_country = ANY(").push_bind(f.original_countries.clone()).push(")");
+    }
+
+    // Name search: substring match on the searchable doc (base name + all-language
+    // aliases), backed by the pg_trgm GIN index on search_text. Combines with every
+    // facet above, so you can search by name AND filter at once.
+    if let Some(query) = f.query.as_deref() {
+        qb.push(" AND x.search_text ILIKE ").push_bind(format!("%{query}%"));
     }
 
     qb.push(match f.sort.as_str() {

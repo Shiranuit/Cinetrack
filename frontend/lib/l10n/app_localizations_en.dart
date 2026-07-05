@@ -33,6 +33,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchHint => 'Search…';
 
   @override
+  String get searchYourShows => 'Search your shows';
+
+  @override
+  String get searchAllShows => 'Search all shows & movies';
+
+  @override
+  String get libraryNoMatchDiscover =>
+      'Nothing in your library matches. Find new shows in Discover.';
+
+  @override
   String get typeSeries => 'Series';
 
   @override

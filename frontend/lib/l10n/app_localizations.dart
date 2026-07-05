@@ -160,6 +160,24 @@ abstract class AppLocalizations {
   /// **'Search…'**
   String get searchHint;
 
+  /// No description provided for @searchYourShows.
+  ///
+  /// In en, this message translates to:
+  /// **'Search your shows'**
+  String get searchYourShows;
+
+  /// No description provided for @searchAllShows.
+  ///
+  /// In en, this message translates to:
+  /// **'Search all shows & movies'**
+  String get searchAllShows;
+
+  /// No description provided for @libraryNoMatchDiscover.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in your library matches. Find new shows in Discover.'**
+  String get libraryNoMatchDiscover;
+
   /// No description provided for @typeSeries.
   ///
   /// In en, this message translates to:

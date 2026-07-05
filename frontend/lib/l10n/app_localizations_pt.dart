@@ -33,6 +33,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchHint => 'Pesquisar…';
 
   @override
+  String get searchYourShows => 'Buscar nas suas séries';
+
+  @override
+  String get searchAllShows => 'Buscar séries e filmes';
+
+  @override
+  String get libraryNoMatchDiscover =>
+      'Nada na sua biblioteca. Encontre novas séries em Descobrir.';
+
+  @override
   String get typeSeries => 'Séries';
 
   @override

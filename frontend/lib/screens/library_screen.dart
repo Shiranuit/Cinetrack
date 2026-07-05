@@ -11,7 +11,6 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../state/settings.dart';
 import '../widgets/filter_sheet.dart';
-import '../widgets/poster.dart';
 import '../widgets/reveal.dart';
 import '../widgets/infinite_grid.dart';
 import '../widgets/poster_grid.dart';
@@ -24,8 +23,9 @@ import 'show_detail_screen.dart';
 
 enum _Filter { series, anime, movies }
 
-/// The home tab: an inline search bar (results drop down from the bar and search
-/// both series & movies), a Series/Movies/All filter, and the tracked rails.
+/// The home tab: a search bar that searches YOUR library by name (composed with
+/// the advanced filter), a Series/Anime/Movies toggle, and the tracked rails.
+/// Full-catalog search lives in Discover.
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
   @override
@@ -33,14 +33,10 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  // The search bar searches YOUR library (by name), composed with the filter —
+  // both live in `_f`, so search + filter operate on the same (library) scope.
   final _searchCtrl = TextEditingController();
-  final _searchFocus = FocusNode();
   Timer? _debounce;
-  bool _searchBusy = false;
-  // Dropdown visibility is explicit (not tied to focus) so scrolling the results —
-  // which dismisses the keyboard and drops focus — doesn't close them.
-  bool _searchOpen = false;
-  List<SearchResult>? _results;
 
   late Future<Library> _libFuture;
   // The type toggles are multi-select and combinable; all on = the whole library.
@@ -73,10 +69,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _moviesFuture = _api.movies(langs: _langs);
     _content = _combine(_libFuture, _moviesFuture);
     _searchCtrl.addListener(_onSearchChanged);
-    // Focusing the field (re)opens the dropdown; losing focus does NOT close it.
-    _searchFocus.addListener(() {
-      if (_searchFocus.hasFocus) setState(() => _searchOpen = true);
-    });
     _api.addListener(_onExternalMutation);
     _api.filterOptions(library: true).then((o) {
       if (mounted) setState(() => _filterOptions = o);
@@ -105,9 +97,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() => _filterToken++);
   }
 
-  Future<List<SearchResult>> _filterPage(int offset, int limit) => context
-      .read<ApiClient>()
-      .filteredSearch(_f, library: true, langs: _langs, offset: offset, limit: limit);
+  /// Backend kinds for the current type toggles. "series" already includes anime,
+  /// so "anime" is only queried separately when "series" is off.
+  List<String> _backendKinds() {
+    final k = <String>[];
+    if (_filter.contains(_Filter.series)) {
+      k.add('series');
+    } else if (_filter.contains(_Filter.anime)) {
+      k.add('anime');
+    }
+    if (_filter.contains(_Filter.movies)) k.add('movie');
+    return k;
+  }
+
+  /// One page of the filtered/searched library: fan out over the selected type
+  /// toggles and merge, so a search spans your series AND movies.
+  Future<List<SearchResult>> _filterPage(int offset, int limit) async {
+    final kinds = _backendKinds();
+    if (kinds.isEmpty) return [];
+    final api = context.read<ApiClient>();
+    final lists = await Future.wait(kinds
+        .map((k) => api.filteredSearch(_f, library: true, type: k, langs: _langs, offset: offset, limit: limit)));
+    return [for (final l in lists) ...l];
+  }
 
   @override
   void dispose() {
@@ -115,18 +127,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _refreshDebounce?.cancel();
     _api.removeListener(_onExternalMutation);
     _searchCtrl.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
 
   String get _langs => context.read<SettingsController>().langsParam;
-  String get _query => _searchCtrl.text.trim();
-  bool get _showDropdown => _searchOpen && _query.isNotEmpty;
-
-  void _closeSearch() {
-    setState(() => _searchOpen = false);
-    _searchFocus.unfocus();
-  }
 
   Future<(Library, List<LibraryMovie>)> _combine(
     Future<Library> lib,
@@ -155,54 +159,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
     await _content;
   }
 
+  // Search within the user's library by name. Writes the query into `_f` (so it
+  // composes with the filter) and, when it changes, resets the results grid. The
+  // body switches to the flat filtered/searched view whenever `_f.isActive`.
   void _onSearchChanged() {
-    final q = _query;
+    final q = _searchCtrl.text.trim();
+    setState(() {}); // refresh the clear button
     _debounce?.cancel();
-    setState(() {
-      if (q.isNotEmpty) _searchOpen = true;
-    });
-    // Require >= 3 characters before searching (matches the backend, which returns
-    // nothing for shorter queries) — so typing on the way to a real term doesn't fire
-    // a request per keystroke.
-    if (q.trim().runes.length < 3) {
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || q == _f.query) return;
       setState(() {
-        _results = null;
-        _searchBusy = false;
+        _f.query = q;
+        _filterToken++;
       });
-      return;
-    }
-    setState(() => _searchBusy = true);
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
-      try {
-        // Search all types; keep series + movies.
-        final r = await context.read<ApiClient>().search(q, langs: _langs);
-        final filtered = r.where((e) => e.kind == 'series' || e.kind == 'movie').toList();
-        if (mounted && _query == q) {
-          setState(() {
-            _results = filtered;
-            _searchBusy = false;
-          });
-        }
-      } catch (_) {
-        if (mounted) setState(() => _searchBusy = false);
-      }
     });
   }
 
   void _clearSearch() {
     _searchCtrl.clear();
-    _closeSearch();
-  }
-
-  Future<void> _openResult(SearchResult r) async {
-    if (r.tvdbId == null) return;
-    _closeSearch();
-    final route = r.kind == 'movie'
-        ? MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: r.tvdbId!))
-        : MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: r.tvdbId!));
-    await Navigator.of(context).push(route);
-    // No manual reload: any track/watch/favorite done inside the detail screen
-    // notifies via ApiClient, which _onExternalMutation already picks up.
+    _debounce?.cancel();
+    if (_f.query.isNotEmpty) {
+      setState(() {
+        _f.query = '';
+        _filterToken++;
+      });
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _openShow(int seriesId) async {
@@ -211,66 +194,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        Column(
-          children: [
-            _searchBar(),
-            _filterBar(),
-            Expanded(child: _filtering ? _filteredBody() : _libraryBody()),
-          ],
-        ),
-        // Tap-outside barrier: closes the dropdown (keeps the query so tapping the
-        // search bar again reopens it). Starts below the search bar so the field
-        // stays tappable.
-        if (_showDropdown)
-          Positioned.fill(
-            top: 60,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _closeSearch,
-              child: const SizedBox.expand(),
-            ),
-          ),
-        if (_showDropdown)
-          Positioned(left: Insets.md, right: Insets.md, top: 62, child: _searchDropdown()),
+        _searchBar(),
+        _filterBar(),
+        Expanded(child: _filtering ? _filteredBody() : _libraryBody()),
       ],
     );
   }
 
-  // Search field + view/filter controls share one row; the type selector gets its
-  // own full-width row below so its labels never wrap.
+  // Row 1: search bar + filter icon (same layout as Discover). Row 2 (below) holds
+  // the type toggles + the Library-only layout (rails/grid) toggle.
   Widget _searchBar() {
     final t = AppLocalizations.of(context);
-    final layout = context.watch<SettingsController>().libraryLayout;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
+      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 0),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _searchCtrl,
-              focusNode: _searchFocus,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: t.searchHint,
+                hintText: t.searchYourShows,
                 prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _query.isEmpty
+                suffixIcon: _searchCtrl.text.isEmpty
                     ? null
                     : IconButton(icon: const Icon(Icons.close_rounded), onPressed: _clearSearch),
               ),
             ),
           ),
-          IconButton(
-            tooltip: layout == LibraryLayout.rails ? t.gridView : t.carouselView,
-            icon: Icon(layout == LibraryLayout.rails ? Icons.grid_view_rounded : Icons.view_carousel_rounded),
-            onPressed: () => context.read<SettingsController>().toggleLibraryLayout(),
-          ),
+          const SizedBox(width: Insets.sm),
           Badge(
             isLabelVisible: _f.activeCount > 0,
             label: Text('${_f.activeCount}'),
-            child: IconButton(
-              tooltip: t.filterLibrary,
+            child: IconButton.filledTonal(
+              tooltip: t.filters,
               icon: const Icon(Icons.tune_rounded),
               onPressed: _openFilters,
             ),
@@ -282,68 +241,44 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _filterBar() {
     final t = AppLocalizations.of(context);
+    final layout = context.watch<SettingsController>().libraryLayout;
     Widget lbl(String s) => Text(s, maxLines: 1, softWrap: false, overflow: TextOverflow.fade);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
-      child: SegmentedButton<_Filter>(
-        multiSelectionEnabled: true,
-        emptySelectionAllowed: true,
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: [
-          ButtonSegment(value: _Filter.series, label: lbl(t.typeSeries), icon: const Icon(Icons.live_tv_rounded)),
-          ButtonSegment(value: _Filter.anime, label: lbl(t.typeAnime), icon: const Icon(Icons.animation_rounded)),
-          ButtonSegment(value: _Filter.movies, label: lbl(t.typeMovies), icon: const Icon(Icons.theaters_rounded)),
+      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: SegmentedButton<_Filter>(
+              multiSelectionEnabled: true,
+              emptySelectionAllowed: true,
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              segments: [
+                ButtonSegment(value: _Filter.series, label: lbl(t.typeSeries)),
+                ButtonSegment(value: _Filter.anime, label: lbl(t.typeAnime)),
+                ButtonSegment(value: _Filter.movies, label: lbl(t.typeMovies)),
+              ],
+              selected: _filter,
+              onSelectionChanged: (s) => setState(() {
+                _filter = s;
+                _filterToken++; // also re-runs the filtered/searched view
+              }),
+            ),
+          ),
+          const SizedBox(width: Insets.sm),
+          // Library-only: rails vs grid layout.
+          IconButton(
+            tooltip: layout == LibraryLayout.rails ? t.gridView : t.carouselView,
+            icon: Icon(layout == LibraryLayout.rails ? Icons.grid_view_rounded : Icons.view_carousel_rounded),
+            onPressed: () => context.read<SettingsController>().toggleLibraryLayout(),
+          ),
         ],
-        selected: _filter,
-        onSelectionChanged: (s) => setState(() => _filter = s),
       ),
     );
   }
 
-  Widget _searchDropdown() {
-    final t = AppLocalizations.of(context);
-    final maxH = MediaQuery.sizeOf(context).height * 0.6;
-    return Material(
-      elevation: 10,
-      color: context.scheme.surfaceContainerHighest,
-      borderRadius: Radii.card,
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxH),
-        child: _searchBusy && _results == null
-            ? const Padding(padding: EdgeInsets.all(Insets.xl), child: Center(child: CircularProgressIndicator()))
-            : (_results?.isEmpty ?? true)
-                ? Padding(padding: const EdgeInsets.all(Insets.lg), child: Text(t.noResults, style: context.text.bodyMedium))
-                : ListView.separated(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: _results!.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final r = _results![i];
-                      final isMovie = r.kind == 'movie';
-                      return ListTile(
-                        leading: SizedBox(width: 38, height: 57, child: Poster(url: r.imageUrl, radius: Radii.sm)),
-                        title: Text(r.name ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
-                        subtitle: Row(
-                          children: [
-                            Icon(isMovie ? Icons.theaters_rounded : Icons.live_tv_rounded,
-                                size: 13, color: context.scheme.onSurfaceVariant),
-                            const SizedBox(width: 4),
-                            Text([isMovie ? t.kindMovie : t.typeSeries, r.year?.toString()].where((e) => e != null).join(' · ')),
-                          ],
-                        ),
-                        onTap: () => _openResult(r),
-                      );
-                    },
-                  ),
-      ),
-    );
-  }
-
-  /// Flat, filtered view of the user's library (shown while filters are active),
-  /// with lazy pagination.
+  /// Flat, filtered view of the user's library (shown while a search or filter is
+  /// active), with lazy pagination.
   Widget _filteredBody() {
     return Column(
       children: [
@@ -364,10 +299,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
               TextButton.icon(
                 icon: const Icon(Icons.close_rounded, size: 16),
                 label: Text(AppLocalizations.of(context).clear),
-                onPressed: () => setState(() {
-                  _f.reset();
-                  _filterToken++;
-                }),
+                // Clear both the search and the facets → back to the rails.
+                onPressed: () {
+                  _debounce?.cancel();
+                  _searchCtrl.clear();
+                  setState(() {
+                    _f.reset();
+                    _f.query = '';
+                    _filterToken++;
+                  });
+                },
               ),
             ],
           ),
@@ -377,12 +318,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
             resetKey: _filterToken,
             fetchPage: _filterPage,
             empty: MessageView(
-                icon: Icons.filter_alt_off_rounded, message: AppLocalizations.of(context).filterNoMatch),
+                icon: Icons.search_off_rounded,
+                message: _f.query.trim().isEmpty
+                    ? AppLocalizations.of(context).filterNoMatch
+                    : AppLocalizations.of(context).libraryNoMatchDiscover),
             itemBuilder: (context, r) => ShowCard(
-              title: r.name ?? 'Series ${r.tvdbId}',
+              title: r.name ?? '—',
               imageUrl: r.imageUrl,
-              heroTag: 'series-${r.tvdbId}',
-              onTap: r.tvdbId == null ? null : () => _openShow(r.tvdbId!),
+              subtitle: r.year?.toString(),
+              heroTag: '${r.kind}-${r.tvdbId}',
+              onTap: r.tvdbId == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => r.kind == 'movie'
+                          ? MovieDetailScreen(movieId: r.tvdbId!)
+                          : ShowDetailScreen(seriesId: r.tvdbId!))),
             ),
           ),
         ),

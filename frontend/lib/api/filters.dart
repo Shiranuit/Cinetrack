@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 /// `toQuery()` maps directly onto the backend `/api/discover` + `/api/library/filter`
 /// query params.
 class AdvancedFilters {
+  /// Free-text name search, combined with the facets below. In the Library it
+  /// searches your tracked shows; in Discover it searches the whole catalog.
+  String query = '';
   String type = 'series'; // series | movie | anime
   String sort = 'popularity';
   final Set<int> genresInc = {}, genresExc = {};
@@ -19,8 +22,9 @@ class AdvancedFilters {
   bool favoritesOnly = false; // library only
 
   /// Whether the library should switch from categorized rails to a flat, sorted
-  /// results view — true when any filter is set OR a non-default sort is chosen.
-  bool get isActive => activeCount > 0 || sort != 'popularity';
+  /// results view — true when a name search or any filter is set, or a non-default
+  /// sort is chosen.
+  bool get isActive => query.trim().isNotEmpty || activeCount > 0 || sort != 'popularity';
 
   int get activeCount =>
       (favoritesOnly ? 1 : 0) +
@@ -64,6 +68,7 @@ class AdvancedFilters {
   /// Non-null query params only.
   Map<String, String> toQuery() {
     final m = <String, String?>{
+      'q': query.trim().isEmpty ? null : query.trim(),
       'type': type,
       'sort': sort,
       'genres': _ids(genresInc),

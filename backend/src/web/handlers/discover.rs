@@ -20,6 +20,9 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct DiscoverQuery {
+    /// Optional name query: substring match on the title (base + aliases). Lets
+    /// Discover and the Library search by name AND filter at the same time.
+    pub q: Option<String>,
     /// "series" (default), "movie", or "anime".
     #[serde(rename = "type")]
     pub kind: Option<String>,
@@ -51,6 +54,14 @@ pub struct DiscoverQuery {
 
 fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>) -> Filters {
     Filters {
+        // Trimmed; ignored if under 2 chars (a 1-char substring is meaningless and
+        // can't use the trigram index on the whole-catalog Discover query).
+        query: q
+            .q
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| s.chars().count() >= 2)
+            .map(str::to_string),
         kind: q.kind.clone().unwrap_or_else(|| "series".to_string()),
         genres_include: csv_ids(q.genres.as_deref()),
         genres_exclude: csv_ids(q.exclude_genres.as_deref()),
