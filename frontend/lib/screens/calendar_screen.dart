@@ -8,6 +8,7 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
+import '../widgets/episode_sheet.dart';
 import '../widgets/poster.dart';
 import '../widgets/section.dart';
 import '../widgets/states.dart';
@@ -108,14 +109,12 @@ class _CalendarRow extends StatelessWidget {
     return ListTile(
       isThreeLine: epLine.isNotEmpty,
       leading: SizedBox(width: 42, height: 63, child: Poster(url: item.imageUrl, radius: Radii.sm)),
-      // Tapping the show NAME opens the show; tapping anywhere else opens the episode.
-      title: GestureDetector(
-        onTap: () => _openShow(context),
-        child: Text(item.name ?? AppLocalizations.of(context).seriesFallback(item.seriesId),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-      ),
+      // Tapping the row opens the episode sheet; the show is reached from there
+      // (tap the show name inside the sheet).
+      title: Text(item.name ?? AppLocalizations.of(context).seriesFallback(item.seriesId),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -133,70 +132,14 @@ class _CalendarRow extends StatelessWidget {
     );
   }
 
-  void _openShow(BuildContext context) => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: item.seriesId)),
-      );
-
-  /// Episode-focused bottom sheet: details + mark-watched + open-show.
+  /// Episode-focused bottom sheet: the same rich sheet shown from a show's
+  /// episode list (still, overview, watch controls).
   void _openEpisode(BuildContext context) {
-    final tag = _epTag;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetCtx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item.name ?? AppLocalizations.of(context).seriesFallback(item.seriesId),
-                  style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: Insets.xs),
-              Text([?tag, ?item.episodeName].join(' · '),
-                  style: context.text.titleSmall?.copyWith(color: context.scheme.primary)),
-              if (_when(context).isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: Insets.xs),
-                  child: Text(_when(context), style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
-                ),
-              const SizedBox(height: Insets.lg),
-              Row(
-                children: [
-                  if (item.episodeId != null)
-                    Expanded(
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.check_rounded, size: 18),
-                        label: Text(AppLocalizations.of(context).markWatched),
-                        onPressed: () {
-                          final messenger = ScaffoldMessenger.of(context);
-                          final markedMsg = AppLocalizations.of(context).markedWatched;
-                          context.read<ApiClient>().watch(item.episodeId!).then((_) {
-                            messenger.showSnackBar(SnackBar(content: Text(markedMsg)));
-                          }).catchError((e) {
-                            messenger.showSnackBar(SnackBar(content: Text('$e')));
-                          });
-                          Navigator.of(sheetCtx).pop();
-                        },
-                      ),
-                    ),
-                  if (item.episodeId != null) const SizedBox(width: Insets.sm),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: Text(AppLocalizations.of(context).openShow),
-                      onPressed: () {
-                        Navigator.of(sheetCtx).pop();
-                        _openShow(context);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      isScrollControlled: true,
+      builder: (_) => _CalendarEpisodeSheet(item: item),
     );
   }
 
@@ -240,5 +183,109 @@ class _Fill extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [SizedBox(height: MediaQuery.sizeOf(context).height * 0.3), child],
+      );
+}
+
+/// Loads the full episode (overview / still) and current watch count for a
+/// calendar item, then shows the shared [EpisodeSheet]. Starts from what the
+/// calendar already knows so the sheet appears instantly, enriching once the
+/// series' episodes load.
+class _CalendarEpisodeSheet extends StatefulWidget {
+  const _CalendarEpisodeSheet({required this.item});
+  final CalendarItem item;
+  @override
+  State<_CalendarEpisodeSheet> createState() => _CalendarEpisodeSheetState();
+}
+
+class _CalendarEpisodeSheetState extends State<_CalendarEpisodeSheet> {
+  late Episode _episode;
+  int _count = 0;
+  bool _touched = false; // once the user taps watch/unwatch, don't clobber _count
+
+  @override
+  void initState() {
+    super.initState();
+    final it = widget.item;
+    // No episode still yet — the calendar only carries the series art, which is
+    // passed to EpisodeSheet as the fallback. The real still fills in on _load.
+    _episode = Episode(
+      id: it.episodeId ?? -1,
+      seasonNumber: it.seasonNumber,
+      number: it.episodeNumber,
+      name: it.episodeName,
+      aired: it.date,
+    );
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<ApiClient>();
+    final lang = context.read<SettingsController>().langsParam.split(',').first;
+    try {
+      final results = await Future.wait([
+        api.episodes(widget.item.seriesId, lang: lang),
+        api.seenCounts(widget.item.seriesId),
+      ]);
+      if (!mounted) return;
+      final eps = results[0] as List<Episode>;
+      final counts = results[1] as Map<int, int>;
+      Episode? full;
+      for (final e in eps) {
+        if (e.id == widget.item.episodeId) {
+          full = e;
+          break;
+        }
+      }
+      setState(() {
+        if (full != null) _episode = full;
+        if (!_touched) _count = counts[widget.item.episodeId] ?? 0;
+      });
+    } catch (_) {
+      // Keep the provisional episode; the watch controls still work.
+    }
+  }
+
+  Future<void> _watch() async {
+    final id = widget.item.episodeId;
+    if (id == null) return;
+    setState(() {
+      _touched = true;
+      _count += 1;
+    });
+    try {
+      await context.read<ApiClient>().watch(id);
+    } catch (_) {
+      if (mounted) setState(() => _count = _count > 0 ? _count - 1 : 0);
+    }
+  }
+
+  Future<void> _unwatch() async {
+    final id = widget.item.episodeId;
+    if (id == null || _count == 0) return;
+    setState(() {
+      _touched = true;
+      _count -= 1;
+    });
+    try {
+      await context.read<ApiClient>().unwatch(id);
+    } catch (_) {
+      if (mounted) setState(() => _count += 1);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => EpisodeSheet(
+        episode: _episode,
+        count: _count,
+        showImageUrl: widget.item.imageUrl,
+        showName: widget.item.name ?? AppLocalizations.of(context).seriesFallback(widget.item.seriesId),
+        onOpenShow: () {
+          // Close the sheet, then open the full show page.
+          final nav = Navigator.of(context);
+          nav.pop();
+          nav.push(MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: widget.item.seriesId)));
+        },
+        onWatch: _watch,
+        onUnwatch: _unwatch,
       );
 }

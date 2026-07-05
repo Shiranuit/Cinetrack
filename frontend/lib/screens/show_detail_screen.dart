@@ -10,6 +10,7 @@ import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../widgets/badges.dart';
+import '../widgets/episode_sheet.dart';
 import '../widgets/net_image.dart';
 import '../widgets/poster.dart';
 import '../widgets/rating_bar.dart';
@@ -231,6 +232,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
             onWatch: _watch,
             onUnwatch: _unwatch,
             onSeasonAction: _seasonAction,
+            showImageUrl: _series!.imageUrl,
           ),
         const SizedBox(height: Insets.xxl),
       ],
@@ -350,6 +352,7 @@ class _SeasonSection extends StatefulWidget {
     required this.onWatch,
     required this.onUnwatch,
     required this.onSeasonAction,
+    this.showImageUrl,
   });
   final int seasonNumber;
   final List<Episode> episodes;
@@ -358,6 +361,7 @@ class _SeasonSection extends StatefulWidget {
   final void Function(int) onWatch;
   final void Function(int) onUnwatch;
   final void Function(int season, String action) onSeasonAction;
+  final String? showImageUrl;
 
   @override
   State<_SeasonSection> createState() => _SeasonSectionState();
@@ -426,6 +430,7 @@ class _SeasonSectionState extends State<_SeasonSection> {
                     _EpisodeCard(
                       episode: e,
                       count: widget.counts[e.id] ?? 0,
+                      showImageUrl: widget.showImageUrl,
                       onWatch: () => widget.onWatch(e.id),
                       onUnwatch: () => widget.onUnwatch(e.id),
                     ),
@@ -439,11 +444,12 @@ class _SeasonSectionState extends State<_SeasonSection> {
 }
 
 class _EpisodeCard extends StatelessWidget {
-  const _EpisodeCard({required this.episode, required this.count, required this.onWatch, required this.onUnwatch});
+  const _EpisodeCard({required this.episode, required this.count, required this.onWatch, required this.onUnwatch, this.showImageUrl});
   final Episode episode;
   final int count;
   final VoidCallback onWatch;
   final VoidCallback onUnwatch;
+  final String? showImageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -496,69 +502,8 @@ class _EpisodeCard extends StatelessWidget {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => _EpisodeSheet(episode: episode, count: count, onWatch: onWatch, onUnwatch: onUnwatch),
+      builder: (_) => EpisodeSheet(episode: episode, count: count, showImageUrl: showImageUrl, onWatch: onWatch, onUnwatch: onUnwatch),
     );
   }
 }
 
-class _EpisodeSheet extends StatelessWidget {
-  const _EpisodeSheet({required this.episode, required this.count, required this.onWatch, required this.onUnwatch});
-  final Episode episode;
-  final int count;
-  final VoidCallback onWatch;
-  final VoidCallback onUnwatch;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
-              child: ClipRRect(
-                borderRadius: Radii.card,
-                child: AspectRatio(aspectRatio: 16 / 9, child: NetImage(url: episode.imageUrl)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(Insets.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'S${episode.seasonNumber ?? 0} · E${episode.number ?? 0}',
-                          style: context.text.labelLarge?.copyWith(color: context.scheme.primary),
-                        ),
-                      ),
-                      WatchControl(count: count, onWatch: onWatch, onUnwatch: onUnwatch, size: 44),
-                    ],
-                  ),
-                  const SizedBox(height: Insets.xs),
-                  Text(episode.name ?? '', style: context.text.titleLarge),
-                  if (episode.aired != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(episode.aired!,
-                          style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
-                    ),
-                  if (episode.overview?.isNotEmpty ?? false) ...[
-                    const SizedBox(height: Insets.md),
-                    Text(episode.overview!, style: context.text.bodyMedium?.copyWith(height: 1.5)),
-                  ],
-                  const SizedBox(height: Insets.md),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
