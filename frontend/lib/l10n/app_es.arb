@@ -222,6 +222,15 @@
   "usersFavorites": "Favoritos de {name}",
   "usersShows": "Series de {name}",
   "yourShows": "Tus series",
+  "yourMovies": "Tus películas",
+  "usersMovies": "Películas de {name}",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "{shows} series · {watches} visionados · {favorites} favoritos importados.\nBuscando series faltantes en segundo plano — revisa «Revisar coincidencias» en breve.",
   "deleteAccountConfirmBody": "Esto elimina permanentemente tu cuenta y todos tus datos — series seguidas, historial de reproducción, favoritos y seguimientos. Esta acción no se puede deshacer.",
   "deleteAnyway": "Eliminar de todos modos",

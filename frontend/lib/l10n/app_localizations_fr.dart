@@ -721,6 +721,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get yourShows => 'Vos séries';
 
   @override
+  String get yourMovies => 'Vos films';
+
+  @override
+  String usersMovies(String name) {
+    return 'Films de $name';
+  }
+
+  @override
   String importGdprSuccess(int shows, int watches, int favorites) {
     return '$shows séries · $watches visionnages · $favorites favoris importés.\nRecherche des séries manquantes en arrière-plan — consultez « Vérifier les correspondances » sous peu.';
   }

@@ -708,6 +708,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get yourShows => 'あなたの番組';
 
   @override
+  String get yourMovies => 'あなたの映画';
+
+  @override
+  String usersMovies(String name) {
+    return '$nameさんの映画';
+  }
+
+  @override
   String importGdprSuccess(int shows, int watches, int favorites) {
     return '$shows件の番組・$watches件の視聴・$favorites件のお気に入りをインポートしました。\n不足している番組をバックグラウンドで照合中です。まもなく「インポートの一致を確認」をご確認ください。';
   }

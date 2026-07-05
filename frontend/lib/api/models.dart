@@ -48,7 +48,7 @@ class Me {
     this.coverUrl,
     this.bio,
     this.isPrivate = false,
-    this.profileBlocks = const ['stats', 'favorites', 'shows'],
+    this.profileBlocks = const ['stats', 'favorites', 'shows', 'movies'],
     this.languages = const ['eng'],
   });
 
@@ -62,7 +62,7 @@ class Me {
             bio: j['bio'] as String?,
             isPrivate: j['is_private'] as bool? ?? false,
             profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ??
-                const ['stats', 'favorites', 'shows'],
+                const ['stats', 'favorites', 'shows', 'movies'],
             languages: (j['languages'] as List?)?.cast<String>() ?? const ['eng'],
           ),
         _ => throw FormatException('Me: bad payload $j'),
@@ -490,7 +490,7 @@ class UserProfile {
     required this.visible,
     required this.followerCount,
     required this.followingCount,
-    this.profileBlocks = const ['stats', 'favorites', 'shows'],
+    this.profileBlocks = const ['stats', 'favorites', 'shows', 'movies'],
   });
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
         id: j['id'] as String,
@@ -506,7 +506,7 @@ class UserProfile {
         followerCount: j['follower_count'] as int? ?? 0,
         followingCount: j['following_count'] as int? ?? 0,
         profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ??
-            const ['stats', 'favorites', 'shows'],
+            const ['stats', 'favorites', 'shows', 'movies'],
       );
 }
 

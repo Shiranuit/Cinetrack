@@ -720,6 +720,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get yourShows => 'Your shows';
 
   @override
+  String get yourMovies => 'Your movies';
+
+  @override
+  String usersMovies(String name) {
+    return '$name\'s movies';
+  }
+
+  @override
   String importGdprSuccess(int shows, int watches, int favorites) {
     return 'Imported $shows shows · $watches watches · $favorites favorites.\nMatching missing shows in the background — check \"Review import matches\" shortly.';
   }

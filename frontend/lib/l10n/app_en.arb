@@ -330,6 +330,15 @@
     }
   },
   "yourShows": "Your shows",
+  "yourMovies": "Your movies",
+  "usersMovies": "{name}'s movies",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "Imported {shows} shows · {watches} watches · {favorites} favorites.\nMatching missing shows in the background — check \"Review import matches\" shortly.",
   "@importGdprSuccess": {
     "placeholders": {

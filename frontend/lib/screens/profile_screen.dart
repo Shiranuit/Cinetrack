@@ -14,16 +14,18 @@ import '../widgets/net_image.dart';
 import '../widgets/section.dart';
 import '../widgets/show_card.dart';
 import '../widgets/states.dart';
+import 'movie_detail_screen.dart';
 import 'settings_screen.dart';
 import 'show_detail_screen.dart';
 import 'user_library_screen.dart';
 
 /// The showcase blocks a profile can display, in customizable order.
-const kAllProfileBlocks = ['stats', 'favorites', 'shows'];
+const kAllProfileBlocks = ['stats', 'favorites', 'shows', 'movies'];
 String _blockLabel(AppLocalizations t, String key) => switch (key) {
       'stats' => t.statistics,
       'favorites' => t.favorites,
       'shows' => t.shows,
+      'movies' => t.typeMovies,
       _ => key,
     };
 
@@ -45,6 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<UserProfile> _profile;
   late Future<Stats> _stats;
   late Future<List<UserShow>> _shows;
+  late Future<List<LibraryMovie>> _movies;
   bool _busy = false;
 
   bool get _isSelf => widget.userId == null;
@@ -62,10 +65,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final p = api.userProfile(_targetId);
     final st = api.userStats(_targetId);
     final sh = api.userShows(_targetId, langs: langs);
+    final mv = api.userMovies(_targetId, langs: langs);
     setState(() {
       _profile = p;
       _stats = st;
       _shows = sh;
+      _movies = mv;
     });
   }
 
@@ -162,6 +167,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return _favoritesBlock(p);
       case 'shows':
         return _showsBlock(p);
+      case 'movies':
+        return _moviesBlock(p);
       default:
         return const SizedBox.shrink();
     }
@@ -235,6 +242,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               builder: (_) => UserLibraryScreen(
                   userId: _targetId,
                   title: _isSelf ? AppLocalizations.of(context).yourShows : AppLocalizations.of(context).usersShows(p.screenName)))),
+        );
+      },
+    );
+  }
+
+  /// Tracked movies — "See all" opens the library on its Movies tab.
+  Widget _moviesBlock(UserProfile p) {
+    return FutureBuilder<List<LibraryMovie>>(
+      future: _movies,
+      builder: (context, snap) {
+        final movies = snap.data ?? [];
+        if (movies.isEmpty) return const SizedBox.shrink();
+        final t = AppLocalizations.of(context);
+        return PosterRail(
+          title: '${t.typeMovies} (${movies.length})',
+          icon: Icons.theaters_rounded,
+          accent: context.scheme.tertiary,
+          count: movies.length,
+          onSeeAll: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => UserLibraryScreen(
+                  userId: _targetId,
+                  startOnMovies: true,
+                  title: _isSelf ? t.yourMovies : t.usersMovies(p.screenName)))),
+          itemBuilder: (context, i) {
+            final m = movies[i];
+            return ShowCard(
+              title: m.name ?? t.movieFallback(m.movieId),
+              imageUrl: m.imageUrl,
+              favorite: m.isFavorited,
+              subtitle: m.year?.toString(),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId)),
+              ),
+            );
+          },
         );
       },
     );

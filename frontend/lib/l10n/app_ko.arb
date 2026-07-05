@@ -222,6 +222,15 @@
   "usersFavorites": "{name}님의 즐겨찾기",
   "usersShows": "{name}님의 프로그램",
   "yourShows": "내 프로그램",
+  "yourMovies": "내 영화",
+  "usersMovies": "{name}님의 영화",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "{shows}개 프로그램 · {watches}개 시청 · {favorites}개 즐겨찾기를 가져왔습니다.\n누락된 프로그램을 백그라운드에서 매칭 중입니다 — 잠시 후 \"가져오기 일치 검토\"를 확인하세요.",
   "deleteAccountConfirmBody": "계정과 모든 데이터(추적 중인 프로그램, 시청 기록, 즐겨찾기 및 팔로우)가 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
   "deleteAnyway": "그래도 삭제",

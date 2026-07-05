@@ -22,9 +22,12 @@ enum _Tab { series, movies, all }
 /// progress, plus a Series/Movies/All selector and advanced Filter/Sort to
 /// search inside their shows. Read-only; privacy-gated on the backend.
 class UserLibraryScreen extends StatefulWidget {
-  const UserLibraryScreen({super.key, required this.userId, required this.title});
+  const UserLibraryScreen({super.key, required this.userId, required this.title, this.startOnMovies = false});
   final String userId;
   final String title;
+
+  /// Open directly on the Movies tab (e.g. from a profile's "Movies → See all").
+  final bool startOnMovies;
   @override
   State<UserLibraryScreen> createState() => _UserLibraryScreenState();
 }
@@ -32,7 +35,7 @@ class UserLibraryScreen extends StatefulWidget {
 class _UserLibraryScreenState extends State<UserLibraryScreen> {
   final _f = AdvancedFilters()..type = 'series';
   FilterOptions _options = const FilterOptions();
-  _Tab _tab = _Tab.series;
+  late _Tab _tab = widget.startOnMovies ? _Tab.movies : _Tab.series;
 
   late Future<Library> _libFuture;
   late Future<List<LibraryMovie>> _moviesFuture;
@@ -118,8 +121,57 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
   Widget _body() {
     if (_tab == _Tab.movies) return _moviesGrid();
     if (_filtering) return _filteredGrid();
+    if (_tab == _Tab.all) return _all();
     return _categorized();
   }
+
+  /// The series categories as horizontal rails (Watching / Up to date / …).
+  List<Widget> _seriesRails(Library lib, AppLocalizations t) {
+    final cats = <(String, IconData, Color, List<LibraryShow>)>[
+      (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, lib.watching),
+      (t.catStale, Icons.history_rounded, context.colors.warning, lib.stale),
+      (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
+      (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
+      (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
+    ].where((e) => e.$4.isNotEmpty).toList();
+    return [
+      for (final (title, icon, accent, shows) in cats)
+        PosterRail(
+          title: title,
+          icon: icon,
+          accent: accent,
+          count: shows.length,
+          itemBuilder: (context, i) {
+            final s = shows[i];
+            return ShowCard(
+              title: s.name ?? t.seriesFallback(s.seriesId),
+              imageUrl: s.imageUrl,
+              favorite: s.isFavorited,
+              progress: s.progress,
+              onTap: () => _openShow(s.seriesId),
+            );
+          },
+        ),
+    ];
+  }
+
+  /// A single rail of tracked movies (used inside the combined "All" tab).
+  Widget _moviesRailFor(List<LibraryMovie> movies, AppLocalizations t) => PosterRail(
+        title: t.typeMovies,
+        icon: Icons.theaters_rounded,
+        accent: context.scheme.tertiary,
+        count: movies.length,
+        itemBuilder: (context, i) {
+          final m = movies[i];
+          return ShowCard(
+            title: m.name ?? t.movieFallback(m.movieId),
+            imageUrl: m.imageUrl,
+            subtitle: m.year?.toString(),
+            favorite: m.isFavorited,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
+          );
+        },
+      );
 
   Widget _categorized() {
     return FutureBuilder<Library>(
@@ -127,38 +179,31 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
         if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
-        final lib = snap.data!;
         final t = AppLocalizations.of(context);
-        final cats = <(String, IconData, Color, List<LibraryShow>)>[
-          (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, lib.watching),
-          (t.catStale, Icons.history_rounded, context.colors.warning, lib.stale),
-          (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
-          (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
-          (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
-        ].where((e) => e.$4.isNotEmpty).toList();
-        if (cats.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
-        return ListView(
-          padding: const EdgeInsets.only(bottom: Insets.xxl),
-          children: [
-            for (final (title, icon, accent, shows) in cats)
-              PosterRail(
-                title: title,
-                icon: icon,
-                accent: accent,
-                count: shows.length,
-                itemBuilder: (context, i) {
-                  final s = shows[i];
-                  return ShowCard(
-                    title: s.name ?? t.seriesFallback(s.seriesId),
-                    imageUrl: s.imageUrl,
-                    favorite: s.isFavorited,
-                    progress: s.progress,
-                    onTap: () => _openShow(s.seriesId),
-                  );
-                },
-              ),
-          ],
-        );
+        final rails = _seriesRails(snap.data!, t);
+        if (rails.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
+        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: rails);
+      },
+    );
+  }
+
+  /// The "All" tab: series category rails plus a Movies rail, in one scroll —
+  /// mirrors the main Library, which shows series and movies together.
+  Widget _all() {
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([_libFuture, _moviesFuture]),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
+        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
+        final t = AppLocalizations.of(context);
+        final lib = snap.data![0] as Library;
+        final movies = snap.data![1] as List<LibraryMovie>;
+        final children = <Widget>[
+          ..._seriesRails(lib, t),
+          if (movies.isNotEmpty) _moviesRailFor(movies, t),
+        ];
+        if (children.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libEmpty);
+        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: children);
       },
     );
   }

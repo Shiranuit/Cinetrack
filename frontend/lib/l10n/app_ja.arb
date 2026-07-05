@@ -222,6 +222,15 @@
   "usersFavorites": "{name}のお気に入り",
   "usersShows": "{name}の番組",
   "yourShows": "あなたの番組",
+  "yourMovies": "あなたの映画",
+  "usersMovies": "{name}さんの映画",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "{shows}件の番組・{watches}件の視聴・{favorites}件のお気に入りをインポートしました。\n不足している番組をバックグラウンドで照合中です。まもなく「インポートの一致を確認」をご確認ください。",
   "deleteAccountConfirmBody": "これによりアカウントとすべてのデータ（追跡中の番組、視聴履歴、お気に入り、フォロー）が完全に削除されます。この操作は取り消せません。",
   "deleteAnyway": "それでも削除",

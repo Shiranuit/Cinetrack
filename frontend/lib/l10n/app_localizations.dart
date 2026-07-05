@@ -1444,6 +1444,18 @@ abstract class AppLocalizations {
   /// **'Your shows'**
   String get yourShows;
 
+  /// No description provided for @yourMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Your movies'**
+  String get yourMovies;
+
+  /// No description provided for @usersMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s movies'**
+  String usersMovies(String name);
+
   /// No description provided for @importGdprSuccess.
   ///
   /// In en, this message translates to:

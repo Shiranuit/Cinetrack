@@ -222,6 +222,15 @@
   "usersFavorites": "{name}的收藏",
   "usersShows": "{name}的剧集",
   "yourShows": "你的剧集",
+  "yourMovies": "我的电影",
+  "usersMovies": "{name} 的电影",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "已导入 {shows} 部剧集 · {watches} 次观看 · {favorites} 个收藏。\n正在后台匹配缺失的剧集 — 请稍后查看“查看导入匹配”。",
   "deleteAccountConfirmBody": "这将永久删除您的账户及所有数据 — 追踪的剧集、观看记录、收藏和关注。此操作无法撤销。",
   "deleteAnyway": "仍然删除",

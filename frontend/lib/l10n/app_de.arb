@@ -222,6 +222,15 @@
   "usersFavorites": "Favoriten von {name}",
   "usersShows": "Serien von {name}",
   "yourShows": "Deine Serien",
+  "yourMovies": "Deine Filme",
+  "usersMovies": "Filme von {name}",
+  "@usersMovies": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "importGdprSuccess": "{shows} Serien · {watches} Ansichten · {favorites} Favoriten importiert.\nFehlende Serien werden im Hintergrund abgeglichen — sieh dir in Kürze „Import-Treffer prüfen“ an.",
   "deleteAccountConfirmBody": "Dadurch werden dein Konto und alle deine Daten dauerhaft gelöscht — verfolgte Serien, Wiedergabeverlauf, Favoriten und Abonnements. Dies kann nicht rückgängig gemacht werden.",
   "deleteAnyway": "Trotzdem löschen",

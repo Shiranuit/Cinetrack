@@ -708,6 +708,14 @@ class AppLocalizationsKo extends AppLocalizations {
   String get yourShows => '내 프로그램';
 
   @override
+  String get yourMovies => '내 영화';
+
+  @override
+  String usersMovies(String name) {
+    return '$name님의 영화';
+  }
+
+  @override
   String importGdprSuccess(int shows, int watches, int favorites) {
     return '$shows개 프로그램 · $watches개 시청 · $favorites개 즐겨찾기를 가져왔습니다.\n누락된 프로그램을 백그라운드에서 매칭 중입니다 — 잠시 후 \"가져오기 일치 검토\"를 확인하세요.';
   }

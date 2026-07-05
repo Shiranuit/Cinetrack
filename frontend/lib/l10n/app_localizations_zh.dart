@@ -706,6 +706,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get yourShows => '你的剧集';
 
   @override
+  String get yourMovies => '我的电影';
+
+  @override
+  String usersMovies(String name) {
+    return '$name 的电影';
+  }
+
+  @override
   String importGdprSuccess(int shows, int watches, int favorites) {
     return '已导入 $shows 部剧集 · $watches 次观看 · $favorites 个收藏。\n正在后台匹配缺失的剧集 — 请稍后查看“查看导入匹配”。';
   }
