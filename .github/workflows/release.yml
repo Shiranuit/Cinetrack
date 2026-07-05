@@ -49,12 +49,27 @@ jobs:
             echo "::warning::KEYSTORE_BASE64 not set — APK will be DEBUG-signed and will NOT update in place across releases."
           fi
 
-      - name: Build release APK (API URL baked in at build time)
+      - name: Build release APK (API URL + version baked in at build time)
         working-directory: frontend
         run: |
           flutter pub get
+          # Derive the Android versionName/versionCode from the git tag so the
+          # installed app reports the released version instead of pubspec's
+          # placeholder 1.0.0. Tag is like "v0.5.0" -> name 0.5.0.
+          VERSION_ARGS=""
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            NAME="${{ github.ref_name }}"
+            NAME="${NAME#v}"                       # strip leading "v"
+            CORE="${NAME%%[-+]*}"                   # drop any -pre / +meta suffix
+            IFS='.' read -r MAJ MIN PAT <<< "$CORE"
+            # Monotonic integer versionCode: major*1000000 + minor*1000 + patch.
+            CODE=$(( ${MAJ:-0} * 1000000 + ${MIN:-0} * 1000 + ${PAT:-0} ))
+            VERSION_ARGS="--build-name=$NAME --build-number=$CODE"
+            echo "Building APK versionName=$NAME versionCode=$CODE"
+          fi
           flutter build apk --release \
-            --dart-define=API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }}
+            --dart-define=API_BASE=${{ vars.API_BASE || 'https://api.cine-track.com' }} \
+            $VERSION_ARGS
 
       - name: Name the APK after the tag
         id: apk
