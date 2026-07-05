@@ -75,6 +75,8 @@
   "markAllWatched": "すべて視聴済みにする",
   "unmarkAll": "すべて解除",
   "rewatchSeason": "シーズンを再視聴 (+1)",
+  "rewatchSeries": "シリーズを再視聴 (+1)",
+  "seriesActions": "シリーズの操作",
   "seasonActions": "シーズンの操作",
   "markWatched": "視聴済みにする",
   "markedWatched": "視聴済みにしました",

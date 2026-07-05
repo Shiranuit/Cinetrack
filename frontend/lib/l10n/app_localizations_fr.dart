@@ -236,6 +236,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get rewatchSeason => 'Revoir la saison (+1)';
 
   @override
+  String get rewatchSeries => 'Revoir la série (+1)';
+
+  @override
+  String get seriesActions => 'Actions sur la série';
+
+  @override
   String get seasonActions => 'Actions sur la saison';
 
   @override

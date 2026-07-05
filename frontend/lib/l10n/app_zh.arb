@@ -75,6 +75,8 @@
   "markAllWatched": "全部标记为已看",
   "unmarkAll": "全部取消标记",
   "rewatchSeason": "重温本季 (+1)",
+  "rewatchSeries": "重看剧集 (+1)",
+  "seriesActions": "剧集操作",
   "seasonActions": "本季操作",
   "markWatched": "标记为已看",
   "markedWatched": "已标记为已看",

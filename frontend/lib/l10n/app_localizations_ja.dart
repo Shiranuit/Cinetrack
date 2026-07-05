@@ -236,6 +236,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get rewatchSeason => 'シーズンを再視聴 (+1)';
 
   @override
+  String get rewatchSeries => 'シリーズを再視聴 (+1)';
+
+  @override
+  String get seriesActions => 'シリーズの操作';
+
+  @override
   String get seasonActions => 'シーズンの操作';
 
   @override

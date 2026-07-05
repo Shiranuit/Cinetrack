@@ -167,6 +167,26 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     }
   }
 
+  /// Whole-series equivalent of [_seasonAction]: mark all watched / rewatch /
+  /// unmark all, across every season.
+  Future<void> _seriesAction(String action) async {
+    try {
+      switch (action) {
+        case 'watch':
+          await _api.watchSeries(widget.seriesId);
+        case 'rewatch':
+          await _api.rewatchSeries(widget.seriesId);
+        case 'unwatch':
+          await _api.unwatchSeries(widget.seriesId);
+      }
+      final counts = await _api.seenCounts(widget.seriesId);
+      if (mounted) setState(() => _counts = counts);
+      _refreshRel();
+    } catch (_) {
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -221,7 +241,28 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xl, Insets.lg, Insets.sm),
-          child: Text(AppLocalizations.of(context).episodes, style: context.text.titleLarge),
+          child: Row(
+            children: [
+              Expanded(child: Text(AppLocalizations.of(context).episodes, style: context.text.titleLarge)),
+              // Whole-series watch actions, mirroring the per-season menu.
+              Builder(builder: (context) {
+                final allSeen = _episodes.isNotEmpty && _seenDistinct >= _episodes.length;
+                return PopupMenuButton<String>(
+                  tooltip: AppLocalizations.of(context).seriesActions,
+                  icon: Icon(
+                    allSeen ? Icons.check_circle_rounded : Icons.done_all_rounded,
+                    color: allSeen ? context.colors.seen : context.scheme.onSurfaceVariant,
+                  ),
+                  onSelected: _seriesAction,
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: 'watch', child: ListTile(leading: const Icon(Icons.done_all_rounded), title: Text(AppLocalizations.of(context).markAllWatched), dense: true)),
+                    PopupMenuItem(value: 'rewatch', child: ListTile(leading: const Icon(Icons.replay_rounded), title: Text(AppLocalizations.of(context).rewatchSeries), dense: true)),
+                    PopupMenuItem(value: 'unwatch', child: ListTile(leading: const Icon(Icons.remove_done_rounded), title: Text(AppLocalizations.of(context).unmarkAll), dense: true)),
+                  ],
+                );
+              }),
+            ],
+          ),
         ),
         for (final s in seasons)
           _SeasonSection(

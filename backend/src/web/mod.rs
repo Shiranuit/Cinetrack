@@ -69,6 +69,10 @@ pub fn router(state: AppState) -> Router {
             "/api/series/{id}/seasons/{season}/watch",
             post(handlers::shows::watch_season).delete(handlers::shows::unwatch_season),
         )
+        .route(
+            "/api/series/{id}/watch",
+            post(handlers::shows::watch_series).delete(handlers::shows::unwatch_series),
+        )
         .route("/api/movies", get(handlers::movie::list_movies))
         .route("/api/movies/{id}", get(handlers::movie::get_movie))
         .route("/api/movies/{id}/relation", get(handlers::movie::movie_relation))

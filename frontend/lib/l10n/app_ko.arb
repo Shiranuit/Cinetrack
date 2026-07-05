@@ -75,6 +75,8 @@
   "markAllWatched": "모두 시청함으로 표시",
   "unmarkAll": "모두 표시 해제",
   "rewatchSeason": "시즌 다시보기 (+1)",
+  "rewatchSeries": "시리즈 다시 보기 (+1)",
+  "seriesActions": "시리즈 작업",
   "seasonActions": "시즌 작업",
   "markWatched": "시청함으로 표시",
   "markedWatched": "시청함으로 표시됨",

@@ -562,6 +562,18 @@ abstract class AppLocalizations {
   /// **'Rewatch season (+1)'**
   String get rewatchSeason;
 
+  /// No description provided for @rewatchSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewatch series (+1)'**
+  String get rewatchSeries;
+
+  /// No description provided for @seriesActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Series actions'**
+  String get seriesActions;
+
   /// No description provided for @seasonActions.
   ///
   /// In en, this message translates to:

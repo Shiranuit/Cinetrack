@@ -529,6 +529,58 @@ pub async fn unwatch_season(state: &AppState, user_id: Uuid, series_id: i64, sea
     recompute_progress(state, user_id, series_id).await
 }
 
+/// Mark EVERY not-yet-watched episode of a series (all seasons, incl. specials)
+/// as watched.
+pub async fn watch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
+    sqlx::query(
+        "INSERT INTO app.watch_event \
+           (user_id, entity_type, series_id, episode_id, season_number, episode_number, runtime, \
+            is_rewatch, source_uuid, watched_at) \
+         SELECT $1, 'episode', $2, e.id, e.season_number, e.number, e.runtime, false, \
+                gen_random_uuid()::text, now() \
+         FROM catalog.episode e \
+         WHERE e.series_id = $2 AND NOT e.deleted \
+           AND NOT EXISTS (SELECT 1 FROM app.watch_event we WHERE we.user_id = $1 AND we.episode_id = e.id)",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
+/// Rewatch a whole series: one watch event for EVERY episode of every season
+/// (increments each episode's ×N count by one, regardless of prior state).
+pub async fn rewatch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
+    sqlx::query(
+        "INSERT INTO app.watch_event \
+           (user_id, entity_type, series_id, episode_id, season_number, episode_number, runtime, \
+            is_rewatch, source_uuid, watched_at) \
+         SELECT $1, 'episode', $2, e.id, e.season_number, e.number, e.runtime, true, \
+                gen_random_uuid()::text, now() \
+         FROM catalog.episode e \
+         WHERE e.series_id = $2 AND NOT e.deleted",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
+/// Un-watch a whole series: remove all watch events for its episodes (keeps the
+/// show in the library; use [`remove_show`] to drop it entirely).
+pub async fn unwatch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
+    sqlx::query(
+        "DELETE FROM app.watch_event WHERE user_id = $1 AND series_id = $2 AND entity_type = 'episode'",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
 /// Remove a show from the user's library entirely (tracking row + watch history).
 pub async fn remove_show(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<()> {
     let mut tx = state.db.begin().await?;

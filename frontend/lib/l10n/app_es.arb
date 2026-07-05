@@ -75,6 +75,8 @@
   "markAllWatched": "Marcar todo como visto",
   "unmarkAll": "Desmarcar todo",
   "rewatchSeason": "Volver a ver la temporada (+1)",
+  "rewatchSeries": "Volver a ver la serie (+1)",
+  "seriesActions": "Acciones de la serie",
   "seasonActions": "Acciones de temporada",
   "markWatched": "Marcar como visto",
   "markedWatched": "Marcado como visto",

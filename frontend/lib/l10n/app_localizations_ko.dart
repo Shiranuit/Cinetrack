@@ -236,6 +236,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get rewatchSeason => '시즌 다시보기 (+1)';
 
   @override
+  String get rewatchSeries => '시리즈 다시 보기 (+1)';
+
+  @override
+  String get seriesActions => '시리즈 작업';
+
+  @override
   String get seasonActions => '시즌 작업';
 
   @override

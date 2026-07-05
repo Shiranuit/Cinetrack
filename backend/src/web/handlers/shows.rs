@@ -168,3 +168,27 @@ pub async fn unwatch_season(
     let nb = tracking::unwatch_season(&state, user_id, series_id, season).await?;
     Ok(Json(json!({ "series_id": series_id, "season": season, "nb_episodes_seen": nb })))
 }
+
+/// Mark the WHOLE series watched (all seasons), or rewatch it with `?rewatch=true`.
+pub async fn watch_series(
+    AuthUser(user_id): AuthUser,
+    State(state): State<AppState>,
+    Path(series_id): Path<i64>,
+    Query(q): Query<SeasonWatchQuery>,
+) -> AppResult<Json<Value>> {
+    let nb = if q.rewatch.unwrap_or(false) {
+        tracking::rewatch_series(&state, user_id, series_id).await?
+    } else {
+        tracking::watch_series(&state, user_id, series_id).await?
+    };
+    Ok(Json(json!({ "series_id": series_id, "nb_episodes_seen": nb })))
+}
+
+pub async fn unwatch_series(
+    AuthUser(user_id): AuthUser,
+    State(state): State<AppState>,
+    Path(series_id): Path<i64>,
+) -> AppResult<Json<Value>> {
+    let nb = tracking::unwatch_series(&state, user_id, series_id).await?;
+    Ok(Json(json!({ "series_id": series_id, "nb_episodes_seen": nb })))
+}

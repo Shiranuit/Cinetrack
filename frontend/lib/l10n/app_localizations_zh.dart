@@ -236,6 +236,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rewatchSeason => '重温本季 (+1)';
 
   @override
+  String get rewatchSeries => '重看剧集 (+1)';
+
+  @override
+  String get seriesActions => '剧集操作';
+
+  @override
   String get seasonActions => '本季操作';
 
   @override
