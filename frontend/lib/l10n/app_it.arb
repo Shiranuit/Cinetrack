@@ -199,7 +199,7 @@
   "runtime30to60": "30–60 min",
   "runtimeOver60": "> 60 min",
   "sortName": "A–Z",
-  "nSelected": "{count} selezionati",
+  "nSelected": "{count} selezionato/i",
   "calendarEmpty": "Niente in programma.\nSegui serie in onda per vederle qui.",
   "seriesFallback": "Serie {id}",
   "discoverEmpty": "Ancora nessuna corrispondenza nel tuo catalogo.\nImporta o cerca serie per riempirlo, poi filtra qui.",
@@ -285,6 +285,21 @@
   "@episodesCount": {
     "placeholders": {
       "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@nSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkUpdated": "{count} aggiornati",
+  "@bulkUpdated": {
+    "placeholders": {
+      "count": {
         "type": "int"
       }
     }

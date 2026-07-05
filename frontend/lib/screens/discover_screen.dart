@@ -8,7 +8,9 @@ import '../api/filters.dart';
 import '../api/models.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../state/selection.dart';
 import '../state/settings.dart';
+import '../widgets/bulk_action_bar.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/infinite_grid.dart';
 import '../widgets/show_card.dart';
@@ -34,6 +36,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   int _reloadToken = 0;
   // The type toggles are multi-select and combinable; all on by default.
   Set<String> _kinds = {'series', 'anime', 'movie'};
+  final _selection = SelectionController();
 
   @override
   void initState() {
@@ -51,7 +54,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   void dispose() {
     _debounce?.cancel();
     _searchCtrl.dispose();
+    _selection.dispose();
     super.dispose();
+  }
+
+  /// After a bulk action, refresh the grid (follow/watch may change what's shown)
+  /// and drop selection mode.
+  Future<void> _afterBulk() async {
+    if (mounted) setState(() => _reloadToken++);
   }
 
   // Name search composes with the facet filters (both go into `_f`). Debounced,
@@ -112,7 +122,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           'movie' => t.typeMovies,
           _ => key,
         };
-    return Column(
+    return SelectionScope(
+      controller: _selection,
+      child: Column(
       children: [
         // Row 1: search bar + filter icon (same layout as the Library).
         Padding(
@@ -202,6 +214,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               title: r.name ?? '—',
               imageUrl: r.imageUrl,
               subtitle: r.year?.toString(),
+              selection: r.tvdbId == null
+                  ? null
+                  : SelItem(r.kind == 'movie' ? SelKind.movie : SelKind.series, r.tvdbId!, r.name ?? ''),
               onTap: r.tvdbId == null
                   ? null
                   : () => Navigator.of(context).push(MaterialPageRoute(
@@ -211,7 +226,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             ),
           ),
         ),
+        ListenableBuilder(
+          listenable: _selection,
+          builder: (_, _) => _selection.active
+              ? BulkActionBar(controller: _selection, onChanged: _afterBulk)
+              : const SizedBox.shrink(),
+        ),
       ],
+      ),
     );
   }
 }

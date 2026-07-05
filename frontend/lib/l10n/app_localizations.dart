@@ -1677,6 +1677,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{n} episodes'**
   String episodesCount(int n);
+
+  /// No description provided for @bulkUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} updated'**
+  String bulkUpdated(int count);
 }
 
 class _AppLocalizationsDelegate

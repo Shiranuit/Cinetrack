@@ -861,4 +861,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String episodesCount(int n) {
     return '$n episodes';
   }
+
+  @override
+  String bulkUpdated(int count) {
+    return '$count updated';
+  }
 }

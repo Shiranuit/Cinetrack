@@ -620,7 +620,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String nSelected(int count) {
-    return '$count件選択';
+    return '$count件を選択';
   }
 
   @override
@@ -846,5 +846,10 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String episodesCount(int n) {
     return '$n話';
+  }
+
+  @override
+  String bulkUpdated(int count) {
+    return '$count件を更新しました';
   }
 }

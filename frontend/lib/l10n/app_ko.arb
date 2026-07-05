@@ -199,7 +199,7 @@
   "runtime30to60": "30~60분",
   "runtimeOver60": "60분 초과",
   "sortName": "이름순",
-  "nSelected": "{count}개 선택",
+  "nSelected": "{count}개 선택됨",
   "calendarEmpty": "예정된 항목이 없습니다.\n방영 중인 프로그램을 팔로우하면 여기에 표시됩니다.",
   "seriesFallback": "시리즈 {id}",
   "discoverEmpty": "아직 카탈로그에 일치하는 항목이 없습니다.\n프로그램을 가져오거나 검색해 채운 다음 여기에서 필터링하세요.",
@@ -285,6 +285,21 @@
   "@episodesCount": {
     "placeholders": {
       "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@nSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkUpdated": "{count}개 업데이트됨",
+  "@bulkUpdated": {
+    "placeholders": {
+      "count": {
         "type": "int"
       }
     }

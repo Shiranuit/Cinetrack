@@ -620,7 +620,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String nSelected(int count) {
-    return '$count개 선택';
+    return '$count개 선택됨';
   }
 
   @override
@@ -846,5 +846,10 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String episodesCount(int n) {
     return '에피소드 $n개';
+  }
+
+  @override
+  String bulkUpdated(int count) {
+    return '$count개 업데이트됨';
   }
 }

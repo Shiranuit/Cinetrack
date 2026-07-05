@@ -631,7 +631,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String nSelected(int count) {
-    return '$count selezionati';
+    return '$count selezionato/i';
   }
 
   @override
@@ -860,5 +860,10 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String episodesCount(int n) {
     return '$n episodi';
+  }
+
+  @override
+  String bulkUpdated(int count) {
+    return '$count aggiornati';
   }
 }

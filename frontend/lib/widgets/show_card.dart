@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../state/selection.dart';
 import 'badges.dart';
 import 'poster.dart';
 
@@ -12,6 +13,11 @@ const double kCardCaptionHeight = 44;
 
 /// The canonical show/movie tile: poster + title (+ optional subtitle, favorite
 /// heart, progress). Used in rails and grids.
+///
+/// When [selection] is set AND the card is under a [SelectionScope], the card joins
+/// multi-select: long-press enters selection mode and selects it, taps toggle it
+/// while a selection is active (otherwise [onTap] runs), and a checkbox overlay +
+/// tint reflect its state.
 class ShowCard extends StatelessWidget {
   const ShowCard({
     super.key,
@@ -23,6 +29,7 @@ class ShowCard extends StatelessWidget {
     this.favorite = false,
     this.progress = 0,
     this.heroTag,
+    this.selection,
   });
 
   final String title;
@@ -34,22 +41,64 @@ class ShowCard extends StatelessWidget {
   final double progress;
   final Object? heroTag;
 
+  /// Identity for multi-select. Null (or no [SelectionScope] above) → the card is
+  /// a plain tile and ignores selection entirely.
+  final SelItem? selection;
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      // On web a mouse press+drag on a card would otherwise get caught by the
-      // long-press recognizer (opening the context sheet) and starve the rail's
-      // horizontal drag — so a drag "acts like a right-click" and the carousel
-      // won't scroll. Drop long-press on web and expose the same menu via a real
-      // right-click (secondary tap), which is the correct desktop idiom anyway.
-      onLongPress: kIsWeb ? null : onLongPress,
-      onSecondaryTap: onLongPress,
-      borderRadius: BorderRadius.circular(Radii.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    // `of` registers a dependency, so the card rebuilds when the selection changes.
+    final controller = selection == null ? null : SelectionScope.of(context);
+    final selecting = controller?.active ?? false;
+    final selected = controller != null && selection != null && controller.contains(selection!.kind, selection!.id);
+
+    void handleTap() {
+      if (selecting && controller != null && selection != null) {
+        controller.toggle(selection!);
+      } else {
+        onTap?.call();
+      }
+    }
+
+    void handleLongPress() {
+      // Long-press / right-click: enter selection mode when idle, otherwise toggle
+      // this card (so right-click can DESELECT too, matching left-click once a
+      // selection is active). Falls back to the card's own long-press only when
+      // it isn't selectable.
+      if (controller != null && selection != null) {
+        if (controller.active) {
+          controller.toggle(selection!);
+        } else {
+          controller.select(selection!);
+        }
+      } else {
+        onLongPress?.call();
+      }
+    }
+
+    // Long-press is gated by POINTER KIND, not platform: touch/stylus (real mobile
+    // and mobile-browser / device-emulation) enters selection, while a desktop
+    // mouse uses right-click (onSecondaryTap) instead — a mouse press+drag would
+    // otherwise get caught by the long-press recognizer and starve a rail's
+    // horizontal drag. (The old `kIsWeb` guard wrongly killed long-press on mobile
+    // web too.)
+    return RawGestureDetector(
+      gestures: {
+        LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+          () => LongPressGestureRecognizer(
+            supportedDevices: const {PointerDeviceKind.touch, PointerDeviceKind.stylus},
+          ),
+          (r) => r.onLongPress = handleLongPress,
+        ),
+      },
+      child: InkWell(
+        onTap: handleTap,
+        onSecondaryTap: handleLongPress,
+        borderRadius: BorderRadius.circular(Radii.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Poster(
             url: imageUrl,
             heroTag: heroTag,
@@ -63,6 +112,20 @@ class ShowCard extends StatelessWidget {
                     child: Icon(Icons.favorite, size: 18, color: context.colors.favorite),
                   ),
                 ProgressStripe(value: progress),
+                if (selected)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: context.scheme.primary.withValues(alpha: 0.28),
+                      border: Border.all(color: context.scheme.primary, width: 3),
+                      borderRadius: BorderRadius.circular(Radii.md),
+                    ),
+                  ),
+                if (selecting)
+                  Positioned(
+                    top: Insets.xs,
+                    left: Insets.xs,
+                    child: _SelectDot(selected: selected),
+                  ),
               ],
             ),
           ),
@@ -90,6 +153,29 @@ class ShowCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The circular checkbox shown top-left of a card while a selection is active.
+class _SelectDot extends StatelessWidget {
+  const _SelectDot({required this.selected});
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: selected ? context.scheme.primary : context.scheme.surface.withValues(alpha: 0.75),
+        shape: BoxShape.circle,
+        border: Border.all(color: selected ? context.scheme.primary : context.scheme.onSurface.withValues(alpha: 0.6), width: 2),
+      ),
+      child: Icon(
+        selected ? Icons.check_rounded : null,
+        size: 16,
+        color: context.scheme.onPrimary,
       ),
     );
   }

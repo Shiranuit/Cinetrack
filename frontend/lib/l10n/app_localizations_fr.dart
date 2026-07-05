@@ -862,4 +862,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String episodesCount(int n) {
     return '$n épisodes';
   }
+
+  @override
+  String bulkUpdated(int count) {
+    return '$count mis à jour';
+  }
 }

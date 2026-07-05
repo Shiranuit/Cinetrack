@@ -9,13 +9,14 @@ import '../api/models.dart';
 import '../l10n/app_localizations.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../state/selection.dart';
 import '../state/settings.dart';
+import '../widgets/bulk_action_bar.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/reveal.dart';
 import '../widgets/infinite_grid.dart';
 import '../widgets/poster_grid.dart';
 import '../widgets/section.dart';
-import '../widgets/show_actions.dart';
 import '../widgets/show_card.dart';
 import '../widgets/states.dart';
 import 'movie_detail_screen.dart';
@@ -60,6 +61,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   // so an add / watch / favorite from anywhere refreshes the library on its own.
   late final ApiClient _api;
   Timer? _refreshDebounce;
+  final _selection = SelectionController();
 
   @override
   void initState() {
@@ -127,6 +129,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _refreshDebounce?.cancel();
     _api.removeListener(_onExternalMutation);
     _searchCtrl.dispose();
+    _selection.dispose();
     super.dispose();
   }
 
@@ -137,15 +140,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     Future<List<LibraryMovie>> movies,
   ) async =>
       (await lib, await movies);
-
-  Future<void> _reloadLibrary() async {
-    final f = context.read<ApiClient>().library(langs: _langs);
-    setState(() {
-      _libFuture = f;
-      _content = _combine(f, _moviesFuture);
-    });
-    await f;
-  }
 
   /// Refresh both series and movies (used by the pull-to-refresh on the body).
   Future<void> _reloadContent() async {
@@ -194,12 +188,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _searchBar(),
-        _filterBar(),
-        Expanded(child: _filtering ? _filteredBody() : _libraryBody()),
-      ],
+    return SelectionScope(
+      controller: _selection,
+      child: Column(
+        children: [
+          _searchBar(),
+          _filterBar(),
+          Expanded(child: _filtering ? _filteredBody() : _libraryBody()),
+          ListenableBuilder(
+            listenable: _selection,
+            builder: (_, _) => _selection.active
+                ? BulkActionBar(controller: _selection, onChanged: _reloadContent, inLibrary: true)
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -327,6 +330,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
               imageUrl: r.imageUrl,
               subtitle: r.year?.toString(),
               heroTag: '${r.kind}-${r.tvdbId}',
+              selection: r.tvdbId == null
+                  ? null
+                  : SelItem(r.kind == 'movie' ? SelKind.movie : SelKind.series, r.tvdbId!, r.name ?? ''),
               onTap: r.tvdbId == null
                   ? null
                   : () => Navigator.of(context).push(MaterialPageRoute(
@@ -469,13 +475,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         progress: s.progress,
         // Progress bar replaces the "N watched" caption.
         heroTag: 'series-${s.seriesId}',
+        selection: SelItem(SelKind.series, s.seriesId, s.name ?? ''),
         onTap: () => _openShow(s.seriesId),
-        onLongPress: () => showShowContextSheet(
-          context,
-          seriesId: s.seriesId,
-          title: s.name ?? 'Series ${s.seriesId}',
-          onChanged: _reloadLibrary,
-        ),
       );
 
   ShowCard _movieCard(LibraryMovie m) => ShowCard(
@@ -483,6 +484,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         imageUrl: m.imageUrl,
         subtitle: m.year?.toString(),
         favorite: m.isFavorited,
+        selection: SelItem(SelKind.movie, m.movieId, m.name ?? ''),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
       );
 }

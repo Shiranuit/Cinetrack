@@ -199,7 +199,7 @@
   "runtime30to60": "30〜60分",
   "runtimeOver60": "60分以上",
   "sortName": "名前順",
-  "nSelected": "{count}件選択",
+  "nSelected": "{count}件を選択",
   "calendarEmpty": "予定はありません。\n放送中の番組をフォローするとここに表示されます。",
   "seriesFallback": "シリーズ {id}",
   "discoverEmpty": "カタログにまだ一致するものがありません。\nインポートまたは検索して番組を追加してから、ここで絞り込んでください。",
@@ -285,6 +285,21 @@
   "@episodesCount": {
     "placeholders": {
       "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@nSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkUpdated": "{count}件を更新しました",
+  "@bulkUpdated": {
+    "placeholders": {
+      "count": {
         "type": "int"
       }
     }

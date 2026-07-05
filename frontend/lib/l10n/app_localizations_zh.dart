@@ -619,7 +619,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String nSelected(int count) {
-    return '已选 $count 个';
+    return '已选择$count个';
   }
 
   @override
@@ -844,5 +844,10 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String episodesCount(int n) {
     return '$n 集';
+  }
+
+  @override
+  String bulkUpdated(int count) {
+    return '已更新$count个';
   }
 }

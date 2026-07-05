@@ -288,5 +288,20 @@
         "type": "int"
       }
     }
+  },
+  "@nSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkUpdated": "{count} actualizado(s)",
+  "@bulkUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

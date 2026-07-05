@@ -437,5 +437,13 @@
         "type": "int"
       }
     }
+  },
+  "bulkUpdated": "{count} updated",
+  "@bulkUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }
