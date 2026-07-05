@@ -128,12 +128,26 @@ pub async fn import_suggestions(
     Ok(Json(import::list_suggestions(&state, uid, &q.list()).await?))
 }
 
+/// A suggestion is a dead-series recovery by default, or a movie import when
+/// `?type=movie`; the id spaces are per-table, so the type picks the right one.
+#[derive(serde::Deserialize)]
+pub struct SuggestionKind {
+    #[serde(default)]
+    pub r#type: String,
+}
+
 pub async fn confirm_suggestion(
     AuthUser(uid): AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::extract::Query(k): axum::extract::Query<SuggestionKind>,
 ) -> AppResult<Json<Value>> {
-    if !import::confirm_suggestion(&state, uid, id).await? {
+    let ok = if k.r#type == "movie" {
+        import::confirm_movie_suggestion(&state, uid, id).await?
+    } else {
+        import::confirm_suggestion(&state, uid, id).await?
+    };
+    if !ok {
         return Err(AppError::NotFound);
     }
     Ok(Json(json!({ "confirmed": true })))
@@ -143,8 +157,14 @@ pub async fn reject_suggestion(
     AuthUser(uid): AuthUser,
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    axum::extract::Query(k): axum::extract::Query<SuggestionKind>,
 ) -> AppResult<Json<Value>> {
-    if !import::reject_suggestion(&state, uid, id).await? {
+    let ok = if k.r#type == "movie" {
+        import::reject_movie_suggestion(&state, uid, id).await?
+    } else {
+        import::reject_suggestion(&state, uid, id).await?
+    };
+    if !ok {
         return Err(AppError::NotFound);
     }
     Ok(Json(json!({ "rejected": true })))

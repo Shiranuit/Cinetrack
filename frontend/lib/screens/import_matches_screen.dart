@@ -9,10 +9,12 @@ import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../widgets/poster.dart';
 import '../widgets/states.dart';
+import 'movie_detail_screen.dart';
 import 'show_detail_screen.dart';
 
-/// Review screen for uncertain dead-id recoveries: for each show whose TheTVDB id
-/// was dead, we propose a best-guess live match; the user confirms or dismisses.
+/// Review screen for uncertain import matches: a show whose TheTVDB id was dead, or
+/// a movie whose title matched only approximately. We propose a best-guess and the
+/// user confirms or dismisses; exact matches are imported without landing here.
 class ImportMatchesScreen extends StatefulWidget {
   const ImportMatchesScreen({super.key});
   @override
@@ -21,7 +23,11 @@ class ImportMatchesScreen extends StatefulWidget {
 
 class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
   late Future<List<MatchSuggestion>> _future;
-  final _resolving = <int>{}; // suggestion ids currently being acted on
+  // Keyed "type:id" — series and movie id spaces are separate, so a bare id could
+  // collide between the two lists.
+  final _resolving = <String>{};
+
+  String _key(MatchSuggestion s) => '${s.entityType}:${s.id}';
 
   @override
   void initState() {
@@ -40,12 +46,12 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
     final api = context.read<ApiClient>();
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _resolving.add(s.id));
+    setState(() => _resolving.add(_key(s)));
     try {
       if (confirm) {
-        await api.confirmSuggestion(s.id);
+        await api.confirmSuggestion(s.id, type: s.entityType);
       } else {
-        await api.rejectSuggestion(s.id);
+        await api.rejectSuggestion(s.id, type: s.entityType);
       }
       messenger.showSnackBar(SnackBar(
         content: Text(confirm ? t.matchedTo(s.suggestedName ?? t.seriesGeneric) : t.dismissedImport(s.importName)),
@@ -53,7 +59,7 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
       _reload();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
-      if (mounted) setState(() => _resolving.remove(s.id));
+      if (mounted) setState(() => _resolving.remove(_key(s)));
     }
   }
 
@@ -90,7 +96,7 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
               }
               return _SuggestionCard(
                 s: items[i - 1],
-                busy: _resolving.contains(items[i - 1].id),
+                busy: _resolving.contains(_key(items[i - 1])),
                 onConfirm: () => _act(items[i - 1], true),
                 onReject: () => _act(items[i - 1], false),
               );
@@ -125,7 +131,11 @@ class _SuggestionCard extends StatelessWidget {
               children: [
                 GestureDetector(
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: s.suggestedSeriesId)),
+                    MaterialPageRoute(
+                      builder: (_) => s.isMovie
+                          ? MovieDetailScreen(movieId: s.suggestedSeriesId)
+                          : ShowDetailScreen(seriesId: s.suggestedSeriesId),
+                    ),
                   ),
                   child: SizedBox(width: 54, height: 81, child: Poster(url: s.imageUrl, radius: Radii.sm)),
                 ),
@@ -142,7 +152,7 @@ class _SuggestionCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(t.likelyMatch, style: context.text.labelSmall?.copyWith(color: context.colors.seen)),
                       ]),
-                      Text(s.suggestedName ?? t.seriesWithId(s.suggestedSeriesId),
+                      Text(s.suggestedName ?? (s.isMovie ? s.importName : t.seriesWithId(s.suggestedSeriesId)),
                           style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                   ),

@@ -319,8 +319,10 @@ class ApiClient extends ChangeNotifier {
   // ---- import match suggestions ----
   Future<List<MatchSuggestion>> importSuggestions({String? langs}) async =>
       _list(await _get('/api/import/suggestions', {'langs': ?langs}), MatchSuggestion.fromJson);
-  Future<void> confirmSuggestion(int id) => _send('POST', '/api/import/suggestions/$id/confirm');
-  Future<void> rejectSuggestion(int id) => _send('POST', '/api/import/suggestions/$id/reject');
+  Future<void> confirmSuggestion(int id, {String type = 'series'}) =>
+      _send('POST', '/api/import/suggestions/$id/confirm?type=$type');
+  Future<void> rejectSuggestion(int id, {String type = 'series'}) =>
+      _send('POST', '/api/import/suggestions/$id/reject?type=$type');
 
   Future<(List<CalendarItem>, List<CalendarItem>)> calendar({String? langs}) async {
     final j = await _get('/api/calendar', {'langs': ?langs});

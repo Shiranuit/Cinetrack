@@ -43,3 +43,4 @@ key.properties
 /dump.sql
 catalog-backup.sql.gz
 architecture
+gdpr-data

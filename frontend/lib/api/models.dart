@@ -467,24 +467,27 @@ class CalendarItem {
 
 class MatchSuggestion {
   final int id;
-  final int deadSeriesId;
+  /// 'series' (a dead-id recovery) or 'movie' (an uncertain movie import). Picks
+  /// which detail screen to open and which confirm/reject endpoint to hit.
+  final String entityType;
   final String importName;
-  final int suggestedSeriesId;
+  final int suggestedSeriesId; // suggested catalog id (series id or movie id)
   final String? suggestedName;
   final String? imageUrl;
   final int distance;
   const MatchSuggestion({
     required this.id,
-    required this.deadSeriesId,
+    this.entityType = 'series',
     required this.importName,
     required this.suggestedSeriesId,
     this.suggestedName,
     this.imageUrl,
     required this.distance,
   });
+  bool get isMovie => entityType == 'movie';
   factory MatchSuggestion.fromJson(Map<String, dynamic> j) => MatchSuggestion(
         id: j['id'] as int,
-        deadSeriesId: j['dead_series_id'] as int,
+        entityType: j['entity_type'] as String? ?? 'series',
         importName: j['import_name'] as String? ?? '',
         suggestedSeriesId: j['suggested_series_id'] as int,
         suggestedName: j['suggested_name'] as String?,

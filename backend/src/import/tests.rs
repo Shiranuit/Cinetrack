@@ -135,3 +135,65 @@ fn fuzzy_match_rejects_unrelated_titles() {
     let other = result("9", "One Piece", json!({}), json!([]));
     assert!(best_fuzzy_match(std::slice::from_ref(&other), "Naruto Shippuden").is_none());
 }
+
+// ---- movie accumulation (v1 tracking export) -------------------------------
+
+use super::{build_movies, movie_search_name, result_year};
+
+#[test]
+fn build_movies_groups_watched_rows_by_uuid() {
+    let follow = row(&[
+        ("entity_type", "movie"), ("type", "follow"), ("uuid", "u1"),
+        ("movie_name", "劇場版 BLEACH 地獄篇"), ("alpha_range_key", "follow-alpha-bleach-hell-verse"),
+        ("release_date", "2010-12-04 00:00:00"), ("runtime", "5400"), ("created_at", "2020-09-01 10:00:00"),
+    ]);
+    let watch1 = row(&[
+        ("entity_type", "movie"), ("type", "watch"), ("uuid", "u1"),
+        ("movie_name", "劇場版 BLEACH 地獄篇"), ("created_at", "2020-09-02 18:43:32"),
+    ]);
+    let rewatch = row(&[
+        ("entity_type", "movie"), ("type", "rewatch_count"), ("uuid", "u1"), ("rewatch_count", "2"),
+    ]);
+    // An episode row (different entity_type) must be ignored.
+    let ep = row(&[("entity_type", "episode"), ("type", "watch"), ("uuid", "e1")]);
+
+    let m = build_movies(&[follow, watch1, rewatch, ep]);
+    assert_eq!(m.len(), 1);
+    let a = &m["u1"];
+    assert!(a.watched);
+    assert_eq!(a.watched_count, 3); // 1 watch + 2 rewatches
+    assert_eq!(a.year, Some(2010));
+    assert_eq!(a.runtime_secs, Some(5400));
+    assert_eq!(a.search_name.as_deref(), Some("bleach hell verse"));
+    assert_eq!(a.last_watched.as_deref(), Some("2020-09-02 18:43:32+00"));
+    assert_eq!(a.followed_at.as_deref(), Some("2020-09-01 10:00:00+00"));
+}
+
+#[test]
+fn build_movies_skips_zero_date_year_and_unwatched_stays_flagged() {
+    // Plan-to-watch only (no `watch` row) with the zero-date sentinel year.
+    let towatch = row(&[
+        ("entity_type", "movie"), ("type", "towatch"), ("uuid", "u2"),
+        ("movie_name", "PSYCHO-PASS PROVIDENCE"), ("release_date", "0001-01-01 00:00:00"),
+    ]);
+    let m = build_movies(&[towatch]);
+    let a = &m["u2"];
+    assert!(!a.watched);
+    assert_eq!(a.year, None); // 0001 sentinel ignored
+}
+
+#[test]
+fn movie_search_name_reads_the_alpha_slug() {
+    let r = row(&[("alpha_range_key", "towatch-alpha-demon-slayer-infinity-train")]);
+    assert_eq!(movie_search_name(&r).as_deref(), Some("demon slayer infinity train"));
+    // No alpha key → nothing to search with here (falls back to the title upstream).
+    assert_eq!(movie_search_name(&row(&[("alpha_range_key", "")])), None);
+    assert_eq!(movie_search_name(&row(&[("x", "y")])), None);
+}
+
+#[test]
+fn result_year_parses_string_or_number() {
+    assert_eq!(result_year(&json!({ "year": "2021" })), Some(2021));
+    assert_eq!(result_year(&json!({ "year": 2019 })), Some(2019));
+    assert_eq!(result_year(&json!({ "name": "no year" })), None);
+}

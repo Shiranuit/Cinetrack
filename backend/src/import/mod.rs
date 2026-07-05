@@ -22,6 +22,9 @@ use source::{Row, ZipSource, boolv, i32v, i64v, s, ts_utc};
 pub struct ImportSummary {
     pub user_id: Uuid,
     pub shows: usize,
+    pub movies: usize,
+    pub movies_matched: usize,
+    pub movies_suggested: usize,
     pub favorites: usize,
     pub watch_events: usize,
     pub rewatches: usize,
@@ -73,6 +76,10 @@ async fn import(
     let rewatched = src.read_csv("rewatched_episode.csv")?;
     let ratings = src.read_csv("ratings-v2-prod-votes.csv")?;
     let tracking = src.read_csv("tracking-prod-records-v2.csv")?;
+    // Movies live only in the v1 tracking export (`entity_type = movie`); v2 is
+    // episode-only. Series carry a TheTVDB id, but movies are identified solely
+    // by a TV Time uuid + title, so they need name resolution (below).
+    let tracking_v1 = src.read_csv("tracking-prod-records.csv")?;
 
     let mut summary = ImportSummary::default();
 
@@ -106,6 +113,9 @@ async fn import(
     summary.watch_events = import_watch_events(state, user_id, &tracking).await?;
     import_stats(state, user_id, &tracking).await?;
 
+    // ---- movies: stage the raw intent now (fast); resolve names below/in bg ----
+    summary.movies = stage_movies(state, user_id, &tracking_v1).await?;
+
     // ---- prefetch referenced series into the catalog via read-through ----
     if prefetch {
         let (ok, failed) = prefetch_series(state, shows.keys().copied()).await;
@@ -115,6 +125,10 @@ async fn import(
         let (applied, suggested) = resolve_unavailable(state, user_id).await;
         summary.series_recovered = applied;
         summary.series_suggested = suggested;
+        // Resolve staged movie titles to catalog ids and add them to the library.
+        let m = resolve_movies(state, user_id).await;
+        summary.movies_matched = m.matched;
+        summary.movies_suggested = m.suggested;
     }
 
     Ok(summary)
@@ -158,6 +172,8 @@ pub async fn prefetch_user_series(state: &AppState, user_id: Uuid) {
     tracing::info!("import prefetch for user {user_id}: {ok}/{total} ok, {failed} failed");
     // Best-effort recovery of the dead ids by matching the imported name.
     resolve_unavailable(state, user_id).await;
+    // Resolve staged movie titles to catalog ids and add them to the library.
+    resolve_movies(state, user_id).await;
 }
 
 /// Sweep every distinct series id in any user's library through the read-through,
@@ -451,6 +467,326 @@ async fn import_stats(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::
     Ok(())
 }
 
+// ---- movies -----------------------------------------------------------------
+//
+// The TV Time export has no TheTVDB movie id: a movie is just a random uuid, a
+// title (usually the original/Japanese one), an optional romanized alpha slug, a
+// year and a runtime, spread across `follow` / `watch` / `towatch` rows in the v1
+// tracking CSV. We accumulate those per uuid, stage the watched ones, then (in the
+// prefetch phase) resolve each title to a catalog movie by TheTVDB search.
+
+#[derive(Default)]
+struct MovieAcc {
+    name: Option<String>,        // original title (movie_name)
+    search_name: Option<String>, // romanized/English title from the alpha slug
+    year: Option<i32>,
+    runtime_secs: Option<i32>,
+    watched: bool,               // has at least one `watch` row
+    watched_count: i32,          // watches + rewatches
+    last_watched: Option<String>,
+    followed_at: Option<String>,
+}
+
+/// Group the v1 tracking export's movie rows (`entity_type = movie`) by TV Time's
+/// movie uuid into one accumulator each. Non-movie rows are ignored.
+fn build_movies(records: &[Row]) -> HashMap<String, MovieAcc> {
+    let mut map: HashMap<String, MovieAcc> = HashMap::new();
+    for r in records {
+        if s(r, "entity_type") != Some("movie") {
+            continue;
+        }
+        let Some(uuid) = s(r, "uuid") else { continue };
+        let a = map.entry(uuid.to_string()).or_default();
+        if a.name.is_none() {
+            a.name = s(r, "movie_name").map(str::to_string);
+        }
+        if a.search_name.is_none() {
+            a.search_name = movie_search_name(r);
+        }
+        if a.year.is_none() {
+            a.year = movie_year(r);
+        }
+        if a.runtime_secs.is_none() {
+            a.runtime_secs = i32v(r, "runtime");
+        }
+        match s(r, "type") {
+            Some("watch") => {
+                a.watched = true;
+                a.watched_count += 1;
+                let w = ts_utc(r, "created_at");
+                if w.as_deref() > a.last_watched.as_deref() {
+                    a.last_watched = w;
+                }
+            }
+            Some("rewatch_count") => a.watched_count += i32v(r, "rewatch_count").unwrap_or(0),
+            Some("follow") => a.followed_at = ts_utc(r, "created_at"),
+            _ => {}
+        }
+    }
+    map
+}
+
+/// The romanized/English title carried in the `*-alpha-<slug>` range key, e.g.
+/// `follow-alpha-demon-slayer-infinity-train` → "demon slayer infinity train".
+/// TheTVDB indexes original + romanized titles, so this searches better than the
+/// (usually Japanese) `movie_name`.
+fn movie_search_name(r: &Row) -> Option<String> {
+    let slug = s(r, "alpha_range_key")?.split("-alpha-").nth(1)?;
+    let name = slug.replace('-', " ");
+    let name = name.trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// Release year from the `release_date` cell ("YYYY-..."), ignoring TV Time's
+/// zero-date sentinel ("0001-...").
+fn movie_year(r: &Row) -> Option<i32> {
+    let rd = s(r, "release_date")?;
+    if rd.starts_with("0001") {
+        return None;
+    }
+    rd.get(0..4)?.parse().ok()
+}
+
+/// Stage every *watched* movie from the export into `app.import_movie` (idempotent
+/// per uuid). Plan-to-watch-only entries are skipped for now: the app has no movie
+/// watchlist, so there's nowhere to surface them. Returns the number staged.
+async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyhow::Result<usize> {
+    let movies = build_movies(records);
+    let (mut staged, mut skipped) = (0usize, 0usize);
+    for (uuid, a) in &movies {
+        if !a.watched {
+            skipped += 1;
+            continue;
+        }
+        let search = a.search_name.clone().or_else(|| a.name.clone());
+        sqlx::query(
+            "INSERT INTO app.import_movie \
+               (user_id, source_uuid, name, search_name, year, runtime_secs, \
+                watched, watched_count, last_watched, followed_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz) \
+             ON CONFLICT (user_id, source_uuid) DO UPDATE SET \
+               name=EXCLUDED.name, search_name=EXCLUDED.search_name, year=EXCLUDED.year, \
+               runtime_secs=EXCLUDED.runtime_secs, watched=EXCLUDED.watched, \
+               watched_count=EXCLUDED.watched_count, last_watched=EXCLUDED.last_watched, \
+               followed_at=EXCLUDED.followed_at, updated_at=now()",
+        )
+        .bind(user_id)
+        .bind(uuid)
+        .bind(a.name.as_deref())
+        .bind(search.as_deref())
+        .bind(a.year)
+        .bind(a.runtime_secs)
+        .bind(a.watched)
+        .bind(a.watched_count.max(1))
+        .bind(a.last_watched.as_deref())
+        .bind(a.followed_at.as_deref())
+        .execute(&state.db)
+        .await?;
+        staged += 1;
+    }
+    if staged > 0 || skipped > 0 {
+        tracing::info!("stage_movies user {user_id}: {staged} watched staged, {skipped} plan-to-watch skipped");
+    }
+    Ok(staged)
+}
+
+#[derive(sqlx::FromRow)]
+struct StagedMovie {
+    source_uuid: String,
+    name: Option<String>,
+    search_name: Option<String>,
+    year: Option<i32>,
+}
+
+/// Counts from a movie-resolution pass.
+#[derive(Default)]
+pub struct MovieResolveCounts {
+    pub matched: usize,   // exact title hit → imported straight into the library
+    pub suggested: usize, // uncertain hit → recorded for the user to confirm
+    pub unmatched: usize, // no plausible match
+}
+
+/// Resolve each still-pending staged movie's title against TheTVDB. An **exact**
+/// title match (name/translation/alias, year-preferred) is imported straight into
+/// the library (`app.user_movie` + a `watch_event`). An **uncertain** match is
+/// recorded as a `suggested` row for the user to confirm/reject in the same review
+/// screen as dead-series recoveries. No plausible match → `unmatched`.
+pub async fn resolve_movies(state: &AppState, user_id: Uuid) -> MovieResolveCounts {
+    let pending: Vec<StagedMovie> = sqlx::query_as(
+        "SELECT source_uuid, name, search_name, year FROM app.import_movie \
+         WHERE user_id = $1 AND status = 'pending'",
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut c = MovieResolveCounts::default();
+    for m in pending {
+        let query = m.search_name.as_deref().or(m.name.as_deref()).map(str::trim).unwrap_or("");
+        if query.is_empty() {
+            continue;
+        }
+        match resolve_one_movie(state, query, m.year).await {
+            MovieOutcome::Exact(movie_id) => {
+                if let Err(e) = link_movie(state, user_id, &m.source_uuid, movie_id).await {
+                    tracing::warn!("link movie \"{query}\" → {movie_id} failed: {e}");
+                    continue;
+                }
+                c.matched += 1;
+                tracing::info!("import movie \"{query}\" → catalog movie {movie_id} (exact)");
+            }
+            MovieOutcome::Uncertain { id, name, distance } => {
+                if let Err(e) = suggest_movie(state, user_id, &m.source_uuid, id, &name, distance).await {
+                    tracing::warn!("suggest movie \"{query}\" → {id} failed: {e}");
+                    continue;
+                }
+                c.suggested += 1;
+                tracing::info!("import movie \"{query}\" → suggests catalog movie {id} (\"{name}\", d={distance})");
+            }
+            MovieOutcome::None => {
+                let _ = sqlx::query(
+                    "UPDATE app.import_movie SET status='unmatched', updated_at=now() \
+                     WHERE user_id=$1 AND source_uuid=$2",
+                )
+                .bind(user_id)
+                .bind(&m.source_uuid)
+                .execute(&state.db)
+                .await;
+                c.unmatched += 1;
+                tracing::warn!("import movie unmatched: \"{query}\" (year {:?})", m.year);
+            }
+        }
+    }
+    if c.matched + c.suggested + c.unmatched > 0 {
+        tracing::info!(
+            "resolve_movies user {user_id}: {} matched, {} suggested, {} unmatched",
+            c.matched, c.suggested, c.unmatched
+        );
+    }
+    c
+}
+
+/// The tier of a movie title match (mirrors the dead-series `ResolveOutcome`).
+enum MovieOutcome {
+    /// Exact title hit → import automatically.
+    Exact(i64),
+    /// Uncertain fuzzy hit → record a suggestion for the user to confirm.
+    Uncertain { id: i64, name: String, distance: i32 },
+    None,
+}
+
+/// Search TheTVDB for a movie by title. An exact title hit (name/translation/alias)
+/// — preferring one whose year matches the export — is [`MovieOutcome::Exact`]; a
+/// close-but-uncertain fuzzy hit is [`MovieOutcome::Uncertain`]; otherwise `None`.
+async fn resolve_one_movie(state: &AppState, name: &str, year: Option<i32>) -> MovieOutcome {
+    let Ok(data) = state.tvdb.search(name, Some("movie")).await else { return MovieOutcome::None };
+    let empty = Vec::new();
+    let results = data.as_array().unwrap_or(&empty);
+
+    let exacts: Vec<(i64, Option<i32>)> = results
+        .iter()
+        .filter_map(|r| exact_name_match(r, name).map(|id| (id, result_year(r))))
+        .collect();
+    if !exacts.is_empty() {
+        if let Some(y) = year {
+            if let Some((id, _)) = exacts.iter().find(|(_, ry)| ry.is_some_and(|v| (v - y).abs() <= 1)) {
+                return MovieOutcome::Exact(*id);
+            }
+        }
+        return MovieOutcome::Exact(exacts[0].0);
+    }
+
+    match best_fuzzy_match(results, name) {
+        Some((id, name, distance)) => MovieOutcome::Uncertain { id, name, distance: distance as i32 },
+        None => MovieOutcome::None,
+    }
+}
+
+/// Record an uncertain movie match as a pending suggestion (caching the candidate's
+/// poster so the review card can show it). Does NOT touch the user's library.
+async fn suggest_movie(
+    state: &AppState,
+    user_id: Uuid,
+    source_uuid: &str,
+    movie_id: i64,
+    name: &str,
+    distance: i32,
+) -> anyhow::Result<()> {
+    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    sqlx::query(
+        "UPDATE app.import_movie SET status='suggested', suggested_movie_id=$3, \
+                suggested_name=$4, distance=$5, updated_at=now() \
+         WHERE user_id=$1 AND source_uuid=$2",
+    )
+    .bind(user_id)
+    .bind(source_uuid)
+    .bind(movie_id)
+    .bind(name)
+    .bind(distance)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
+/// Release year of a TheTVDB search result (the `year` field is a string).
+fn result_year(r: &serde_json::Value) -> Option<i32> {
+    r["year"]
+        .as_str()
+        .and_then(|s| s.get(0..4).and_then(|y| y.parse().ok()))
+        .or_else(|| r["year"].as_i64().map(|v| v as i32))
+}
+
+/// Cache the resolved movie, add it to the user's library from the staged row, log
+/// one watch event for history, and mark the staging row matched. All timestamps
+/// stay in SQL (read straight from `app.import_movie`).
+async fn link_movie(state: &AppState, user_id: Uuid, source_uuid: &str, movie_id: i64) -> anyhow::Result<()> {
+    // Cache name/poster/runtime so the library can render the movie.
+    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+
+    sqlx::query(
+        "INSERT INTO app.user_movie \
+           (user_id, movie_id, watched, watched_count, last_watched, created_at, updated_at) \
+         SELECT im.user_id, $3, im.watched, GREATEST(im.watched_count, 1), im.last_watched, now(), now() \
+         FROM app.import_movie im WHERE im.user_id = $1 AND im.source_uuid = $2 \
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET \
+           watched = app.user_movie.watched OR EXCLUDED.watched, \
+           watched_count = GREATEST(app.user_movie.watched_count, EXCLUDED.watched_count), \
+           last_watched = GREATEST(app.user_movie.last_watched, EXCLUDED.last_watched), \
+           updated_at = now()",
+    )
+    .bind(user_id)
+    .bind(source_uuid)
+    .bind(movie_id)
+    .execute(&state.db)
+    .await?;
+
+    // One watch event (dated at the last watch) so the movie shows in history; the
+    // deterministic source_uuid keeps re-imports idempotent.
+    sqlx::query(
+        "INSERT INTO app.watch_event (user_id, entity_type, movie_id, source_uuid, watched_at) \
+         SELECT im.user_id, 'movie', $3, 'movie-import-' || im.source_uuid, COALESCE(im.last_watched, now()) \
+         FROM app.import_movie im WHERE im.user_id = $1 AND im.source_uuid = $2 AND im.watched \
+         ON CONFLICT (user_id, source_uuid) DO NOTHING",
+    )
+    .bind(user_id)
+    .bind(source_uuid)
+    .bind(movie_id)
+    .execute(&state.db)
+    .await?;
+
+    sqlx::query(
+        "UPDATE app.import_movie SET status='matched', resolved_movie_id=$3, updated_at=now() \
+         WHERE user_id=$1 AND source_uuid=$2",
+    )
+    .bind(user_id)
+    .bind(source_uuid)
+    .bind(movie_id)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
 /// How many series to fetch from TheTVDB concurrently. Each fetch is one HTTPS
 /// round-trip (~0.3–0.4s of latency, mostly idle wait), so a serial loop over a
 /// few hundred series is dominated by that wait — running a handful in parallel
@@ -696,11 +1032,14 @@ fn levenshtein(a: &[char], b: &[char]) -> usize {
     prev[m]
 }
 
-/// A pending fuzzy-match suggestion, enriched with the candidate series' poster.
+/// A pending fuzzy-match suggestion, enriched with the candidate's poster. Covers
+/// both dead-series recoveries (`entity_type = "series"`) and uncertain movie
+/// imports (`entity_type = "movie"`); `suggested_series_id` carries the suggested
+/// catalog id in either case (a series id or a movie id).
 #[derive(serde::Serialize, sqlx::FromRow)]
 pub struct MatchSuggestion {
     pub id: i64,
-    pub dead_series_id: i64,
+    pub entity_type: String,
     pub import_name: String,
     pub suggested_series_id: i64,
     pub suggested_name: Option<String>,
@@ -708,16 +1047,17 @@ pub struct MatchSuggestion {
     pub distance: i32,
 }
 
-/// Pending match suggestions for a user (closest first). `langs` resolves the
-/// suggested series' name to the user's preferred language when a translation is
-/// cached (falling back to the base name, which for anime is often Japanese).
+/// Pending match suggestions for a user (closest first), across both dead-series
+/// recoveries and uncertain movie imports. `langs` resolves the candidate's name to
+/// the user's preferred language when a translation is cached (falling back to the
+/// base name, which for anime is often Japanese).
 pub async fn list_suggestions(
     state: &AppState,
     user_id: Uuid,
     langs: &[String],
 ) -> crate::error::AppResult<Vec<MatchSuggestion>> {
-    let rows = sqlx::query_as::<_, MatchSuggestion>(
-        "SELECT m.id, m.dead_series_id, m.import_name, m.suggested_series_id, \
+    let mut rows = sqlx::query_as::<_, MatchSuggestion>(
+        "SELECT m.id, 'series' AS entity_type, m.import_name, m.suggested_series_id, \
                 COALESCE( \
                   (SELECT tr.name FROM catalog.translation tr \
                    WHERE tr.entity_type = 'series' AND tr.entity_id = m.suggested_series_id \
@@ -734,6 +1074,31 @@ pub async fn list_suggestions(
     .bind(langs)
     .fetch_all(&state.db)
     .await?;
+
+    let movies = sqlx::query_as::<_, MatchSuggestion>(
+        "SELECT im.id, 'movie' AS entity_type, \
+                COALESCE(im.search_name, im.name, '') AS import_name, \
+                im.suggested_movie_id AS suggested_series_id, \
+                COALESCE( \
+                  (SELECT tr.name FROM catalog.translation tr \
+                   WHERE tr.entity_type = 'movie' AND tr.entity_id = im.suggested_movie_id \
+                     AND tr.name IS NOT NULL AND tr.language = ANY($2) \
+                   ORDER BY array_position($2, tr.language) LIMIT 1), \
+                  m.name, im.suggested_name) AS suggested_name, \
+                m.image_url, COALESCE(im.distance, 0) AS distance \
+         FROM app.import_movie im \
+         LEFT JOIN catalog.movie m ON m.id = im.suggested_movie_id \
+         WHERE im.user_id = $1 AND im.status = 'suggested' \
+         ORDER BY im.distance, import_name",
+    )
+    .bind(user_id)
+    .bind(langs)
+    .fetch_all(&state.db)
+    .await?;
+
+    // Merge, closest first (series and movies interleaved by match confidence).
+    rows.extend(movies);
+    rows.sort_by(|a, b| a.distance.cmp(&b.distance).then_with(|| a.import_name.cmp(&b.import_name)));
     Ok(rows)
 }
 
@@ -768,6 +1133,37 @@ pub async fn reject_suggestion(state: &AppState, user_id: Uuid, id: i64) -> crat
     let n = sqlx::query(
         "UPDATE app.import_match SET status = 'rejected' \
          WHERE id = $1 AND user_id = $2 AND status = 'pending'",
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    Ok(n > 0)
+}
+
+/// Confirm an uncertain movie suggestion: import the suggested movie into the
+/// user's library. Returns false if the suggestion doesn't exist / isn't pending.
+pub async fn confirm_movie_suggestion(state: &AppState, user_id: Uuid, id: i64) -> crate::error::AppResult<bool> {
+    let row: Option<(String, Option<i64>)> = sqlx::query_as(
+        "SELECT source_uuid, suggested_movie_id FROM app.import_movie \
+         WHERE id = $1 AND user_id = $2 AND status = 'suggested'",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((source_uuid, Some(movie_id))) = row else { return Ok(false) };
+    link_movie(state, user_id, &source_uuid, movie_id).await?;
+    Ok(true)
+}
+
+/// Reject an uncertain movie suggestion: leave it out of the library and remember
+/// the rejection so it isn't suggested again.
+pub async fn reject_movie_suggestion(state: &AppState, user_id: Uuid, id: i64) -> crate::error::AppResult<bool> {
+    let n = sqlx::query(
+        "UPDATE app.import_movie SET status='rejected', updated_at=now() \
+         WHERE id = $1 AND user_id = $2 AND status = 'suggested'",
     )
     .bind(id)
     .bind(user_id)
