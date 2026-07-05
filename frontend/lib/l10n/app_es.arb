@@ -256,5 +256,37 @@
   "stoppedWatching": "Dejaste de ver",
   "removeFromLibrary": "Quitar de la biblioteca",
   "removed": "Eliminado",
-  "seriesGeneric": "serie"
+  "seriesGeneric": "serie",
+  "moreDetails": "Más detalles",
+  "showDetails": "Detalles",
+  "communityRating": "Valoración de la comunidad",
+  "language": "Idioma",
+  "country": "País",
+  "aired": "Emisión",
+  "episodeLength": "Duración del episodio",
+  "alsoKnownAs": "También conocido como",
+  "seasonsCount": "{n} temporadas",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "~{n} min",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n} episodios",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

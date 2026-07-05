@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localized_locales/flutter_localized_locales.dart';
-import 'package:world_countries/world_countries.dart';
 
 import '../api/filters.dart';
 import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../util/locale_labels.dart';
 
 /// Sort option ids in display order. Labels resolve via [sortLabel] so they localize.
 const kSortKeys = ['popularity', 'rating', 'year', 'updated', 'seasons', 'episodes', 'runtime', 'name'];
@@ -32,31 +31,8 @@ String statusLabel(AppLocalizations t, String s) => switch (s) {
       _ => s,
     };
 
-// TheTVDB uses ISO 639-2 (3-letter) language codes, but CLDR (via
-// flutter_localized_locales) is keyed by 2-letter — map the common ones. Names
-// then come back localized in the user's UI language for free.
-const _iso639 = {
-  'eng': 'en', 'jpn': 'ja', 'fra': 'fr', 'deu': 'de', 'spa': 'es', 'ita': 'it', 'por': 'pt', 'kor': 'ko',
-  'zho': 'zh', 'zhtw': 'zh', 'rus': 'ru', 'ara': 'ar', 'hin': 'hi', 'nld': 'nl', 'swe': 'sv', 'nor': 'no',
-  'dan': 'da', 'fin': 'fi', 'pol': 'pl', 'tur': 'tr', 'tha': 'th', 'vie': 'vi', 'heb': 'he', 'hun': 'hu',
-  'ces': 'cs', 'ell': 'el', 'ukr': 'uk', 'ron': 'ro', 'ind': 'id', 'fas': 'fa', 'cat': 'ca', 'tgl': 'tl',
-  'msa': 'ms',
-};
-String _langName(BuildContext context, String code) {
-  final two = _iso639[code] ?? (code.length == 2 ? code : null);
-  final name = two == null ? null : LocaleNames.of(context)?.nameOf(two);
-  return name ?? code.toUpperCase();
-}
-
-// TheTVDB gives ISO 3166 alpha-3 codes (lowercase, e.g. "usa", "jpn"). Resolve
-// to a WorldCountry and read its name translated for the current UI locale
-// (via world_countries' TypedLocaleDelegate). Falls back to the English common
-// name, then the raw code, when a code is unknown or untranslated.
-String _countryName(BuildContext context, String code) {
-  final country = WorldCountry.maybeFromCode(code.toUpperCase());
-  if (country == null) return code.toUpperCase();
-  return context.maybeLocale?.maps.countryTranslations[country] ?? country.name.common;
-}
+// Language/country label helpers moved to util/locale_labels.dart (shared with
+// the show-detail metadata view).
 
 /// Advanced-filter bottom sheet, shared by Discover and the Library filter.
 /// Mutates [filters] in place; the caller reloads results on dismiss.
@@ -128,10 +104,10 @@ class _FilterSheetState extends State<FilterSheet> {
             _multiSection<String>(t.status, [for (final s in o.statuses) (s, statusLabel(t, s))], f.statuses),
           if (o.languages.isNotEmpty)
             _multiSection<String>(AppLocalizations.of(context).filterOrigLanguage,
-                [for (final c in o.languages) (c, _langName(context, c))], f.originalLanguages),
+                [for (final c in o.languages) (c, langName(context, c))], f.originalLanguages),
           if (o.countries.isNotEmpty)
             _multiSection<String>(AppLocalizations.of(context).filterOrigCountry,
-                [for (final c in o.countries) (c, _countryName(context, c))], f.originalCountries),
+                [for (final c in o.countries) (c, countryName(context, c))], f.originalCountries),
 
           if (o.tags.isNotEmpty)
             _triSection(t.themes, [for (final tag in o.tags) (tag.id, tag.name)], f.tagsInc, f.tagsExc),

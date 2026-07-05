@@ -256,5 +256,37 @@
   "stoppedWatching": "Arrêt du visionnage",
   "removeFromLibrary": "Retirer de la bibliothèque",
   "removed": "Retiré",
-  "seriesGeneric": "série"
+  "seriesGeneric": "série",
+  "moreDetails": "Plus de détails",
+  "showDetails": "Détails",
+  "communityRating": "Note de la communauté",
+  "language": "Langue",
+  "country": "Pays",
+  "aired": "Diffusion",
+  "episodeLength": "Durée d'un épisode",
+  "alsoKnownAs": "Aussi connu sous",
+  "seasonsCount": "{n} saisons",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "~{n} min",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n} épisodes",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

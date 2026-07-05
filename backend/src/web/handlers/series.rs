@@ -41,6 +41,14 @@ pub async fn list_episodes(
     Ok(Json(catalog::episode::list_for_series(&state, id, season_type, lang.as_deref()).await?))
 }
 
+/// Rich metadata (genres/networks/studios/themes + facts) for the show page.
+pub async fn series_details(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<catalog::series::SeriesDetails>> {
+    Ok(Json(catalog::series::details(&state, id).await?))
+}
+
 /// Seasons of a series (from the mirrored series record).
 pub async fn list_seasons(
     State(state): State<AppState>,

@@ -45,6 +45,60 @@ pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<Ser
     Ok(row)
 }
 
+/// Rich metadata for the show page's "more details" view: facets (genres, themes,
+/// networks, studios) plus scalars not on the base record's hot path.
+#[derive(serde::Serialize, sqlx::FromRow)]
+pub struct SeriesDetails {
+    pub original_language: Option<String>,
+    pub original_country: Option<String>,
+    pub runtime: Option<i32>, // average episode length, minutes
+    pub season_count: Option<i32>,
+    pub episode_count: Option<i32>,
+    /// Average of this app's users' 1..10 ratings, and how many rated it (TheTVDB's
+    /// own `score` is a popularity metric, not a rating, so we don't surface it).
+    pub community_rating: Option<f64>,
+    pub rating_count: Option<i64>,
+    pub aliases: Option<Vec<String>>,
+    pub genres: Option<Vec<String>>,
+    pub tags: Option<Vec<String>>, // themes
+    pub networks: Option<Vec<String>>,
+    pub studios: Option<Vec<String>>,
+    pub first_aired: Option<String>,
+    pub last_aired: Option<String>,
+}
+
+pub async fn details(state: &AppState, id: i64) -> AppResult<SeriesDetails> {
+    // Ensure the series (and its facet links) are cached; single-flight coalesces
+    // with the parallel `get` the show page also makes.
+    get(state, id, None).await?;
+    sqlx::query_as::<_, SeriesDetails>(
+        "SELECT s.original_language, s.original_country, s.runtime, \
+                s.season_count, s.episode_count, \
+           (SELECT avg(rating)::float8 FROM app.user_show WHERE series_id = s.id AND rating IS NOT NULL) AS community_rating, \
+           (SELECT count(*) FROM app.user_show WHERE series_id = s.id AND rating IS NOT NULL) AS rating_count, \
+           s.aliases, \
+           (SELECT array_agg(g.name ORDER BY g.name) FROM catalog.series_genre sg \
+              JOIN catalog.genre g ON g.id = sg.genre_id WHERE sg.series_id = s.id) AS genres, \
+           (SELECT array_agg(t.name ORDER BY t.name) FROM catalog.series_tag st \
+              JOIN catalog.tag t ON t.id = st.tag_id WHERE st.series_id = s.id) AS tags, \
+           (SELECT array_agg(c.name ORDER BY c.name) FROM catalog.series_company sc \
+              JOIN catalog.company c ON c.id = sc.company_id \
+              WHERE sc.series_id = s.id AND sc.kind = 'Network') AS networks, \
+           (SELECT array_agg(c.name ORDER BY c.name) FROM catalog.series_company sc \
+              JOIN catalog.company c ON c.id = sc.company_id \
+              WHERE sc.series_id = s.id AND sc.kind = 'Studio') AS studios, \
+           (SELECT min(aired)::text FROM catalog.episode \
+              WHERE series_id = s.id AND NOT deleted AND season_number > 0) AS first_aired, \
+           (SELECT max(aired)::text FROM catalog.episode \
+              WHERE series_id = s.id AND NOT deleted AND season_number > 0) AS last_aired \
+         FROM catalog.series s WHERE s.id = $1 AND NOT s.deleted",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)
+}
+
 /// Force a re-fetch from TheTVDB and upsert (used by the /updates sync worker).
 pub async fn refresh(state: &AppState, id: i64) -> AppResult<()> {
     let data = state.tvdb.series_extended(id).await?;

@@ -808,4 +808,43 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get seriesGeneric => '시리즈';
+
+  @override
+  String get moreDetails => '더 보기';
+
+  @override
+  String get showDetails => '상세 정보';
+
+  @override
+  String get communityRating => '커뮤니티 평점';
+
+  @override
+  String get language => '언어';
+
+  @override
+  String get country => '국가';
+
+  @override
+  String get aired => '방영';
+
+  @override
+  String get episodeLength => '에피소드 길이';
+
+  @override
+  String get alsoKnownAs => '다른 제목';
+
+  @override
+  String seasonsCount(int n) {
+    return '시즌 $n개';
+  }
+
+  @override
+  String runtimeMinutes(int n) {
+    return '약 $n분';
+  }
+
+  @override
+  String episodesCount(int n) {
+    return '에피소드 $n개';
+  }
 }

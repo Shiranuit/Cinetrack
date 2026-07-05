@@ -63,6 +63,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/calendar", get(handlers::discover::calendar))
         .route("/api/series/{id}", get(handlers::series::get_series))
         .route("/api/series/{id}/translations", get(handlers::series::list_translations))
+        .route("/api/series/{id}/details", get(handlers::series::series_details))
         .route("/api/series/{id}/episodes", get(handlers::series::list_episodes))
         .route("/api/series/{id}/seasons", get(handlers::series::list_seasons))
         .route(

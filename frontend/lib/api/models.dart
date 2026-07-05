@@ -98,6 +98,61 @@ class Series {
       };
 }
 
+/// Rich show-page metadata (`/api/series/{id}/details`): facets for the "more
+/// details" view plus a few at-a-glance facts.
+class SeriesDetails {
+  final String? originalLanguage;
+  final String? originalCountry;
+  final int? runtime; // avg episode length, minutes
+  final int? seasonCount;
+  final int? episodeCount;
+  final double? communityRating; // avg 1..10, this app's users
+  final int? ratingCount;
+  final List<String> aliases;
+  final List<String> genres;
+  final List<String> tags; // themes
+  final List<String> networks;
+  final List<String> studios;
+  final String? firstAired;
+  final String? lastAired;
+
+  const SeriesDetails({
+    this.originalLanguage,
+    this.originalCountry,
+    this.runtime,
+    this.seasonCount,
+    this.episodeCount,
+    this.communityRating,
+    this.ratingCount,
+    this.aliases = const [],
+    this.genres = const [],
+    this.tags = const [],
+    this.networks = const [],
+    this.studios = const [],
+    this.firstAired,
+    this.lastAired,
+  });
+
+  static List<String> _strs(dynamic v) => (v as List?)?.cast<String>() ?? const [];
+
+  factory SeriesDetails.fromJson(Map<String, dynamic> j) => SeriesDetails(
+        originalLanguage: j['original_language'] as String?,
+        originalCountry: j['original_country'] as String?,
+        runtime: (j['runtime'] as num?)?.toInt(),
+        seasonCount: (j['season_count'] as num?)?.toInt(),
+        episodeCount: (j['episode_count'] as num?)?.toInt(),
+        communityRating: (j['community_rating'] as num?)?.toDouble(),
+        ratingCount: (j['rating_count'] as num?)?.toInt(),
+        aliases: _strs(j['aliases']),
+        genres: _strs(j['genres']),
+        tags: _strs(j['tags']),
+        networks: _strs(j['networks']),
+        studios: _strs(j['studios']),
+        firstAired: j['first_aired'] as String?,
+        lastAired: j['last_aired'] as String?,
+      );
+}
+
 class Season {
   final int id;
   final int? number;

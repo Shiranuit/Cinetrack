@@ -1611,6 +1611,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'series'**
   String get seriesGeneric;
+
+  /// No description provided for @moreDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'More details'**
+  String get moreDetails;
+
+  /// No description provided for @showDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get showDetails;
+
+  /// No description provided for @communityRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Community rating'**
+  String get communityRating;
+
+  /// No description provided for @language.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get language;
+
+  /// No description provided for @country.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get country;
+
+  /// No description provided for @aired.
+  ///
+  /// In en, this message translates to:
+  /// **'Aired'**
+  String get aired;
+
+  /// No description provided for @episodeLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Episode length'**
+  String get episodeLength;
+
+  /// No description provided for @alsoKnownAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Also known as'**
+  String get alsoKnownAs;
+
+  /// No description provided for @seasonsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} seasons'**
+  String seasonsCount(int n);
+
+  /// No description provided for @runtimeMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'~{n} min'**
+  String runtimeMinutes(int n);
+
+  /// No description provided for @episodesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} episodes'**
+  String episodesCount(int n);
 }
 
 class _AppLocalizationsDelegate

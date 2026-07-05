@@ -9,6 +9,7 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
+import '../util/locale_labels.dart';
 import '../widgets/badges.dart';
 import '../widgets/episode_sheet.dart';
 import '../widgets/net_image.dart';
@@ -32,6 +33,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   UserShow? _rel;
   List<Episode> _episodes = [];
   Map<int, int> _counts = {};
+  SeriesDetails? _details; // best-effort; fills in the meta strip + details sheet
 
   String get _langs => context.read<SettingsController>().langsParam;
 
@@ -46,6 +48,11 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       _loading = true;
       _error = null;
     });
+    // Rich metadata is non-critical: fetch it alongside, and let the meta strip
+    // fill in when it arrives (a failure never blocks the page).
+    _api.seriesDetails(widget.seriesId).then((d) {
+      if (mounted) setState(() => _details = d);
+    }).catchError((_) {});
     try {
       final r = await Future.wait([
         _api.series(widget.seriesId, lang: _langs.split(',').first),
@@ -110,6 +117,15 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           ));
     await _api.rateShow(widget.seriesId, rating);
     await _refreshRel();
+  }
+
+  void _openDetailsSheet(SeriesDetails d) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _DetailsSheet(details: d, seriesName: _series?.name),
+    );
   }
 
   Widget _ratingRow() {
@@ -232,6 +248,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       padding: EdgeInsets.zero,
       children: [
         _Hero(series: _series!, seenDistinct: _seenDistinct, totalEpisodes: _episodes.length),
+        if (_details != null) _MetaStrip(details: _details!, onMore: () => _openDetailsSheet(_details!)),
         Padding(padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0), child: _actionBar()),
         _ratingRow(),
         if (_series!.overview?.isNotEmpty ?? false)
@@ -547,4 +564,178 @@ class _EpisodeCard extends StatelessWidget {
     );
   }
 }
+
+/// Tier 1: at-a-glance metadata under the hero — genre chips, community rating,
+/// a compact facts line, and a "more details" entry point.
+class _MetaStrip extends StatefulWidget {
+  const _MetaStrip({required this.details, required this.onMore});
+  final SeriesDetails details;
+  final VoidCallback onMore;
+  @override
+  State<_MetaStrip> createState() => _MetaStripState();
+}
+
+class _MetaStripState extends State<_MetaStrip> {
+  bool _allGenres = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final muted = context.scheme.onSurfaceVariant;
+    final details = widget.details;
+    final facts = <String>[
+      if ((details.seasonCount ?? 0) > 0) t.seasonsCount(details.seasonCount!),
+      if ((details.runtime ?? 0) > 0) t.runtimeMinutes(details.runtime!),
+      if (details.originalLanguage != null) langName(context, details.originalLanguage!),
+    ];
+    final shown = _allGenres ? details.genres : details.genres.take(4).toList();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.md, Insets.lg, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (details.genres.isNotEmpty)
+            Wrap(
+              spacing: Insets.xs,
+              runSpacing: Insets.xs,
+              children: [
+                for (final g in shown) Pill(label: g),
+                // Tap "+N" to reveal the rest of the genres in place.
+                if (!_allGenres && details.genres.length > 4)
+                  GestureDetector(
+                    onTap: () => setState(() => _allGenres = true),
+                    child: Pill(label: '+${details.genres.length - 4}', color: context.scheme.primary),
+                  ),
+              ],
+            ),
+          if (details.communityRating != null || facts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: Insets.sm),
+              child: Row(
+                children: [
+                  if (details.communityRating != null) ...[
+                    Icon(Icons.star_rounded, size: 16, color: context.colors.favorite),
+                    const SizedBox(width: 3),
+                    Text(details.communityRating!.toStringAsFixed(1),
+                        style: context.text.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                    if ((details.ratingCount ?? 0) > 0)
+                      Text(' (${details.ratingCount})', style: context.text.labelMedium?.copyWith(color: muted)),
+                    const SizedBox(width: Insets.md),
+                  ],
+                  Expanded(
+                    child: Text(facts.join('  ·  '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.labelMedium?.copyWith(color: muted)),
+                  ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: widget.onMore,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: Insets.xs),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(t.moreDetails),
+                const Icon(Icons.chevron_right_rounded, size: 18),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tier 2: full metadata in a bottom sheet.
+class _DetailsSheet extends StatelessWidget {
+  const _DetailsSheet({required this.details, this.seriesName});
+  final SeriesDetails details;
+  final String? seriesName;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final d = details;
+    final rows = <Widget>[];
+    void row(String label, String? value) {
+      if (value == null || value.isEmpty) return;
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: Insets.md),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 120, child: Text(label, style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant))),
+          Expanded(child: Text(value, style: context.text.bodyMedium)),
+        ]),
+      ));
+    }
+    void chips(String label, List<String> items) {
+      if (items.isEmpty) return;
+      rows.add(Padding(
+        padding: const EdgeInsets.only(bottom: Insets.md),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+          const SizedBox(height: Insets.xs),
+          Wrap(spacing: Insets.xs, runSpacing: Insets.xs, children: [for (final i in items) Pill(label: i)]),
+        ]),
+      ));
+    }
+
+    if (d.communityRating != null) {
+      row(t.communityRating, '${d.communityRating!.toStringAsFixed(1)} / 10${(d.ratingCount ?? 0) > 0 ? '  (${d.ratingCount})' : ''}');
+    }
+    chips(t.genres, d.genres);
+    chips(t.themes, d.tags);
+    chips(t.networks, d.networks);
+    chips(t.studios, d.studios);
+    if (d.originalLanguage != null) row(t.language, langName(context, d.originalLanguage!));
+    if (d.originalCountry != null) row(t.country, countryName(context, d.originalCountry!));
+    if ((d.runtime ?? 0) > 0) row(t.episodeLength, t.runtimeMinutes(d.runtime!));
+    if ((d.episodeCount ?? 0) > 0) row(t.episodes, t.episodesCount(d.episodeCount!));
+    final aired = _airedRange(d.firstAired, d.lastAired);
+    if (aired != null) row(t.aired, aired);
+    chips(t.alsoKnownAs, d.aliases);
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.lg),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(seriesName ?? t.showDetails,
+                      style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: Insets.sm),
+            if (rows.isEmpty)
+              Text(t.nothingHereYet, style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant))
+            else
+              ...rows,
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// "2016 – 2021", or "2016" if single year / one date known.
+String? _airedRange(String? first, String? last) {
+  final f = first?.split('-').first;
+  final l = last?.split('-').first;
+  if (f == null && l == null) return null;
+  if (f != null && l != null && f != l) return '$f – $l';
+  return f ?? l;
+}
+
 

@@ -256,5 +256,37 @@
   "stoppedWatching": "已停止观看",
   "removeFromLibrary": "从库中移除",
   "removed": "已移除",
-  "seriesGeneric": "剧集"
+  "seriesGeneric": "剧集",
+  "moreDetails": "更多详情",
+  "showDetails": "详情",
+  "communityRating": "社区评分",
+  "language": "语言",
+  "country": "国家/地区",
+  "aired": "播出",
+  "episodeLength": "单集时长",
+  "alsoKnownAs": "又名",
+  "seasonsCount": "{n} 季",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "约{n}分钟",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n} 集",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

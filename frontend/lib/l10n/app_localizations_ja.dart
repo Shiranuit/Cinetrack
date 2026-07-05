@@ -808,4 +808,43 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get seriesGeneric => 'シリーズ';
+
+  @override
+  String get moreDetails => '詳細';
+
+  @override
+  String get showDetails => '詳細';
+
+  @override
+  String get communityRating => 'コミュニティ評価';
+
+  @override
+  String get language => '言語';
+
+  @override
+  String get country => '国';
+
+  @override
+  String get aired => '放送';
+
+  @override
+  String get episodeLength => 'エピソードの長さ';
+
+  @override
+  String get alsoKnownAs => '別名';
+
+  @override
+  String seasonsCount(int n) {
+    return '$nシーズン';
+  }
+
+  @override
+  String runtimeMinutes(int n) {
+    return '約$n分';
+  }
+
+  @override
+  String episodesCount(int n) {
+    return '$n話';
+  }
 }

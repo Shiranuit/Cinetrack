@@ -256,5 +256,37 @@
   "stoppedWatching": "Visione interrotta",
   "removeFromLibrary": "Rimuovi dalla libreria",
   "removed": "Rimosso",
-  "seriesGeneric": "serie"
+  "seriesGeneric": "serie",
+  "moreDetails": "Altri dettagli",
+  "showDetails": "Dettagli",
+  "communityRating": "Voto della community",
+  "language": "Lingua",
+  "country": "Paese",
+  "aired": "In onda",
+  "episodeLength": "Durata episodio",
+  "alsoKnownAs": "Conosciuto anche come",
+  "seasonsCount": "{n} stagioni",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "~{n} min",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n} episodi",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

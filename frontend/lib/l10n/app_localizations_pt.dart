@@ -822,4 +822,43 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get seriesGeneric => 'série';
+
+  @override
+  String get moreDetails => 'Mais detalhes';
+
+  @override
+  String get showDetails => 'Detalhes';
+
+  @override
+  String get communityRating => 'Avaliação da comunidade';
+
+  @override
+  String get language => 'Idioma';
+
+  @override
+  String get country => 'País';
+
+  @override
+  String get aired => 'Exibição';
+
+  @override
+  String get episodeLength => 'Duração do episódio';
+
+  @override
+  String get alsoKnownAs => 'Também conhecido como';
+
+  @override
+  String seasonsCount(int n) {
+    return '$n temporadas';
+  }
+
+  @override
+  String runtimeMinutes(int n) {
+    return '~$n min';
+  }
+
+  @override
+  String episodesCount(int n) {
+    return '$n episódios';
+  }
 }

@@ -405,5 +405,37 @@
   "stoppedWatching": "Stopped watching",
   "removeFromLibrary": "Remove from library",
   "removed": "Removed",
-  "seriesGeneric": "series"
+  "seriesGeneric": "series",
+  "moreDetails": "More details",
+  "showDetails": "Details",
+  "communityRating": "Community rating",
+  "language": "Language",
+  "country": "Country",
+  "aired": "Aired",
+  "episodeLength": "Episode length",
+  "alsoKnownAs": "Also known as",
+  "seasonsCount": "{n} seasons",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "~{n} min",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n} episodes",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

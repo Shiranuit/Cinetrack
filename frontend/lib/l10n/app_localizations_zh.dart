@@ -806,4 +806,43 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get seriesGeneric => '剧集';
+
+  @override
+  String get moreDetails => '更多详情';
+
+  @override
+  String get showDetails => '详情';
+
+  @override
+  String get communityRating => '社区评分';
+
+  @override
+  String get language => '语言';
+
+  @override
+  String get country => '国家/地区';
+
+  @override
+  String get aired => '播出';
+
+  @override
+  String get episodeLength => '单集时长';
+
+  @override
+  String get alsoKnownAs => '又名';
+
+  @override
+  String seasonsCount(int n) {
+    return '$n 季';
+  }
+
+  @override
+  String runtimeMinutes(int n) {
+    return '约$n分钟';
+  }
+
+  @override
+  String episodesCount(int n) {
+    return '$n 集';
+  }
 }

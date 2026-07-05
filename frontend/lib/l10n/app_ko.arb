@@ -256,5 +256,37 @@
   "stoppedWatching": "시청 중지됨",
   "removeFromLibrary": "라이브러리에서 제거",
   "removed": "제거됨",
-  "seriesGeneric": "시리즈"
+  "seriesGeneric": "시리즈",
+  "moreDetails": "더 보기",
+  "showDetails": "상세 정보",
+  "communityRating": "커뮤니티 평점",
+  "language": "언어",
+  "country": "국가",
+  "aired": "방영",
+  "episodeLength": "에피소드 길이",
+  "alsoKnownAs": "다른 제목",
+  "seasonsCount": "시즌 {n}개",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "약 {n}분",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "에피소드 {n}개",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

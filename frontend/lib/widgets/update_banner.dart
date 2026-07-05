@@ -67,7 +67,6 @@ class _UpdateBannerState extends State<UpdateBanner> {
                   child: Text(t.update),
                 ),
               IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 icon: const Icon(Icons.close_rounded, size: 18),
                 onPressed: () => setState(() => _dismissed = true),
               ),

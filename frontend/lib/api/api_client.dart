@@ -359,6 +359,9 @@ class ApiClient extends ChangeNotifier {
   Future<UserShow> showRelation(int seriesId, {String? langs}) async =>
       UserShow.fromJson(await _get('/api/shows/$seriesId', {'langs': ?langs}));
 
+  Future<SeriesDetails> seriesDetails(int id) async =>
+      SeriesDetails.fromJson(await _get('/api/series/$id/details'));
+
   Future<void> removeShow(int seriesId) => _send('DELETE', '/api/shows/$seriesId');
 
   Future<void> watchSeason(int seriesId, int season) =>

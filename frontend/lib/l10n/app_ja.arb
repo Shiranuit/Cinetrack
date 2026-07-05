@@ -256,5 +256,37 @@
   "stoppedWatching": "視聴を停止しました",
   "removeFromLibrary": "ライブラリから削除",
   "removed": "削除しました",
-  "seriesGeneric": "シリーズ"
+  "seriesGeneric": "シリーズ",
+  "moreDetails": "詳細",
+  "showDetails": "詳細",
+  "communityRating": "コミュニティ評価",
+  "language": "言語",
+  "country": "国",
+  "aired": "放送",
+  "episodeLength": "エピソードの長さ",
+  "alsoKnownAs": "別名",
+  "seasonsCount": "{n}シーズン",
+  "@seasonsCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "runtimeMinutes": "約{n}分",
+  "@runtimeMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "episodesCount": "{n}話",
+  "@episodesCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }
