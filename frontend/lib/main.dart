@@ -46,7 +46,10 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
-        Provider<ApiClient>.value(value: api),
+        // ApiClient is a ChangeNotifier (it fires after authenticated writes so
+        // screens can auto-refresh). `.value` provides the shared instance without
+        // disposing it — `main` owns it and hands the same one to the controllers.
+        ChangeNotifierProvider<ApiClient>.value(value: api),
         ChangeNotifierProvider<AuthController>.value(value: auth),
         ChangeNotifierProvider<SettingsController>.value(value: settings),
       ],

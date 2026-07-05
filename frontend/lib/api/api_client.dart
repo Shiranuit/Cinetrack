@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -23,7 +23,7 @@ class ApiException implements Exception {
 /// refresh token lives in an httpOnly cookie the browser manages).
 const _refreshKey = 'cinetrack_refresh';
 
-class ApiClient {
+class ApiClient extends ChangeNotifier {
   ApiClient({String? base}) : base = base ?? Config.apiBase;
 
   final String base;
@@ -77,12 +77,19 @@ class ApiClient {
   Future<dynamic> _get(String path, [Map<String, dynamic>? query]) =>
       _request(() => _client.get(_uri(path, query), headers: _headers()));
 
-  Future<dynamic> _send(String method, String path, {Object? body, bool auth = true}) =>
-      _request(() async {
-        final req = http.Request(method, _uri(path))..headers.addAll(_headers(json: body != null));
-        if (body != null) req.body = jsonEncode(body);
-        return http.Response.fromStream(await _client.send(req));
-      }, auth: auth);
+  Future<dynamic> _send(String method, String path, {Object? body, bool auth = true}) async {
+    final result = await _request(() async {
+      final req = http.Request(method, _uri(path))..headers.addAll(_headers(json: body != null));
+      if (body != null) req.body = jsonEncode(body);
+      return http.Response.fromStream(await _client.send(req));
+    }, auth: auth);
+    // An authenticated write (follow / watch / favorite / rate / import / …) can
+    // change what tracking screens show. Notify listeners so an open screen (e.g.
+    // the Library) refreshes itself instead of needing a manual pull-to-refresh.
+    // Auth-flow calls use auth:false and are skipped, so login/logout don't fire.
+    if (auth) notifyListeners();
+    return result;
+  }
 
   // ---- session / refresh ----
 

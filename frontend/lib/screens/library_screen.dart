@@ -56,21 +56,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
   // Series + movies fetched together so the two can be shown in one combined
   // scroll when both type toggles are on.
   late Future<(Library, List<LibraryMovie>)> _content;
+  // Last successfully loaded content, kept so a background auto-refresh doesn't
+  // flash the whole library to a spinner while it reloads.
+  (Library, List<LibraryMovie>)? _lastContent;
+
+  // The API client is a change signal too: any authenticated write notifies it,
+  // so an add / watch / favorite from anywhere refreshes the library on its own.
+  late final ApiClient _api;
+  Timer? _refreshDebounce;
 
   @override
   void initState() {
     super.initState();
-    _libFuture = context.read<ApiClient>().library(langs: _langs);
-    _moviesFuture = context.read<ApiClient>().movies(langs: _langs);
+    _api = context.read<ApiClient>();
+    _libFuture = _api.library(langs: _langs);
+    _moviesFuture = _api.movies(langs: _langs);
     _content = _combine(_libFuture, _moviesFuture);
     _searchCtrl.addListener(_onSearchChanged);
     // Focusing the field (re)opens the dropdown; losing focus does NOT close it.
     _searchFocus.addListener(() {
       if (_searchFocus.hasFocus) setState(() => _searchOpen = true);
     });
-    context.read<ApiClient>().filterOptions(library: true).then((o) {
+    _api.addListener(_onExternalMutation);
+    _api.filterOptions(library: true).then((o) {
       if (mounted) setState(() => _filterOptions = o);
     }).catchError((_) {});
+  }
+
+  /// A write happened somewhere (any authenticated ApiClient call) — quietly
+  /// reload series + movies. Debounced so a burst (e.g. marking a whole season)
+  /// collapses into a single reload.
+  void _onExternalMutation() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _reloadContent();
+    });
   }
 
   bool get _filtering => _f.isActive;
@@ -92,6 +112,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _refreshDebounce?.cancel();
+    _api.removeListener(_onExternalMutation);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -179,12 +201,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ? MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: r.tvdbId!))
         : MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: r.tvdbId!));
     await Navigator.of(context).push(route);
-    await _reloadLibrary();
+    // No manual reload: any track/watch/favorite done inside the detail screen
+    // notifies via ApiClient, which _onExternalMutation already picks up.
   }
 
   Future<void> _openShow(int seriesId) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: seriesId)));
-    await _reloadLibrary();
   }
 
   @override
@@ -368,15 +390,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Future<void> _reloadMovies() async {
-    final f = context.read<ApiClient>().movies(langs: _langs);
-    setState(() {
-      _moviesFuture = f;
-      _content = _combine(_libFuture, f);
-    });
-    await f;
-  }
-
   /// The library body: a single scroll combining the selected type sections —
   /// series categories (filtered by the Series/Anime toggles) and, if Movies is
   /// on, a Movies section. Respects the rails/grid layout preference.
@@ -400,9 +413,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
       child: FutureBuilder<(Library, List<LibraryMovie>)>(
         future: _content,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) return const _Scroll(child: LoadingView());
-          if (snap.hasError) return _Scroll(child: ErrorView(message: '${snap.error}', onRetry: _reloadContent));
-          final (lib, movies) = snap.data!;
+          if (snap.hasData) _lastContent = snap.data;
+          // Keep showing the last content while a background refresh runs, so an
+          // auto-reload (or pull-to-refresh) doesn't blank the library to a spinner.
+          final data = snap.data ?? _lastContent;
+          if (data == null) {
+            if (snap.hasError) return _Scroll(child: ErrorView(message: '${snap.error}', onRetry: _reloadContent));
+            return const _Scroll(child: LoadingView());
+          }
+          final (lib, movies) = data;
 
           // Series categories, filtered to the selected kinds: a show is kept if
           // it's anime and Anime is on, or non-anime and Series is on.
@@ -514,10 +533,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         imageUrl: m.imageUrl,
         subtitle: m.year?.toString(),
         favorite: m.isFavorited,
-        onTap: () async {
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId)));
-          await _reloadMovies();
-        },
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
       );
 }
 
