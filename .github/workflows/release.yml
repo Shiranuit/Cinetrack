@@ -195,7 +195,11 @@ jobs:
 
   # ---- Deploy to the Dedibox over SSH (tags only) -----------------------------
   deploy:
-    needs: [image, web-image]
+    # Also wait on `release`: once we restart the backend it advertises the new
+    # version over /api/config, and the web/mobile clients will try to fetch that
+    # version's APK. Those assets must already be attached to the GitHub Release,
+    # or the download 404s during the gap.
+    needs: [image, web-image, release]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
