@@ -162,25 +162,32 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ),
         ),
         // Row 2: type toggles (no layout toggle here — that's Library-only).
+        // Stretched to full width so it lines up with the Library's filter bar.
         Padding(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
-          child: SegmentedButton<String>(
-            multiSelectionEnabled: true,
-            emptySelectionAllowed: true,
-            showSelectedIcon: false,
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
-            segments: [
-              for (final e in _types.entries)
-                ButtonSegment(
-                  value: e.key,
-                  label: Text(typeLabel(e.key), maxLines: 1, softWrap: false, overflow: TextOverflow.fade),
+          child: Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<String>(
+                  multiSelectionEnabled: true,
+                  emptySelectionAllowed: true,
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: [
+                    for (final e in _types.entries)
+                      ButtonSegment(
+                        value: e.key,
+                        label: Text(typeLabel(e.key), maxLines: 1, softWrap: false, overflow: TextOverflow.fade),
+                      ),
+                  ],
+                  selected: _kinds,
+                  onSelectionChanged: (s) {
+                    setState(() => _kinds = s);
+                    _reload();
+                  },
                 ),
+              ),
             ],
-            selected: _kinds,
-            onSelectionChanged: (s) {
-              setState(() => _kinds = s);
-              _reload();
-            },
           ),
         ),
         Expanded(
