@@ -159,6 +159,7 @@ pub struct Library {
     pub up_to_date: Vec<LibraryShow>,
     pub stale: Vec<LibraryShow>,
     pub not_started: Vec<LibraryShow>,
+    pub for_later: Vec<LibraryShow>,
     pub stopped: Vec<LibraryShow>,
 }
 
@@ -249,6 +250,9 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String]) -> AppRe
         let started = r.last_watched.is_some() || r.seen_episodes > 0 || r.nb_episodes_seen > 0;
         if r.archived || r.status.as_deref() == Some("stopped") {
             lib.stopped.push(r);
+        } else if r.status.as_deref() == Some("for_later") {
+            // Explicit "watch later" wins over the progress-based buckets.
+            lib.for_later.push(r);
         } else if !started {
             lib.not_started.push(r);
         } else if r.caught_up {

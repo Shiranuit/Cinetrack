@@ -352,12 +352,14 @@ class Library {
   final List<LibraryShow> upToDate;
   final List<LibraryShow> stale;
   final List<LibraryShow> notStarted;
+  final List<LibraryShow> forLater;
   final List<LibraryShow> stopped;
   const Library({
     required this.watching,
     required this.upToDate,
     required this.stale,
     required this.notStarted,
+    required this.forLater,
     required this.stopped,
   });
 
@@ -369,11 +371,12 @@ class Library {
         upToDate: _list(j['up_to_date']),
         stale: _list(j['stale']),
         notStarted: _list(j['not_started']),
+        forLater: _list(j['for_later']),
         stopped: _list(j['stopped']),
       );
 
   bool get isEmpty =>
-      watching.isEmpty && upToDate.isEmpty && stale.isEmpty && notStarted.isEmpty && stopped.isEmpty;
+      watching.isEmpty && upToDate.isEmpty && stale.isEmpty && notStarted.isEmpty && forLater.isEmpty && stopped.isEmpty;
 }
 
 class Genre {

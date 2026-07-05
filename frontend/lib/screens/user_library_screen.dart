@@ -131,6 +131,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
       (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, lib.watching),
       (t.catStale, Icons.history_rounded, context.colors.warning, lib.stale),
       (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
+      (t.watchLater, Icons.schedule_rounded, context.scheme.tertiary, lib.forLater),
       (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
       (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
     ].where((e) => e.$4.isNotEmpty).toList();

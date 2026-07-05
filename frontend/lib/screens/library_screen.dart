@@ -388,6 +388,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   (_cats[0], pick(lib.watching)),
                   (_cats[2], pick(lib.stale)), // Haven't watched in a while
                   (_cats[3], pick(lib.notStarted)), // Haven't started
+                  (_cats[5], pick(lib.forLater)), // Watch later
                   (_cats[1], pick(lib.upToDate)), // Up to date
                   (_cats[4], pick(lib.stopped)),
                 ].where((e) => e.$2.isNotEmpty).toList()
@@ -504,6 +505,7 @@ final _cats = <_Cat>[
   _Cat((t) => t.catStale, Icons.history_rounded, (c) => c.colors.warning),
   _Cat((t) => t.catNotStarted, Icons.playlist_add_rounded, (c) => c.scheme.secondary),
   _Cat((t) => t.catStopped, Icons.pause_circle_rounded, (c) => c.scheme.onSurfaceVariant),
+  _Cat((t) => t.watchLater, Icons.schedule_rounded, (c) => c.scheme.tertiary),
 ];
 
 class _Scroll extends StatelessWidget {
