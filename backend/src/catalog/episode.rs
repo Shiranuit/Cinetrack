@@ -113,40 +113,60 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
 /// can't stall the sweep. Re-run to retry anything still unmarked. Returns the
 /// number of series processed this run.
 pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
-    let mut done = 0u64;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+
+    // Process several series at once so the TheTVDB client's global rate pacer
+    // stays fed and the sweep runs at up to THETVDB_MAX_RPS (never above it — the
+    // pacer caps total throughput regardless of concurrency). Reuses the same knob
+    // as the enrichment worker.
+    let concurrency = state.config.enrich_concurrency.max(1);
+    let done = Arc::new(AtomicU64::new(0));
     let mut cursor = 0i64;
     loop {
         let ids: Vec<i64> = sqlx::query_scalar(
             "SELECT id FROM catalog.series \
              WHERE id > $1 AND NOT deleted AND episode_translations_synced_at IS NULL \
-             ORDER BY id LIMIT 200",
+             ORDER BY id LIMIT $2",
         )
         .bind(cursor)
+        .bind((concurrency as i64) * 8)
         .fetch_all(&state.db)
         .await?;
         if ids.is_empty() {
             break;
         }
-        for id in ids {
-            cursor = id; // advance regardless of outcome so failures don't loop
-            match mirror_translations(state, id).await {
-                Ok(()) => {
-                    sqlx::query(
-                        "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
-                    )
-                    .bind(id)
-                    .execute(&state.db)
-                    .await?;
-                }
-                Err(e) => tracing::warn!("episode-translation backfill: series {id} failed: {e}"),
+        cursor = *ids.last().unwrap(); // advance past the batch so failures don't loop this run
+
+        for chunk in ids.chunks(concurrency) {
+            let mut set = tokio::task::JoinSet::new();
+            for &id in chunk {
+                let st = state.clone();
+                let done = done.clone();
+                set.spawn(async move {
+                    match mirror_translations(&st, id).await {
+                        Ok(()) => {
+                            let _ = sqlx::query(
+                                "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
+                            )
+                            .bind(id)
+                            .execute(&st.db)
+                            .await;
+                        }
+                        Err(e) => tracing::warn!("episode-translation backfill: series {id} failed: {e}"),
+                    }
+                    let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                    if n % 100 == 0 {
+                        tracing::info!("episode-translation backfill: {n} series processed");
+                    }
+                });
             }
-            done += 1;
-            if done % 100 == 0 {
-                tracing::info!("episode-translation backfill: {done} series processed");
-            }
+            while set.join_next().await.is_some() {}
         }
     }
-    Ok(done)
+    Ok(done.load(Ordering::Relaxed))
 }
 
 /// Episodes of a series for a season-type (default `default`), fetched
