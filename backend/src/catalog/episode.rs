@@ -42,9 +42,117 @@ pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<Epi
     Ok(row)
 }
 
+/// Mirror EVERY available-language name/overview for a series' episodes into
+/// `catalog.translation`, so Mirror mode (which never calls TheTVDB on view) can
+/// serve translated episodes offline. Reads the set of languages each episode has
+/// from the cached base records' `nameTranslations`/`overviewTranslations`, then
+/// pulls the bulk episodes-by-language endpoint (which returns translated
+/// name/overview) once per language. Direct client calls — meant to run from
+/// enrichment / the backfill bin, so it mirrors regardless of `CATALOG_MODE`.
+pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<()> {
+    // The base episode records already hold the original language; only mirror the
+    // OTHER languages any episode of this series actually has a translation for.
+    let original: Option<String> =
+        sqlx::query_scalar("SELECT original_language FROM catalog.series WHERE id = $1")
+            .bind(series_id)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten();
+
+    let langs: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT lang FROM ( \
+            SELECT jsonb_array_elements_text(raw -> 'nameTranslations') AS lang \
+              FROM catalog.episode \
+              WHERE series_id = $1 AND NOT deleted AND jsonb_typeof(raw -> 'nameTranslations') = 'array' \
+            UNION \
+            SELECT jsonb_array_elements_text(raw -> 'overviewTranslations') AS lang \
+              FROM catalog.episode \
+              WHERE series_id = $1 AND NOT deleted AND jsonb_typeof(raw -> 'overviewTranslations') = 'array' \
+         ) t WHERE lang <> COALESCE($2, '') AND lang <> ''",
+    )
+    .bind(series_id)
+    .bind(original.as_deref())
+    .fetch_all(&state.db)
+    .await?;
+
+    for lang in &langs {
+        let mut page = 0u32;
+        loop {
+            let data = match state.tvdb.series_episodes(series_id, "default", Some(lang), page).await {
+                Ok(d) => d,
+                Err(AppError::NotFound) => break, // language not served for this series
+                Err(e) => return Err(e),
+            };
+            let episodes = data["episodes"].as_array().cloned().unwrap_or_default();
+            if episodes.is_empty() {
+                break;
+            }
+            for e in &episodes {
+                if let Some(id) = as_i64(&e["id"]) {
+                    let name = e["name"].as_str().filter(|s| !s.is_empty());
+                    let overview = e["overview"].as_str().filter(|s| !s.is_empty());
+                    // Skip episodes the language has no actual text for (the endpoint
+                    // returns nulls for those) so we don't write empty rows.
+                    if name.is_some() || overview.is_some() {
+                        translation::store_one(state, "episode", id, lang, name, overview).await?;
+                    }
+                }
+            }
+            if episodes.len() < 500 {
+                break; // last page
+            }
+            page += 1;
+        }
+    }
+    Ok(())
+}
+
+/// Catalog-wide backfill of per-episode translations (see [`mirror_translations`]).
+/// Resumable: a per-series marker (`episode_translations_synced_at`) is set on
+/// success, and a cursor advances past failures within a run so one bad series
+/// can't stall the sweep. Re-run to retry anything still unmarked. Returns the
+/// number of series processed this run.
+pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
+    let mut done = 0u64;
+    let mut cursor = 0i64;
+    loop {
+        let ids: Vec<i64> = sqlx::query_scalar(
+            "SELECT id FROM catalog.series \
+             WHERE id > $1 AND NOT deleted AND episode_translations_synced_at IS NULL \
+             ORDER BY id LIMIT 200",
+        )
+        .bind(cursor)
+        .fetch_all(&state.db)
+        .await?;
+        if ids.is_empty() {
+            break;
+        }
+        for id in ids {
+            cursor = id; // advance regardless of outcome so failures don't loop
+            match mirror_translations(state, id).await {
+                Ok(()) => {
+                    sqlx::query(
+                        "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
+                    )
+                    .bind(id)
+                    .execute(&state.db)
+                    .await?;
+                }
+                Err(e) => tracing::warn!("episode-translation backfill: series {id} failed: {e}"),
+            }
+            done += 1;
+            if done % 100 == 0 {
+                tracing::info!("episode-translation backfill: {done} series processed");
+            }
+        }
+    }
+    Ok(done)
+}
+
 /// Episodes of a series for a season-type (default `default`), fetched
-/// read-through (all pages) and cached, then returned ordered. `lang` requests
-/// translated titles inline from TheTVDB (one call per page, no per-episode fetch).
+/// read-through (all pages) and cached, then returned ordered. The bulk episode
+/// list stays in the series' original language, so translated name/overview are
+/// overlaid from the per-episode translation cache (warmed on first view).
 pub async fn list_for_series(
     state: &AppState,
     series_id: i64,
@@ -94,13 +202,40 @@ pub async fn list_for_series(
         .await?;
     }
 
+    // Overlay per-episode translations for the requested language. TheTVDB only
+    // translates an episode's name/overview via the per-episode translation
+    // endpoint (the bulk episode list stays in the series' original language), so
+    // warm the translation cache for any episodes missing a fresh entry, then read
+    // it back with a COALESCE. Cached (incl. negative results), so this only calls
+    // out on the first view per (series, language).
+    if let (Some(lang), true) = (lang, state.config.catalog_mode.allow_remote()) {
+        let stale: Vec<i64> = sqlx::query_scalar(&format!(
+            "SELECT e.id FROM catalog.episode e \
+             LEFT JOIN catalog.translation t \
+               ON t.entity_type = 'episode' AND t.entity_id = e.id AND t.language = $2 \
+             WHERE e.series_id = $1 AND NOT e.deleted \
+               AND (t.entity_id IS NULL OR t.last_synced_at <= now() - interval '{TTL}')"
+        ))
+        .bind(series_id)
+        .bind(lang)
+        .fetch_all(&state.db)
+        .await?;
+        translation::prefetch(state, "episode", &stale, lang).await;
+    }
+
     let rows = sqlx::query_as::<_, EpisodeRow>(
-        "SELECT id, series_id, season_number, number, absolute_number, name, overview, \
-                aired::text AS aired, runtime, image_url \
-         FROM catalog.episode WHERE series_id = $1 AND NOT deleted \
-         ORDER BY season_number NULLS LAST, number NULLS LAST",
+        "SELECT e.id, e.series_id, e.season_number, e.number, e.absolute_number, \
+                COALESCE(NULLIF(t.name, ''), e.name) AS name, \
+                COALESCE(NULLIF(t.overview, ''), e.overview) AS overview, \
+                e.aired::text AS aired, e.runtime, e.image_url \
+         FROM catalog.episode e \
+         LEFT JOIN catalog.translation t \
+           ON t.entity_type = 'episode' AND t.entity_id = e.id AND t.language = $2 \
+         WHERE e.series_id = $1 AND NOT e.deleted \
+         ORDER BY e.season_number NULLS LAST, e.number NULLS LAST",
     )
     .bind(series_id)
+    .bind(lang.unwrap_or(""))
     .fetch_all(&state.db)
     .await?;
     Ok(rows)

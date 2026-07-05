@@ -94,7 +94,22 @@ async fn ensure(state: &AppState, entity_type: &str, id: i64, lang: &str) -> App
     if fresh != Some(true) && state.config.catalog_mode.allow_remote() {
         match state.tvdb.translation(url_kind(entity_type), id, lang).await {
             Ok(data) => upsert(state, entity_type, id, lang, &data).await?,
-            Err(AppError::NotFound) => return Ok(None),
+            Err(AppError::NotFound) => {
+                // Negative cache: record that TheTVDB has no translation for this
+                // (entity, language) so we don't re-request it every TTL. Matters
+                // most for per-episode lookups, where a show lacking a translation
+                // in the user's language would otherwise refetch on every view.
+                sqlx::query(
+                    "INSERT INTO catalog.translation (entity_type, entity_id, language) \
+                     VALUES ($1, $2, $3) \
+                     ON CONFLICT (entity_type, entity_id, language) DO UPDATE SET last_synced_at = now()",
+                )
+                .bind(entity_type)
+                .bind(id)
+                .bind(lang)
+                .execute(&state.db)
+                .await?;
+            }
             Err(e) => return Err(e),
         }
     }
@@ -154,13 +169,68 @@ pub async fn apply(
     let Some(lang) = lang else { return Ok(None) };
     let Some(t) = ensure(state, entity_type, id, lang).await? else { return Ok(None) };
 
+    // Only label the row as translated when something was actually overlaid — a
+    // negative-cache tombstone (name/overview NULL) counts as "no translation".
+    let mut applied = false;
     if t.name.as_deref().is_some_and(|s| !s.is_empty()) {
         *name = t.name;
+        applied = true;
     }
     if t.overview.as_deref().is_some_and(|s| !s.is_empty()) {
         *overview = t.overview;
+        applied = true;
     }
-    Ok(Some(lang.to_string()))
+    Ok(applied.then(|| lang.to_string()))
+}
+
+/// Upsert a single translation row (used when mirroring translations in bulk,
+/// e.g. from the episodes-by-language endpoint). COALESCE keeps any existing
+/// name/overview when the incoming value is NULL, so a partial fetch never wipes
+/// a good translation.
+pub async fn store_one(
+    state: &AppState,
+    entity_type: &str,
+    id: i64,
+    lang: &str,
+    name: Option<&str>,
+    overview: Option<&str>,
+) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO catalog.translation (entity_type, entity_id, language, name, overview, last_synced_at) \
+         VALUES ($1, $2, $3, $4, $5, now()) \
+         ON CONFLICT (entity_type, entity_id, language) DO UPDATE SET \
+           name = COALESCE(EXCLUDED.name, catalog.translation.name), \
+           overview = COALESCE(EXCLUDED.overview, catalog.translation.overview), \
+           last_synced_at = now()",
+    )
+    .bind(entity_type)
+    .bind(id)
+    .bind(lang)
+    .bind(name)
+    .bind(overview)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
+/// Warm the translation cache for many entities of one type in `lang`, with
+/// bounded concurrency. Best-effort: individual failures are ignored so one bad
+/// or missing translation never fails the batch. Used to overlay per-episode
+/// translations without N sequential round-trips.
+pub async fn prefetch(state: &AppState, entity_type: &str, ids: &[i64], lang: &str) {
+    const CONCURRENCY: usize = 8;
+    for chunk in ids.chunks(CONCURRENCY) {
+        let mut set = tokio::task::JoinSet::new();
+        for &id in chunk {
+            let state = state.clone();
+            let entity_type = entity_type.to_string();
+            let lang = lang.to_string();
+            set.spawn(async move {
+                let _ = ensure(&state, &entity_type, id, &lang).await;
+            });
+        }
+        while set.join_next().await.is_some() {}
+    }
 }
 
 /// Languages for which TheTVDB has a name and/or overview, read from the cached

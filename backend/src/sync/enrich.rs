@@ -146,6 +146,20 @@ async fn enrich_one(state: &AppState, item: &queue::QueueItem) -> AppResult<()> 
             if let Err(e) = catalog::episode::list_for_series(state, item.id, "default", None).await {
                 tracing::debug!("enrich series {} episodes skipped: {e}", item.id);
             }
+            // Mirror per-episode translations (every available language) so Mirror
+            // mode serves translated episodes offline. Best effort; marks the series
+            // done so the backfill sweep skips it.
+            match catalog::episode::mirror_translations(state, item.id).await {
+                Ok(()) => {
+                    let _ = sqlx::query(
+                        "UPDATE catalog.series SET episode_translations_synced_at = now() WHERE id = $1",
+                    )
+                    .bind(item.id)
+                    .execute(&state.db)
+                    .await;
+                }
+                Err(e) => tracing::debug!("enrich series {} episode translations skipped: {e}", item.id),
+            }
         }
         "movie" => catalog::movie::refresh_full(state, item.id).await?,
         "season" => catalog::season::refresh(state, item.id).await?,
