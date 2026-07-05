@@ -183,31 +183,36 @@ pub async fn apply(
     Ok(applied.then(|| lang.to_string()))
 }
 
-/// Upsert a single translation row (used when mirroring translations in bulk,
-/// e.g. from the episodes-by-language endpoint). COALESCE keeps any existing
-/// name/overview when the incoming value is NULL, so a partial fetch never wipes
-/// a good translation.
-pub async fn store_one(
+/// Bulk-upsert many translation rows of one type/language in a SINGLE statement
+/// (used when mirroring translations from the episodes-by-language endpoint). One
+/// round-trip per page instead of one per row keeps DB connection churn low.
+/// COALESCE keeps any existing name/overview when the incoming value is NULL, so a
+/// partial fetch never wipes a good translation.
+pub async fn store_many(
     state: &AppState,
     entity_type: &str,
-    id: i64,
     lang: &str,
-    name: Option<&str>,
-    overview: Option<&str>,
+    ids: &[i64],
+    names: &[Option<String>],
+    overviews: &[Option<String>],
 ) -> AppResult<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
     sqlx::query(
         "INSERT INTO catalog.translation (entity_type, entity_id, language, name, overview, last_synced_at) \
-         VALUES ($1, $2, $3, $4, $5, now()) \
+         SELECT $1, t.id, $2, t.name, t.overview, now() \
+         FROM unnest($3::bigint[], $4::text[], $5::text[]) AS t(id, name, overview) \
          ON CONFLICT (entity_type, entity_id, language) DO UPDATE SET \
            name = COALESCE(EXCLUDED.name, catalog.translation.name), \
            overview = COALESCE(EXCLUDED.overview, catalog.translation.overview), \
            last_synced_at = now()",
     )
     .bind(entity_type)
-    .bind(id)
     .bind(lang)
-    .bind(name)
-    .bind(overview)
+    .bind(ids)
+    .bind(names)
+    .bind(overviews)
     .execute(&state.db)
     .await?;
     Ok(())

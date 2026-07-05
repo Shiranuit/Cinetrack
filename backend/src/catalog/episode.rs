@@ -87,17 +87,25 @@ pub async fn mirror_translations(state: &AppState, series_id: i64) -> AppResult<
             if episodes.is_empty() {
                 break;
             }
+            // Collect the page and write it in one bulk upsert (one DB round-trip
+            // per page instead of one per episode).
+            let mut ids = Vec::new();
+            let mut names = Vec::new();
+            let mut overviews = Vec::new();
             for e in &episodes {
                 if let Some(id) = as_i64(&e["id"]) {
-                    let name = e["name"].as_str().filter(|s| !s.is_empty());
-                    let overview = e["overview"].as_str().filter(|s| !s.is_empty());
+                    let name = e["name"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
+                    let overview = e["overview"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
                     // Skip episodes the language has no actual text for (the endpoint
                     // returns nulls for those) so we don't write empty rows.
                     if name.is_some() || overview.is_some() {
-                        translation::store_one(state, "episode", id, lang, name, overview).await?;
+                        ids.push(id);
+                        names.push(name);
+                        overviews.push(overview);
                     }
                 }
             }
+            translation::store_many(state, "episode", lang, &ids, &names, &overviews).await?;
             if episodes.len() < 500 {
                 break; // last page
             }
@@ -120,9 +128,15 @@ pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
 
     // Process several series at once so the TheTVDB client's global rate pacer
     // stays fed and the sweep runs at up to THETVDB_MAX_RPS (never above it — the
-    // pacer caps total throughput regardless of concurrency). Reuses the same knob
-    // as the enrichment worker.
-    let concurrency = state.config.enrich_concurrency.max(1);
+    // pacer caps total throughput regardless of concurrency). Kept modest by
+    // default: this bin runs as a SEPARATE process with its OWN DB pool, so it must
+    // not consume so many connections that it (plus the live server) exhausts
+    // Postgres. Tune with BACKFILL_CONCURRENCY.
+    let concurrency = std::env::var("BACKFILL_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(8);
     let done = Arc::new(AtomicU64::new(0));
     let mut cursor = 0i64;
     loop {
