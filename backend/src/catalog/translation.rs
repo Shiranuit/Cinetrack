@@ -206,7 +206,9 @@ pub async fn store_many(
          ON CONFLICT (entity_type, entity_id, language) DO UPDATE SET \
            name = COALESCE(EXCLUDED.name, catalog.translation.name), \
            overview = COALESCE(EXCLUDED.overview, catalog.translation.overview), \
-           last_synced_at = now()",
+           last_synced_at = now() \
+         WHERE (EXCLUDED.name IS NOT NULL AND EXCLUDED.name IS DISTINCT FROM catalog.translation.name) \
+            OR (EXCLUDED.overview IS NOT NULL AND EXCLUDED.overview IS DISTINCT FROM catalog.translation.overview)",
     )
     .bind(entity_type)
     .bind(lang)
