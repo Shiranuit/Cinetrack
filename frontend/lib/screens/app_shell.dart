@@ -89,6 +89,7 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return AppBar(
       titleSpacing: Insets.lg,
       title: Row(
@@ -105,7 +106,7 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        IconButton(onPressed: onFriends, icon: const Icon(Icons.people_alt_rounded), tooltip: 'Friends'),
+        IconButton(onPressed: onFriends, icon: const Icon(Icons.people_alt_rounded), tooltip: t.friends),
         Padding(padding: const EdgeInsets.only(right: Insets.lg, left: Insets.xs), child: const _ProfileButton()),
       ],
     );

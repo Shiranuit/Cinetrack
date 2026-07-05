@@ -69,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final f = res?.files.firstOrNull;
     if (f?.bytes == null || !mounted) return;
     final api = context.read<ApiClient>();
+    final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
@@ -76,8 +77,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${s['shows']} shows · ${s['watch_events']} watches · ${s['favorites']} favorites.\n'
-            'Matching missing shows in the background — check "Review import matches" shortly.',
+            t.importGdprSuccess(
+              s['shows'] as int,
+              s['watch_events'] as int,
+              s['favorites'] as int,
+            ),
           ),
         ),
       );
@@ -98,11 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: const Text(
-          'This permanently deletes your account and all your data — tracked shows, '
-          'watch history, favorites and follows. This cannot be undone.',
-        ),
+        title: Text('${AppLocalizations.of(context).deleteAccount}?'),
+        content: Text(AppLocalizations.of(context).deleteAccountConfirmBody),
         // Sensitive action: make Cancel the obvious, prominent default and Delete
         // the deliberately-understated (subtle text) choice so it's hard to hit by
         // accident.
@@ -113,11 +114,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: TextButton.styleFrom(
               foregroundColor: context.scheme.onSurfaceVariant,
             ),
-            child: const Text('Delete anyway'),
+            child: Text(AppLocalizations.of(ctx).deleteAnyway),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep my account'),
+            child: Text(AppLocalizations.of(ctx).keepMyAccount),
           ),
         ],
       ),
@@ -190,7 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(ctx).cancel),
           ),
           FilledButton(
             onPressed: () {
@@ -198,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.pop(ctx, ctrl.text.trim());
               }
             },
-            child: const Text('Save'),
+            child: Text(AppLocalizations.of(ctx).save),
           ),
         ],
       ),
@@ -208,28 +209,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _editName() async {
+    final t = AppLocalizations.of(context);
     final me = context.read<AuthController>().me;
     final name = await _promptText(
-      title: 'Display name',
-      label: 'Name',
+      title: t.displayName,
+      label: t.fieldName,
       initial: me?.screenName ?? '',
       keyboard: TextInputType.name,
       validator: (v) =>
-          (v == null || v.trim().isEmpty) ? 'Name cannot be empty' : null,
+          (v == null || v.trim().isEmpty) ? t.nameCannotBeEmpty : null,
     );
     if (name == null || !mounted) return;
     await _saveProfile(screenName: name);
   }
 
   Future<void> _editEmail() async {
+    final t = AppLocalizations.of(context);
     final me = context.read<AuthController>().me;
     final email = await _promptText(
-      title: 'Email',
-      label: 'Email',
+      title: t.fieldEmail,
+      label: t.fieldEmail,
       initial: me?.email ?? '',
       keyboard: TextInputType.emailAddress,
       validator: (v) =>
-          (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+          (v == null || !v.contains('@')) ? t.enterValidEmail : null,
     );
     if (email == null || !mounted) return;
     await _saveProfile(email: email);
@@ -238,12 +241,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveProfile({String? screenName, String? email}) async {
     final api = context.read<ApiClient>();
     final auth = context.read<AuthController>();
+    final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
       await api.updateProfile(screenName: screenName, email: email);
       await auth.reloadMe();
-      messenger.showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      messenger.showSnackBar(SnackBar(content: Text(t.profileUpdated)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
     } finally {
@@ -311,13 +315,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(ctx).cancel),
               ),
               FilledButton(
                 onPressed: canSubmit
                     ? () => Navigator.pop(ctx, (cur.text, p1.text))
                     : null,
-                child: const Text('Update'),
+                child: Text(AppLocalizations.of(ctx).update),
               ),
             ],
           );
@@ -387,7 +391,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.password_rounded),
             title: Text(t.changePassword),
-            subtitle: const Text('Set a new password'),
+            subtitle: Text(t.setNewPassword),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: _busy ? null : _changePassword,
           ),
@@ -414,9 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             secondary: const Icon(Icons.lock_person_rounded),
             title: Text(t.privateProfile),
-            subtitle: const Text(
-              'Only accepted followers can see your profile and activity',
-            ),
+            subtitle: Text(t.privacyHint),
             value: isPrivate,
             onChanged: _busy ? null : _setPrivacy,
           ),
@@ -455,7 +457,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
             child: Text(
-              'Drag to set translation priority. The first available translation is used.',
+              t.langPriorityHint,
               style: context.text.labelMedium?.copyWith(
                 color: context.scheme.onSurfaceVariant,
               ),
@@ -491,7 +493,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     subtitle: i == 0
                         ? Text(
-                            'Primary',
+                            t.primary,
                             style: TextStyle(color: context.scheme.primary),
                           )
                         : null,
@@ -521,7 +523,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Insets.sm,
               ),
               child: Text(
-                'Add a language',
+                t.addLanguage,
                 style: context.text.labelMedium?.copyWith(
                   color: context.scheme.onSurfaceVariant,
                 ),
@@ -547,8 +549,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SectionHeader(title: t.sectionData, icon: Icons.storage_rounded),
           ListTile(
             leading: const Icon(Icons.upload_file_rounded),
-            title: const Text('Import TV Time data'),
-            subtitle: const Text('Upload your GDPR export (.zip)'),
+            title: Text(t.importTvTime),
+            subtitle: Text(t.importGdprHint),
             onTap: _busy ? null : _importGdpr,
           ),
           if (_suggestions > 0)
@@ -557,10 +559,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: Text('$_suggestions'),
                 child: const Icon(Icons.rule_rounded),
               ),
-              title: const Text('Review import matches'),
-              subtitle: Text(
-                '$_suggestions show${_suggestions == 1 ? '' : 's'} need confirming',
-              ),
+              title: Text(t.reviewImportMatches),
+              subtitle: Text(t.showsNeedConfirming(_suggestions)),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: _busy ? null : _openMatches,
             ),
@@ -575,12 +575,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: context.scheme.error,
             ),
             title: Text(
-              'Delete account',
+              t.deleteAccount,
               style: TextStyle(color: context.scheme.error),
             ),
-            subtitle: const Text(
-              'Permanently remove your account and all data',
-            ),
+            subtitle: Text(t.deleteAccountHint),
             onTap: _busy ? null : _deleteAccount,
           ),
         ],

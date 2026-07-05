@@ -957,6 +957,618 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No tracked movies.'**
   String get noTrackedMovies;
+
+  /// No description provided for @langPriorityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to set translation priority. The first available translation is used.'**
+  String get langPriorityHint;
+
+  /// No description provided for @privacyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only accepted followers can see your profile and activity'**
+  String get privacyHint;
+
+  /// No description provided for @setNewPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a new password'**
+  String get setNewPassword;
+
+  /// No description provided for @importTvTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Import TV Time data'**
+  String get importTvTime;
+
+  /// No description provided for @importGdprHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload your GDPR export (.zip)'**
+  String get importGdprHint;
+
+  /// No description provided for @deleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get deleteAccount;
+
+  /// No description provided for @deleteAccountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently remove your account and all data'**
+  String get deleteAccountHint;
+
+  /// No description provided for @displayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get displayName;
+
+  /// No description provided for @addLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a language'**
+  String get addLanguage;
+
+  /// No description provided for @primary.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary'**
+  String get primary;
+
+  /// No description provided for @statistics.
+  ///
+  /// In en, this message translates to:
+  /// **'Statistics'**
+  String get statistics;
+
+  /// No description provided for @changePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Change profile picture'**
+  String get changePhoto;
+
+  /// No description provided for @changeBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Change background'**
+  String get changeBackground;
+
+  /// No description provided for @seeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get seeAll;
+
+  /// No description provided for @unitMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'mo'**
+  String get unitMonth;
+
+  /// No description provided for @unitDay.
+  ///
+  /// In en, this message translates to:
+  /// **'d'**
+  String get unitDay;
+
+  /// No description provided for @unitHour.
+  ///
+  /// In en, this message translates to:
+  /// **'h'**
+  String get unitHour;
+
+  /// No description provided for @specials.
+  ///
+  /// In en, this message translates to:
+  /// **'Specials'**
+  String get specials;
+
+  /// No description provided for @season.
+  ///
+  /// In en, this message translates to:
+  /// **'Season {number}'**
+  String season(int number);
+
+  /// No description provided for @episodesSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'episodes seen'**
+  String get episodesSeen;
+
+  /// No description provided for @rateThisShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate this show'**
+  String get rateThisShow;
+
+  /// No description provided for @today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get today;
+
+  /// No description provided for @day.
+  ///
+  /// In en, this message translates to:
+  /// **'day'**
+  String get day;
+
+  /// No description provided for @days.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get days;
+
+  /// No description provided for @sortPopular.
+  ///
+  /// In en, this message translates to:
+  /// **'Popular'**
+  String get sortPopular;
+
+  /// No description provided for @sortTopRated.
+  ///
+  /// In en, this message translates to:
+  /// **'Top rated'**
+  String get sortTopRated;
+
+  /// No description provided for @sortReleaseDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Release date'**
+  String get sortReleaseDate;
+
+  /// No description provided for @sortLastUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated'**
+  String get sortLastUpdated;
+
+  /// No description provided for @seasons.
+  ///
+  /// In en, this message translates to:
+  /// **'Seasons'**
+  String get seasons;
+
+  /// No description provided for @episodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Episodes'**
+  String get episodes;
+
+  /// No description provided for @sortLongest.
+  ///
+  /// In en, this message translates to:
+  /// **'Longest'**
+  String get sortLongest;
+
+  /// No description provided for @genres.
+  ///
+  /// In en, this message translates to:
+  /// **'Genres'**
+  String get genres;
+
+  /// No description provided for @themes.
+  ///
+  /// In en, this message translates to:
+  /// **'Themes'**
+  String get themes;
+
+  /// No description provided for @networks.
+  ///
+  /// In en, this message translates to:
+  /// **'Networks'**
+  String get networks;
+
+  /// No description provided for @studios.
+  ///
+  /// In en, this message translates to:
+  /// **'Studios'**
+  String get studios;
+
+  /// No description provided for @releaseYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Release year'**
+  String get releaseYear;
+
+  /// No description provided for @runtimeLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Episode / runtime length'**
+  String get runtimeLength;
+
+  /// No description provided for @filterAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Any'**
+  String get filterAny;
+
+  /// No description provided for @triStateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'tap: include → exclude → off'**
+  String get triStateHint;
+
+  /// No description provided for @statusContinuing.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuing'**
+  String get statusContinuing;
+
+  /// No description provided for @statusEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Ended'**
+  String get statusEnded;
+
+  /// No description provided for @statusUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get statusUpcoming;
+
+  /// No description provided for @noFollowingYet.
+  ///
+  /// In en, this message translates to:
+  /// **'You aren\'t following anyone yet.\nSearch above to find people.'**
+  String get noFollowingYet;
+
+  /// No description provided for @sortedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted by {sort}'**
+  String sortedBy(String sort);
+
+  /// No description provided for @filteredSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Filtered · {count} active · {sort}'**
+  String filteredSummary(int count, String sort);
+
+  /// No description provided for @showFollowing.
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get showFollowing;
+
+  /// No description provided for @yourRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Your rating · {rating}/10'**
+  String yourRating(int rating);
+
+  /// No description provided for @searchIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Search {name}…'**
+  String searchIn(String name);
+
+  /// No description provided for @refineSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Refine your search to see more…'**
+  String get refineSearch;
+
+  /// No description provided for @runtimeUnder30.
+  ///
+  /// In en, this message translates to:
+  /// **'< 30m'**
+  String get runtimeUnder30;
+
+  /// No description provided for @runtime30to60.
+  ///
+  /// In en, this message translates to:
+  /// **'30–60m'**
+  String get runtime30to60;
+
+  /// No description provided for @runtimeOver60.
+  ///
+  /// In en, this message translates to:
+  /// **'> 60m'**
+  String get runtimeOver60;
+
+  /// No description provided for @sortName.
+  ///
+  /// In en, this message translates to:
+  /// **'A–Z'**
+  String get sortName;
+
+  /// No description provided for @nSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String nSelected(int count);
+
+  /// No description provided for @calendarEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing scheduled.\nFollow airing shows to see them here.'**
+  String get calendarEmpty;
+
+  /// No description provided for @seriesFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Series {id}'**
+  String seriesFallback(int id);
+
+  /// No description provided for @discoverEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches in your catalog yet.\nImport or search shows to fill it, then filter here.'**
+  String get discoverEmpty;
+
+  /// No description provided for @noUsersFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No users found.'**
+  String get noUsersFound;
+
+  /// No description provided for @reviewImportMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'Review import matches'**
+  String get reviewImportMatches;
+
+  /// No description provided for @nothingToReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to review.\nAll imported shows are matched.'**
+  String get nothingToReview;
+
+  /// No description provided for @importMatchesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'These shows\' original ids are gone from TheTVDB. We found likely matches — confirm the correct ones, dismiss the rest.'**
+  String get importMatchesIntro;
+
+  /// No description provided for @youImported.
+  ///
+  /// In en, this message translates to:
+  /// **'You imported'**
+  String get youImported;
+
+  /// No description provided for @likelyMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'likely match'**
+  String get likelyMatch;
+
+  /// No description provided for @notIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Not it'**
+  String get notIt;
+
+  /// No description provided for @confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirm;
+
+  /// No description provided for @matchedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched to {name}'**
+  String matchedTo(String name);
+
+  /// No description provided for @dismissedImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismissed \"{name}\"'**
+  String dismissedImport(String name);
+
+  /// No description provided for @seriesWithId.
+  ///
+  /// In en, this message translates to:
+  /// **'series {id}'**
+  String seriesWithId(int id);
+
+  /// No description provided for @ok.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get ok;
+
+  /// No description provided for @gridView.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid view'**
+  String get gridView;
+
+  /// No description provided for @carouselView.
+  ///
+  /// In en, this message translates to:
+  /// **'Carousel view'**
+  String get carouselView;
+
+  /// No description provided for @filterLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter library'**
+  String get filterLibrary;
+
+  /// No description provided for @kindMovie.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie'**
+  String get kindMovie;
+
+  /// No description provided for @watchedTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'Watched ×{count}'**
+  String watchedTimes(int count);
+
+  /// No description provided for @favorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite'**
+  String get favorite;
+
+  /// No description provided for @unfavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite'**
+  String get unfavorite;
+
+  /// No description provided for @movie.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie'**
+  String get movie;
+
+  /// No description provided for @movieNumbered.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie {id}'**
+  String movieNumbered(int id);
+
+  /// No description provided for @usersFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s favorites'**
+  String usersFavorites(String name);
+
+  /// No description provided for @usersShows.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s shows'**
+  String usersShows(String name);
+
+  /// No description provided for @yourShows.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shows'**
+  String get yourShows;
+
+  /// No description provided for @importGdprSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {shows} shows · {watches} watches · {favorites} favorites.\nMatching missing shows in the background — check \"Review import matches\" shortly.'**
+  String importGdprSuccess(int shows, int watches, int favorites);
+
+  /// No description provided for @deleteAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes your account and all your data — tracked shows, watch history, favorites and follows. This cannot be undone.'**
+  String get deleteAccountConfirmBody;
+
+  /// No description provided for @deleteAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete anyway'**
+  String get deleteAnyway;
+
+  /// No description provided for @keepMyAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep my account'**
+  String get keepMyAccount;
+
+  /// No description provided for @nameCannotBeEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Name cannot be empty'**
+  String get nameCannotBeEmpty;
+
+  /// No description provided for @enterValidEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email'**
+  String get enterValidEmail;
+
+  /// No description provided for @profileUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile updated.'**
+  String get profileUpdated;
+
+  /// No description provided for @showsNeedConfirming.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} show needs confirming} other{{count} shows need confirming}}'**
+  String showsNeedConfirming(int count);
+
+  /// No description provided for @showFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Show {id}'**
+  String showFallback(int id);
+
+  /// No description provided for @filterAndSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter & sort'**
+  String get filterAndSort;
+
+  /// No description provided for @movieFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie {id}'**
+  String movieFallback(int id);
+
+  /// No description provided for @ratingStars.
+  ///
+  /// In en, this message translates to:
+  /// **'★ {rating}/10'**
+  String ratingStars(int rating);
+
+  /// No description provided for @markWatchedAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark watched again'**
+  String get markWatchedAgain;
+
+  /// No description provided for @addToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favorites'**
+  String get addToFavorites;
+
+  /// No description provided for @addedToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to favorites'**
+  String get addedToFavorites;
+
+  /// No description provided for @watchLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch later'**
+  String get watchLater;
+
+  /// No description provided for @markedForLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked for later'**
+  String get markedForLater;
+
+  /// No description provided for @stoppedWatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped watching'**
+  String get stoppedWatching;
+
+  /// No description provided for @removeFromLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from library'**
+  String get removeFromLibrary;
+
+  /// No description provided for @removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get removed;
+
+  /// No description provided for @seriesGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'series'**
+  String get seriesGeneric;
 }
 
 class _AppLocalizationsDelegate

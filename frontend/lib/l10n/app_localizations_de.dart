@@ -440,4 +440,362 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noTrackedMovies => 'Keine verfolgten Filme.';
+
+  @override
+  String get langPriorityHint =>
+      'Ziehen, um die Übersetzungspriorität festzulegen. Die erste verfügbare Übersetzung wird verwendet.';
+
+  @override
+  String get privacyHint =>
+      'Nur akzeptierte Follower können dein Profil und deine Aktivität sehen';
+
+  @override
+  String get setNewPassword => 'Neues Passwort festlegen';
+
+  @override
+  String get importTvTime => 'TV-Time-Daten importieren';
+
+  @override
+  String get importGdprHint => 'Lade deinen DSGVO-Export (.zip) hoch';
+
+  @override
+  String get deleteAccount => 'Konto löschen';
+
+  @override
+  String get deleteAccountHint => 'Konto und alle Daten dauerhaft entfernen';
+
+  @override
+  String get displayName => 'Anzeigename';
+
+  @override
+  String get addLanguage => 'Sprache hinzufügen';
+
+  @override
+  String get primary => 'Primär';
+
+  @override
+  String get statistics => 'Statistiken';
+
+  @override
+  String get changePhoto => 'Profilbild ändern';
+
+  @override
+  String get changeBackground => 'Hintergrund ändern';
+
+  @override
+  String get seeAll => 'Alle ansehen';
+
+  @override
+  String get unitMonth => 'Mon.';
+
+  @override
+  String get unitDay => 'T';
+
+  @override
+  String get unitHour => 'Std.';
+
+  @override
+  String get specials => 'Specials';
+
+  @override
+  String season(int number) {
+    return 'Staffel $number';
+  }
+
+  @override
+  String get episodesSeen => 'Folgen gesehen';
+
+  @override
+  String get rateThisShow => 'Serie bewerten';
+
+  @override
+  String get today => 'Heute';
+
+  @override
+  String get day => 'Tag';
+
+  @override
+  String get days => 'Tage';
+
+  @override
+  String get sortPopular => 'Beliebt';
+
+  @override
+  String get sortTopRated => 'Am besten bewertet';
+
+  @override
+  String get sortReleaseDate => 'Erscheinungsdatum';
+
+  @override
+  String get sortLastUpdated => 'Zuletzt aktualisiert';
+
+  @override
+  String get seasons => 'Staffeln';
+
+  @override
+  String get episodes => 'Folgen';
+
+  @override
+  String get sortLongest => 'Längste';
+
+  @override
+  String get genres => 'Genres';
+
+  @override
+  String get themes => 'Themen';
+
+  @override
+  String get networks => 'Sender';
+
+  @override
+  String get studios => 'Studios';
+
+  @override
+  String get releaseYear => 'Erscheinungsjahr';
+
+  @override
+  String get runtimeLength => 'Folgen-/Filmlänge';
+
+  @override
+  String get filterAny => 'Alle';
+
+  @override
+  String get triStateHint => 'tippen: einschließen → ausschließen → aus';
+
+  @override
+  String get statusContinuing => 'Laufend';
+
+  @override
+  String get statusEnded => 'Beendet';
+
+  @override
+  String get statusUpcoming => 'Demnächst';
+
+  @override
+  String get noFollowingYet =>
+      'Du folgst noch niemandem.\nSuche oben, um Leute zu finden.';
+
+  @override
+  String sortedBy(String sort) {
+    return 'Sortiert nach $sort';
+  }
+
+  @override
+  String filteredSummary(int count, String sort) {
+    return 'Gefiltert · $count aktiv · $sort';
+  }
+
+  @override
+  String get showFollowing => 'Folge ich';
+
+  @override
+  String yourRating(int rating) {
+    return 'Deine Bewertung · $rating/10';
+  }
+
+  @override
+  String searchIn(String name) {
+    return '$name suchen…';
+  }
+
+  @override
+  String get refineSearch => 'Verfeinere deine Suche, um mehr zu sehen…';
+
+  @override
+  String get runtimeUnder30 => '< 30 Min.';
+
+  @override
+  String get runtime30to60 => '30–60 Min.';
+
+  @override
+  String get runtimeOver60 => '> 60 Min.';
+
+  @override
+  String get sortName => 'A–Z';
+
+  @override
+  String nSelected(int count) {
+    return '$count ausgewählt';
+  }
+
+  @override
+  String get calendarEmpty =>
+      'Nichts geplant.\nFolge laufenden Serien, um sie hier zu sehen.';
+
+  @override
+  String seriesFallback(int id) {
+    return 'Serie $id';
+  }
+
+  @override
+  String get discoverEmpty =>
+      'Noch keine Treffer in deinem Katalog.\nImportiere oder suche Serien, um ihn zu füllen, und filtere dann hier.';
+
+  @override
+  String get noUsersFound => 'Keine Benutzer gefunden.';
+
+  @override
+  String get reviewImportMatches => 'Import-Zuordnungen prüfen';
+
+  @override
+  String get nothingToReview =>
+      'Nichts zu prüfen.\nAlle importierten Serien sind zugeordnet.';
+
+  @override
+  String get importMatchesIntro =>
+      'Die ursprünglichen IDs dieser Serien sind bei TheTVDB nicht mehr vorhanden. Wir haben wahrscheinliche Treffer gefunden – bestätige die richtigen und verwirf den Rest.';
+
+  @override
+  String get youImported => 'Du hast importiert';
+
+  @override
+  String get likelyMatch => 'wahrscheinlicher Treffer';
+
+  @override
+  String get notIt => 'Passt nicht';
+
+  @override
+  String get confirm => 'Bestätigen';
+
+  @override
+  String matchedTo(String name) {
+    return 'Zugeordnet zu $name';
+  }
+
+  @override
+  String dismissedImport(String name) {
+    return '„$name“ verworfen';
+  }
+
+  @override
+  String seriesWithId(int id) {
+    return 'Serie $id';
+  }
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String get gridView => 'Rasteransicht';
+
+  @override
+  String get carouselView => 'Karussellansicht';
+
+  @override
+  String get filterLibrary => 'Bibliothek filtern';
+
+  @override
+  String get kindMovie => 'Film';
+
+  @override
+  String watchedTimes(int count) {
+    return 'Gesehen ×$count';
+  }
+
+  @override
+  String get favorite => 'Favorit';
+
+  @override
+  String get unfavorite => 'Aus Favoriten entfernen';
+
+  @override
+  String get movie => 'Film';
+
+  @override
+  String movieNumbered(int id) {
+    return 'Film $id';
+  }
+
+  @override
+  String usersFavorites(String name) {
+    return 'Favoriten von $name';
+  }
+
+  @override
+  String usersShows(String name) {
+    return 'Serien von $name';
+  }
+
+  @override
+  String get yourShows => 'Deine Serien';
+
+  @override
+  String importGdprSuccess(int shows, int watches, int favorites) {
+    return '$shows Serien · $watches Ansichten · $favorites Favoriten importiert.\nFehlende Serien werden im Hintergrund abgeglichen — sieh dir in Kürze „Import-Treffer prüfen“ an.';
+  }
+
+  @override
+  String get deleteAccountConfirmBody =>
+      'Dadurch werden dein Konto und alle deine Daten dauerhaft gelöscht — verfolgte Serien, Wiedergabeverlauf, Favoriten und Abonnements. Dies kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get deleteAnyway => 'Trotzdem löschen';
+
+  @override
+  String get keepMyAccount => 'Konto behalten';
+
+  @override
+  String get nameCannotBeEmpty => 'Der Name darf nicht leer sein';
+
+  @override
+  String get enterValidEmail => 'Gib eine gültige E-Mail-Adresse ein';
+
+  @override
+  String get profileUpdated => 'Profil aktualisiert.';
+
+  @override
+  String showsNeedConfirming(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Serien müssen bestätigt werden',
+      one: '$count Serie muss bestätigt werden',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String showFallback(int id) {
+    return 'Serie $id';
+  }
+
+  @override
+  String get filterAndSort => 'Filtern & sortieren';
+
+  @override
+  String movieFallback(int id) {
+    return 'Film $id';
+  }
+
+  @override
+  String ratingStars(int rating) {
+    return '★ $rating/10';
+  }
+
+  @override
+  String get markWatchedAgain => 'Erneut als gesehen markieren';
+
+  @override
+  String get addToFavorites => 'Zu Favoriten hinzufügen';
+
+  @override
+  String get addedToFavorites => 'Zu Favoriten hinzugefügt';
+
+  @override
+  String get watchLater => 'Später ansehen';
+
+  @override
+  String get markedForLater => 'Für später markiert';
+
+  @override
+  String get stoppedWatching => 'Ansehen gestoppt';
+
+  @override
+  String get removeFromLibrary => 'Aus Bibliothek entfernen';
+
+  @override
+  String get removed => 'Entfernt';
+
+  @override
+  String get seriesGeneric => 'Serie';
 }

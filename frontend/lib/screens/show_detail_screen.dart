@@ -117,7 +117,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0),
       child: Row(
         children: [
-          Text(r == null ? 'Rate this show' : 'Your rating · $r/10',
+          Text(r == null ? AppLocalizations.of(context).rateThisShow : AppLocalizations.of(context).yourRating(r),
               style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           const Spacer(),
           Flexible(child: RatingBar(value: r, onRate: _rate)),
@@ -220,7 +220,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xl, Insets.lg, Insets.sm),
-          child: Text('Episodes', style: context.text.titleLarge),
+          child: Text(AppLocalizations.of(context).episodes, style: context.text.titleLarge),
         ),
         for (final s in seasons)
           _SeasonSection(
@@ -244,7 +244,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         Expanded(
           child: rel.isFollowed
               ? FilledButton.tonalIcon(
-                  onPressed: _toggleFollow, icon: const Icon(Icons.check_rounded, size: 20), label: Text(AppLocalizations.of(context).following))
+                  onPressed: _toggleFollow, icon: const Icon(Icons.check_rounded, size: 20), label: Text(AppLocalizations.of(context).showFollowing))
               : FilledButton.icon(
                   onPressed: _toggleFollow, icon: const Icon(Icons.add_rounded, size: 20), label: Text(AppLocalizations.of(context).follow)),
         ),
@@ -318,7 +318,7 @@ class _Hero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(series.name ?? 'Show ${series.id}',
+                      Text(series.name ?? AppLocalizations.of(context).showFallback(series.id),
                           style: context.text.headlineSmall, maxLines: 3, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: Insets.sm),
                       Wrap(spacing: Insets.sm, runSpacing: Insets.xs, children: [
@@ -326,7 +326,7 @@ class _Hero extends StatelessWidget {
                         if (series.year != null) Pill(label: '${series.year}', color: context.scheme.onSurfaceVariant),
                       ]),
                       const SizedBox(height: Insets.sm),
-                      Text('$seenDistinct / $totalEpisodes episodes seen',
+                      Text('$seenDistinct / $totalEpisodes ${AppLocalizations.of(context).episodesSeen}',
                           style: context.text.labelLarge?.copyWith(color: context.colors.seen)),
                     ],
                   ),
@@ -371,7 +371,9 @@ class _SeasonSectionState extends State<_SeasonSection> {
     final seen = widget.episodes.where((e) => (widget.counts[e.id] ?? 0) > 0).length;
     final total = widget.episodes.length;
     final allSeen = seen == total && total > 0;
-    final label = widget.seasonNumber == 0 ? 'Specials' : 'Season ${widget.seasonNumber}';
+    final label = widget.seasonNumber == 0
+        ? AppLocalizations.of(context).specials
+        : AppLocalizations.of(context).season(widget.seasonNumber);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xs, Insets.lg, Insets.xs),

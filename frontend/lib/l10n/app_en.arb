@@ -147,5 +147,249 @@
   "libNoShows": "No shows.",
   "nothingHereYet": "Nothing here yet.",
   "filterNoMatch": "No shows match these filters.",
-  "noTrackedMovies": "No tracked movies."
+  "noTrackedMovies": "No tracked movies.",
+  "langPriorityHint": "Drag to set translation priority. The first available translation is used.",
+  "privacyHint": "Only accepted followers can see your profile and activity",
+  "setNewPassword": "Set a new password",
+  "importTvTime": "Import TV Time data",
+  "importGdprHint": "Upload your GDPR export (.zip)",
+  "deleteAccount": "Delete account",
+  "deleteAccountHint": "Permanently remove your account and all data",
+  "displayName": "Display name",
+  "addLanguage": "Add a language",
+  "primary": "Primary",
+  "statistics": "Statistics",
+  "changePhoto": "Change profile picture",
+  "changeBackground": "Change background",
+  "seeAll": "See all",
+  "unitMonth": "mo",
+  "unitDay": "d",
+  "unitHour": "h",
+  "specials": "Specials",
+  "season": "Season {number}",
+  "episodesSeen": "episodes seen",
+  "rateThisShow": "Rate this show",
+  "today": "Today",
+  "day": "day",
+  "days": "days",
+  "sortPopular": "Popular",
+  "sortTopRated": "Top rated",
+  "sortReleaseDate": "Release date",
+  "sortLastUpdated": "Last updated",
+  "seasons": "Seasons",
+  "episodes": "Episodes",
+  "sortLongest": "Longest",
+  "genres": "Genres",
+  "themes": "Themes",
+  "networks": "Networks",
+  "studios": "Studios",
+  "releaseYear": "Release year",
+  "runtimeLength": "Episode / runtime length",
+  "filterAny": "Any",
+  "triStateHint": "tap: include → exclude → off",
+  "statusContinuing": "Continuing",
+  "statusEnded": "Ended",
+  "statusUpcoming": "Upcoming",
+  "noFollowingYet": "You aren't following anyone yet.\nSearch above to find people.",
+  "@season": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "sortedBy": "Sorted by {sort}",
+  "@sortedBy": {
+    "placeholders": {
+      "sort": {
+        "type": "String"
+      }
+    }
+  },
+  "filteredSummary": "Filtered · {count} active · {sort}",
+  "@filteredSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "sort": {
+        "type": "String"
+      }
+    }
+  },
+  "showFollowing": "Following",
+  "yourRating": "Your rating · {rating}/10",
+  "@yourRating": {
+    "placeholders": {
+      "rating": {
+        "type": "int"
+      }
+    }
+  },
+  "searchIn": "Search {name}…",
+  "@searchIn": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "refineSearch": "Refine your search to see more…",
+  "runtimeUnder30": "< 30m",
+  "runtime30to60": "30–60m",
+  "runtimeOver60": "> 60m",
+  "sortName": "A–Z",
+  "nSelected": "{count} selected",
+  "@nSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarEmpty": "Nothing scheduled.\nFollow airing shows to see them here.",
+  "seriesFallback": "Series {id}",
+  "@seriesFallback": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "discoverEmpty": "No matches in your catalog yet.\nImport or search shows to fill it, then filter here.",
+  "noUsersFound": "No users found.",
+  "reviewImportMatches": "Review import matches",
+  "nothingToReview": "Nothing to review.\nAll imported shows are matched.",
+  "importMatchesIntro": "These shows' original ids are gone from TheTVDB. We found likely matches — confirm the correct ones, dismiss the rest.",
+  "youImported": "You imported",
+  "likelyMatch": "likely match",
+  "notIt": "Not it",
+  "confirm": "Confirm",
+  "matchedTo": "Matched to {name}",
+  "@matchedTo": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "dismissedImport": "Dismissed \"{name}\"",
+  "@dismissedImport": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "seriesWithId": "series {id}",
+  "@seriesWithId": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "ok": "OK",
+  "gridView": "Grid view",
+  "carouselView": "Carousel view",
+  "filterLibrary": "Filter library",
+  "kindMovie": "Movie",
+  "watchedTimes": "Watched ×{count}",
+  "@watchedTimes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "favorite": "Favorite",
+  "unfavorite": "Unfavorite",
+  "movie": "Movie",
+  "movieNumbered": "Movie {id}",
+  "@movieNumbered": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "usersFavorites": "{name}'s favorites",
+  "@usersFavorites": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "usersShows": "{name}'s shows",
+  "@usersShows": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "yourShows": "Your shows",
+  "importGdprSuccess": "Imported {shows} shows · {watches} watches · {favorites} favorites.\nMatching missing shows in the background — check \"Review import matches\" shortly.",
+  "@importGdprSuccess": {
+    "placeholders": {
+      "shows": {
+        "type": "int"
+      },
+      "watches": {
+        "type": "int"
+      },
+      "favorites": {
+        "type": "int"
+      }
+    }
+  },
+  "deleteAccountConfirmBody": "This permanently deletes your account and all your data — tracked shows, watch history, favorites and follows. This cannot be undone.",
+  "deleteAnyway": "Delete anyway",
+  "keepMyAccount": "Keep my account",
+  "nameCannotBeEmpty": "Name cannot be empty",
+  "enterValidEmail": "Enter a valid email",
+  "profileUpdated": "Profile updated.",
+  "showsNeedConfirming": "{count, plural, =1{{count} show needs confirming} other{{count} shows need confirming}}",
+  "@showsNeedConfirming": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "showFallback": "Show {id}",
+  "@showFallback": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "filterAndSort": "Filter & sort",
+  "movieFallback": "Movie {id}",
+  "@movieFallback": {
+    "placeholders": {
+      "id": {
+        "type": "int"
+      }
+    }
+  },
+  "ratingStars": "★ {rating}/10",
+  "@ratingStars": {
+    "placeholders": {
+      "rating": {
+        "type": "int"
+      }
+    }
+  },
+  "markWatchedAgain": "Mark watched again",
+  "addToFavorites": "Add to favorites",
+  "addedToFavorites": "Added to favorites",
+  "watchLater": "Watch later",
+  "markedForLater": "Marked for later",
+  "stoppedWatching": "Stopped watching",
+  "removeFromLibrary": "Remove from library",
+  "removed": "Removed",
+  "seriesGeneric": "series"
 }

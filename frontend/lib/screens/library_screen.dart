@@ -240,7 +240,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
           IconButton(
-            tooltip: layout == LibraryLayout.rails ? 'Grid view' : 'Carousel view',
+            tooltip: layout == LibraryLayout.rails ? t.gridView : t.carouselView,
             icon: Icon(layout == LibraryLayout.rails ? Icons.grid_view_rounded : Icons.view_carousel_rounded),
             onPressed: () => context.read<SettingsController>().toggleLibraryLayout(),
           ),
@@ -248,7 +248,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             isLabelVisible: _f.activeCount > 0,
             label: Text('${_f.activeCount}'),
             child: IconButton(
-              tooltip: 'Filter library',
+              tooltip: t.filterLibrary,
               icon: const Icon(Icons.tune_rounded),
               onPressed: _openFilters,
             ),
@@ -280,6 +280,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _searchDropdown() {
+    final t = AppLocalizations.of(context);
     final maxH = MediaQuery.sizeOf(context).height * 0.6;
     return Material(
       elevation: 10,
@@ -291,7 +292,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         child: _searchBusy && _results == null
             ? const Padding(padding: EdgeInsets.all(Insets.xl), child: Center(child: CircularProgressIndicator()))
             : (_results?.isEmpty ?? true)
-                ? Padding(padding: const EdgeInsets.all(Insets.lg), child: Text('No results', style: context.text.bodyMedium))
+                ? Padding(padding: const EdgeInsets.all(Insets.lg), child: Text(t.noResults, style: context.text.bodyMedium))
                 : ListView.separated(
                     shrinkWrap: true,
                     padding: EdgeInsets.zero,
@@ -308,7 +309,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             Icon(isMovie ? Icons.theaters_rounded : Icons.live_tv_rounded,
                                 size: 13, color: context.scheme.onSurfaceVariant),
                             const SizedBox(width: 4),
-                            Text([isMovie ? 'Movie' : 'Series', r.year?.toString()].where((e) => e != null).join(' · ')),
+                            Text([isMovie ? t.kindMovie : t.typeSeries, r.year?.toString()].where((e) => e != null).join(' · ')),
                           ],
                         ),
                         onTap: () => _openResult(r),
@@ -328,11 +329,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
           child: Row(
             children: [
-              Text(
-                  _f.activeCount > 0
-                      ? 'Filtered · ${_f.activeCount} active · ${kSorts[_f.sort] ?? ''}'
-                      : 'Sorted by ${kSorts[_f.sort] ?? _f.sort}',
-                  style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+              Builder(builder: (context) {
+                final t = AppLocalizations.of(context);
+                final sort = sortLabel(t, _f.sort);
+                return Text(
+                    _f.activeCount > 0
+                        ? t.filteredSummary(_f.activeCount, sort)
+                        : t.sortedBy(sort),
+                    style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant));
+              }),
               const Spacer(),
               TextButton.icon(
                 icon: const Icon(Icons.close_rounded, size: 16),
@@ -432,7 +437,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ..._section(cat.title(t), cat.icon, cat.accent(context), shows.length, grid, section++,
                     (j) => _libraryCard(shows[j])),
               if (movieList.isNotEmpty)
-                ..._section('Movies', Icons.theaters_rounded, context.scheme.tertiary, movieList.length, grid,
+                ..._section(t.typeMovies, Icons.theaters_rounded, context.scheme.tertiary, movieList.length, grid,
                     section++, (j) => _movieCard(movieList[j])),
               const SliverToBoxAdapter(child: SizedBox(height: Insets.xxl)),
             ],

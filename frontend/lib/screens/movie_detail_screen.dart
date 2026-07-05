@@ -59,7 +59,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           Expanded(
             child: FilledButton.icon(
               icon: Icon(watched ? Icons.check_circle_rounded : Icons.add_rounded, size: 18),
-              label: Text(watched ? 'Watched ×$count' : AppLocalizations.of(context).markWatched),
+              label: Text(watched ? AppLocalizations.of(context).watchedTimes(count) : AppLocalizations.of(context).markWatched),
               style: watched ? FilledButton.styleFrom(backgroundColor: context.colors.seen) : null,
               onPressed: () => _do(() => api.watchMovie(widget.movieId)),
             ),
@@ -74,7 +74,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           ],
           const SizedBox(width: Insets.sm),
           IconButton.outlined(
-            tooltip: fav ? 'Unfavorite' : 'Favorite',
+            tooltip: fav ? AppLocalizations.of(context).unfavorite : AppLocalizations.of(context).favorite,
             icon: Icon(fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                 color: fav ? context.colors.favorite : null),
             onPressed: () => _do(() => api.favoriteMovie(widget.movieId, !fav)),
@@ -169,11 +169,11 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(m.name ?? 'Movie ${m.id}',
+                      Text(m.name ?? AppLocalizations.of(context).movieNumbered(m.id),
                           style: context.text.headlineSmall, maxLines: 3, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: Insets.sm),
                       Wrap(spacing: Insets.sm, children: [
-                        const Pill(label: 'Movie'),
+                        Pill(label: AppLocalizations.of(context).movie),
                         if (m.year != null) Pill(label: '${m.year}', color: context.scheme.onSurfaceVariant),
                       ]),
                     ],

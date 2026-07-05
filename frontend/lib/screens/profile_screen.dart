@@ -20,11 +20,12 @@ import 'user_library_screen.dart';
 
 /// The showcase blocks a profile can display, in customizable order.
 const kAllProfileBlocks = ['stats', 'favorites', 'shows'];
-const _kBlockLabels = {
-  'stats': 'Statistics',
-  'favorites': 'Favorites',
-  'shows': 'Shows',
-};
+String _blockLabel(AppLocalizations t, String key) => switch (key) {
+      'stats' => t.statistics,
+      'favorites' => t.favorites,
+      'shows' => t.shows,
+      _ => key,
+    };
 
 /// A user's profile showcase — the current user's own profile when [userId] is
 /// null, otherwise another user's (respecting their privacy). Both render the
@@ -73,11 +74,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _profile;
   }
 
-  String _watchTime(int minutes) {
+  String _watchTime(BuildContext context, int minutes) {
+    final t = AppLocalizations.of(context);
     final mo = minutes ~/ (60 * 24 * 30);
     final d = (minutes % (60 * 24 * 30)) ~/ (60 * 24);
     final h = (minutes % (60 * 24)) ~/ 60;
-    return [if (mo > 0) '${mo}mo', if (d > 0) '${d}d', '${h}h'].join(' ');
+    return [if (mo > 0) '$mo${t.unitMonth}', if (d > 0) '$d${t.unitDay}', '$h${t.unitHour}'].join(' ');
   }
 
   @override
@@ -174,7 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (s == null) return const SizedBox(height: Insets.md);
         final items = [
           ('${s.episodesSeen}', AppLocalizations.of(context).statEpisodes),
-          (_watchTime(s.totalMinutes), AppLocalizations.of(context).statWatched),
+          (_watchTime(context, s.totalMinutes), AppLocalizations.of(context).statWatched),
           ('${s.moviesSeen}', AppLocalizations.of(context).statMovies),
         ];
         return Padding(
@@ -209,7 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           favorites,
           onSeeAll: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ShowsGridScreen(
-                  title: _isSelf ? AppLocalizations.of(context).favorites : '${p.screenName}\'s favorites',
+                  title: _isSelf ? AppLocalizations.of(context).favorites : AppLocalizations.of(context).usersFavorites(p.screenName),
                   shows: favorites))),
         );
       },
@@ -232,7 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onSeeAll: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => UserLibraryScreen(
                   userId: _targetId,
-                  title: _isSelf ? 'Your shows' : '${p.screenName}\'s shows'))),
+                  title: _isSelf ? AppLocalizations.of(context).yourShows : AppLocalizations.of(context).usersShows(p.screenName)))),
         );
       },
     );
@@ -249,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         itemBuilder: (context, i) {
           final s = shows[i];
           return ShowCard(
-            title: s.name ?? 'Series ${s.seriesId}',
+            title: s.name ?? AppLocalizations.of(context).seriesFallback(s.seriesId),
             imageUrl: s.imageUrl,
             favorite: s.isFavorited,
             onTap: () => Navigator.of(context).push(
@@ -502,14 +504,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(width: Insets.sm),
                         _bannerAction(
                           Icons.settings_rounded,
-                          'Settings',
+                          AppLocalizations.of(context).settings,
                           () => Navigator.of(context).push(
                             MaterialPageRoute(
                                 builder: (_) => const SettingsScreen()),
                           ),
                         ),
                         const SizedBox(width: Insets.sm),
-                        _bannerAction(Icons.logout_rounded, 'Log out', () {
+                        _bannerAction(Icons.logout_rounded, AppLocalizations.of(context).logOut, () {
                           Navigator.of(context).popUntil((r) => r.isFirst);
                           context.read<AuthController>().logout();
                         }),
@@ -562,7 +564,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 avatar ? Icons.account_circle_rounded : Icons.wallpaper_rounded,
               ),
               title: Text(
-                avatar ? 'Change profile photo' : 'Change background',
+                avatar ? AppLocalizations.of(ctx).changePhoto : AppLocalizations.of(ctx).changeBackground,
               ),
               onTap: () => Navigator.of(ctx).pop(true),
             ),
@@ -675,7 +677,7 @@ class _CustomizeSheetState extends State<_CustomizeSheet> {
                     index: i,
                     child: const Icon(Icons.drag_handle_rounded),
                   ),
-                  title: Text(_kBlockLabels[_order[i]] ?? _order[i]),
+                  title: Text(_blockLabel(AppLocalizations.of(context), _order[i])),
                   trailing: Switch(
                     value: _enabled.contains(_order[i]),
                     onChanged: (on) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
@@ -51,10 +52,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
           if (snap.hasError) return _Fill(child: ErrorView(message: '${snap.error}', onRetry: _reload));
           final (upcoming, recent) = snap.data!;
           if (upcoming.isEmpty && recent.isEmpty) {
-            return const _Fill(
+            return _Fill(
               child: MessageView(
                 icon: Icons.event_available_rounded,
-                message: 'Nothing scheduled.\nFollow airing shows to see them here.',
+                message: AppLocalizations.of(context).calendarEmpty,
               ),
             );
           }
@@ -89,9 +90,9 @@ class _CalendarRow extends StatelessWidget {
   }
 
   /// "Mon 12 Aug · 22:30" — date first, release time appended when known.
-  String get _when {
+  String _when(BuildContext context) {
     final parts = <String>[];
-    if (item.date != null) parts.add(_prettyDate(item.date!));
+    if (item.date != null) parts.add(_prettyDate(context, item.date!));
     if (item.time != null && item.time!.isNotEmpty) parts.add(item.time!);
     return parts.join(' · ');
   }
@@ -110,7 +111,7 @@ class _CalendarRow extends StatelessWidget {
       // Tapping the show NAME opens the show; tapping anywhere else opens the episode.
       title: GestureDetector(
         onTap: () => _openShow(context),
-        child: Text(item.name ?? 'Series ${item.seriesId}',
+        child: Text(item.name ?? AppLocalizations.of(context).seriesFallback(item.seriesId),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -123,8 +124,8 @@ class _CalendarRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-          if (_when.isNotEmpty)
-            Text(_when, style: context.text.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w500)),
+          if (_when(context).isNotEmpty)
+            Text(_when(context), style: context.text.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w500)),
         ],
       ),
       trailing: _countdown(context),
@@ -149,15 +150,15 @@ class _CalendarRow extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.name ?? 'Series ${item.seriesId}',
+              Text(item.name ?? AppLocalizations.of(context).seriesFallback(item.seriesId),
                   style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: Insets.xs),
               Text([?tag, ?item.episodeName].join(' · '),
                   style: context.text.titleSmall?.copyWith(color: context.scheme.primary)),
-              if (_when.isNotEmpty)
+              if (_when(context).isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: Insets.xs),
-                  child: Text(_when, style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+                  child: Text(_when(context), style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
                 ),
               const SizedBox(height: Insets.lg),
               Row(
@@ -209,7 +210,8 @@ class _CalendarRow extends StatelessWidget {
     final now = DateTime.now();
     final days = DateTime(d.year, d.month, d.day).difference(DateTime(now.year, now.month, now.day)).inDays;
     if (days < 0) return null;
-    final (String value, String unit) = days == 0 ? ('Today', '') : ('$days', days == 1 ? 'day' : 'days');
+    final t = AppLocalizations.of(context);
+    final (String value, String unit) = days == 0 ? (t.today, '') : ('$days', days == 1 ? t.day : t.days);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -222,13 +224,12 @@ class _CalendarRow extends StatelessWidget {
   }
 }
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /// "2026-08-12" -> "12 Aug 2026"; returns the raw string if it doesn't parse.
-String _prettyDate(String iso) {
+String _prettyDate(BuildContext context, String iso) {
   final d = DateTime.tryParse(iso);
   if (d == null) return iso;
-  return '${d.day} ${_months[d.month - 1]} ${d.year}';
+  final locale = Localizations.localeOf(context).toString();
+  return DateFormat.yMMMd(locale).format(d);
 }
 
 /// Wraps a widget in a scrollable so pull-to-refresh works on empty/loading.

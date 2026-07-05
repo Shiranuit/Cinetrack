@@ -5,6 +5,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../widgets/poster.dart';
 import '../widgets/states.dart';
@@ -37,6 +38,7 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
 
   Future<void> _act(MatchSuggestion s, bool confirm) async {
     final api = context.read<ApiClient>();
+    final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _resolving.add(s.id));
     try {
@@ -46,7 +48,7 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
         await api.rejectSuggestion(s.id);
       }
       messenger.showSnackBar(SnackBar(
-        content: Text(confirm ? 'Matched to ${s.suggestedName ?? 'series'}' : 'Dismissed "${s.importName}"'),
+        content: Text(confirm ? t.matchedTo(s.suggestedName ?? t.seriesGeneric) : t.dismissedImport(s.importName)),
       ));
       _reload();
     } catch (e) {
@@ -57,8 +59,9 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Review import matches')),
+      appBar: AppBar(title: Text(t.reviewImportMatches)),
       body: FutureBuilder<List<MatchSuggestion>>(
         future: _future,
         builder: (context, snap) {
@@ -66,9 +69,9 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
           if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: _reload);
           final items = snap.data ?? [];
           if (items.isEmpty) {
-            return const MessageView(
+            return MessageView(
               icon: Icons.done_all_rounded,
-              message: 'Nothing to review.\nAll imported shows are matched.',
+              message: t.nothingToReview,
             );
           }
           return ListView.separated(
@@ -80,7 +83,7 @@ class _ImportMatchesScreenState extends State<ImportMatchesScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: Insets.sm),
                   child: Text(
-                    "These shows' original ids are gone from TheTVDB. We found likely matches — confirm the correct ones, dismiss the rest.",
+                    t.importMatchesIntro,
                     style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant),
                   ),
                 );
@@ -108,6 +111,7 @@ class _SuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Card(
       color: context.scheme.surfaceContainerHighest,
       clipBehavior: Clip.antiAlias,
@@ -130,15 +134,15 @@ class _SuggestionCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('You imported', style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant)),
+                      Text(t.youImported, style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant)),
                       Text(s.importName, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700), maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: Insets.xs),
                       Row(children: [
                         Icon(Icons.arrow_downward_rounded, size: 14, color: context.colors.seen),
                         const SizedBox(width: 4),
-                        Text('likely match', style: context.text.labelSmall?.copyWith(color: context.colors.seen)),
+                        Text(t.likelyMatch, style: context.text.labelSmall?.copyWith(color: context.colors.seen)),
                       ]),
-                      Text(s.suggestedName ?? 'series ${s.suggestedSeriesId}',
+                      Text(s.suggestedName ?? t.seriesWithId(s.suggestedSeriesId),
                           style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w700), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                   ),
@@ -155,7 +159,7 @@ class _SuggestionCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: onReject,
                       icon: const Icon(Icons.close_rounded, size: 18),
-                      label: const Text('Not it'),
+                      label: Text(t.notIt),
                     ),
                   ),
                   const SizedBox(width: Insets.sm),
@@ -163,7 +167,7 @@ class _SuggestionCard extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: onConfirm,
                       icon: const Icon(Icons.check_rounded, size: 18),
-                      label: const Text('Confirm'),
+                      label: Text(t.confirm),
                     ),
                   ),
                 ],

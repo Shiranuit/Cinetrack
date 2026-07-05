@@ -432,4 +432,355 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noTrackedMovies => '没有追踪的电影。';
+
+  @override
+  String get langPriorityHint => '拖动以设置翻译优先级。将使用第一个可用的翻译。';
+
+  @override
+  String get privacyHint => '只有已接受的关注者才能查看你的个人资料和动态';
+
+  @override
+  String get setNewPassword => '设置新密码';
+
+  @override
+  String get importTvTime => '导入 TV Time 数据';
+
+  @override
+  String get importGdprHint => '上传你的 GDPR 导出文件（.zip）';
+
+  @override
+  String get deleteAccount => '删除账户';
+
+  @override
+  String get deleteAccountHint => '永久删除你的账户和所有数据';
+
+  @override
+  String get displayName => '显示名称';
+
+  @override
+  String get addLanguage => '添加语言';
+
+  @override
+  String get primary => '主要';
+
+  @override
+  String get statistics => '统计';
+
+  @override
+  String get changePhoto => '更换头像';
+
+  @override
+  String get changeBackground => '更换背景';
+
+  @override
+  String get seeAll => '查看全部';
+
+  @override
+  String get unitMonth => '个月';
+
+  @override
+  String get unitDay => '天';
+
+  @override
+  String get unitHour => '小时';
+
+  @override
+  String get specials => '特别篇';
+
+  @override
+  String season(int number) {
+    return '第 $number 季';
+  }
+
+  @override
+  String get episodesSeen => '集已观看';
+
+  @override
+  String get rateThisShow => '评价此剧';
+
+  @override
+  String get today => '今天';
+
+  @override
+  String get day => '天';
+
+  @override
+  String get days => '天';
+
+  @override
+  String get sortPopular => '热门';
+
+  @override
+  String get sortTopRated => '高评分';
+
+  @override
+  String get sortReleaseDate => '发布日期';
+
+  @override
+  String get sortLastUpdated => '最近更新';
+
+  @override
+  String get seasons => '季数';
+
+  @override
+  String get episodes => '集数';
+
+  @override
+  String get sortLongest => '最长';
+
+  @override
+  String get genres => '类型';
+
+  @override
+  String get themes => '主题';
+
+  @override
+  String get networks => '电视网';
+
+  @override
+  String get studios => '工作室';
+
+  @override
+  String get releaseYear => '发行年份';
+
+  @override
+  String get runtimeLength => '单集/片长';
+
+  @override
+  String get filterAny => '全部';
+
+  @override
+  String get triStateHint => '点击：包含 → 排除 → 关闭';
+
+  @override
+  String get statusContinuing => '连载中';
+
+  @override
+  String get statusEnded => '已完结';
+
+  @override
+  String get statusUpcoming => '即将播出';
+
+  @override
+  String get noFollowingYet => '你还没有关注任何人。\n在上方搜索以查找用户。';
+
+  @override
+  String sortedBy(String sort) {
+    return '按$sort排序';
+  }
+
+  @override
+  String filteredSummary(int count, String sort) {
+    return '已筛选 · $count 项 · $sort';
+  }
+
+  @override
+  String get showFollowing => '已关注';
+
+  @override
+  String yourRating(int rating) {
+    return '你的评分 · $rating/10';
+  }
+
+  @override
+  String searchIn(String name) {
+    return '搜索$name…';
+  }
+
+  @override
+  String get refineSearch => '细化搜索以查看更多…';
+
+  @override
+  String get runtimeUnder30 => '30 分钟以下';
+
+  @override
+  String get runtime30to60 => '30–60 分钟';
+
+  @override
+  String get runtimeOver60 => '60 分钟以上';
+
+  @override
+  String get sortName => '名称';
+
+  @override
+  String nSelected(int count) {
+    return '已选 $count 个';
+  }
+
+  @override
+  String get calendarEmpty => '暂无排期。\n关注正在播出的剧集即可在此查看。';
+
+  @override
+  String seriesFallback(int id) {
+    return '剧集 $id';
+  }
+
+  @override
+  String get discoverEmpty => '您的目录中还没有匹配项。\n导入或搜索节目来填充它，然后在此处筛选。';
+
+  @override
+  String get noUsersFound => '未找到用户。';
+
+  @override
+  String get reviewImportMatches => '查看导入匹配';
+
+  @override
+  String get nothingToReview => '没有需要查看的内容。\n所有导入的节目均已匹配。';
+
+  @override
+  String get importMatchesIntro =>
+      '这些节目的原始 ID 已从 TheTVDB 中消失。我们找到了可能的匹配项——确认正确的，其余的忽略。';
+
+  @override
+  String get youImported => '你导入了';
+
+  @override
+  String get likelyMatch => '可能匹配';
+
+  @override
+  String get notIt => '不是';
+
+  @override
+  String get confirm => '确认';
+
+  @override
+  String matchedTo(String name) {
+    return '已匹配到 $name';
+  }
+
+  @override
+  String dismissedImport(String name) {
+    return '已忽略\"$name\"';
+  }
+
+  @override
+  String seriesWithId(int id) {
+    return '剧集 $id';
+  }
+
+  @override
+  String get ok => '确定';
+
+  @override
+  String get gridView => '网格视图';
+
+  @override
+  String get carouselView => '轮播视图';
+
+  @override
+  String get filterLibrary => '筛选媒体库';
+
+  @override
+  String get kindMovie => '电影';
+
+  @override
+  String watchedTimes(int count) {
+    return '已观看 ×$count';
+  }
+
+  @override
+  String get favorite => '收藏';
+
+  @override
+  String get unfavorite => '取消收藏';
+
+  @override
+  String get movie => '电影';
+
+  @override
+  String movieNumbered(int id) {
+    return '电影 $id';
+  }
+
+  @override
+  String usersFavorites(String name) {
+    return '$name的收藏';
+  }
+
+  @override
+  String usersShows(String name) {
+    return '$name的剧集';
+  }
+
+  @override
+  String get yourShows => '你的剧集';
+
+  @override
+  String importGdprSuccess(int shows, int watches, int favorites) {
+    return '已导入 $shows 部剧集 · $watches 次观看 · $favorites 个收藏。\n正在后台匹配缺失的剧集 — 请稍后查看“查看导入匹配”。';
+  }
+
+  @override
+  String get deleteAccountConfirmBody =>
+      '这将永久删除您的账户及所有数据 — 追踪的剧集、观看记录、收藏和关注。此操作无法撤销。';
+
+  @override
+  String get deleteAnyway => '仍然删除';
+
+  @override
+  String get keepMyAccount => '保留我的账户';
+
+  @override
+  String get nameCannotBeEmpty => '名称不能为空';
+
+  @override
+  String get enterValidEmail => '请输入有效的电子邮箱';
+
+  @override
+  String get profileUpdated => '个人资料已更新。';
+
+  @override
+  String showsNeedConfirming(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 部剧集需要确认',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String showFallback(int id) {
+    return '节目 $id';
+  }
+
+  @override
+  String get filterAndSort => '筛选和排序';
+
+  @override
+  String movieFallback(int id) {
+    return '电影 $id';
+  }
+
+  @override
+  String ratingStars(int rating) {
+    return '★ $rating/10';
+  }
+
+  @override
+  String get markWatchedAgain => '再次标记为已观看';
+
+  @override
+  String get addToFavorites => '添加到收藏';
+
+  @override
+  String get addedToFavorites => '已添加到收藏';
+
+  @override
+  String get watchLater => '稍后观看';
+
+  @override
+  String get markedForLater => '已标记为稍后观看';
+
+  @override
+  String get stoppedWatching => '已停止观看';
+
+  @override
+  String get removeFromLibrary => '从库中移除';
+
+  @override
+  String get removed => '已移除';
+
+  @override
+  String get seriesGeneric => '剧集';
 }

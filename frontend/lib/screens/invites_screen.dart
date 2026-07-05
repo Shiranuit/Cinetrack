@@ -111,7 +111,7 @@ class _InvitesScreenState extends State<InvitesScreen> {
             },
             child: Text(t.copyLink),
           ),
-          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(t.ok)),
         ],
       ),
     );

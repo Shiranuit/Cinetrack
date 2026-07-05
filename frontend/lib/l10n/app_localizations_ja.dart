@@ -433,4 +433,356 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get noTrackedMovies => '追跡中の映画はありません。';
+
+  @override
+  String get langPriorityHint => 'ドラッグして翻訳の優先順位を設定します。最初に利用可能な翻訳が使用されます。';
+
+  @override
+  String get privacyHint => '承認されたフォロワーのみがあなたのプロフィールとアクティビティを閲覧できます';
+
+  @override
+  String get setNewPassword => '新しいパスワードを設定';
+
+  @override
+  String get importTvTime => 'TV Time のデータをインポート';
+
+  @override
+  String get importGdprHint => 'GDPR エクスポート（.zip）をアップロード';
+
+  @override
+  String get deleteAccount => 'アカウントを削除';
+
+  @override
+  String get deleteAccountHint => 'アカウントとすべてのデータを完全に削除します';
+
+  @override
+  String get displayName => '表示名';
+
+  @override
+  String get addLanguage => '言語を追加';
+
+  @override
+  String get primary => '優先';
+
+  @override
+  String get statistics => '統計';
+
+  @override
+  String get changePhoto => 'プロフィール写真を変更';
+
+  @override
+  String get changeBackground => '背景を変更';
+
+  @override
+  String get seeAll => 'すべて表示';
+
+  @override
+  String get unitMonth => 'か月';
+
+  @override
+  String get unitDay => '日';
+
+  @override
+  String get unitHour => '時間';
+
+  @override
+  String get specials => '特別編';
+
+  @override
+  String season(int number) {
+    return 'シーズン$number';
+  }
+
+  @override
+  String get episodesSeen => '話視聴済み';
+
+  @override
+  String get rateThisShow => 'この番組を評価';
+
+  @override
+  String get today => '今日';
+
+  @override
+  String get day => '日';
+
+  @override
+  String get days => '日';
+
+  @override
+  String get sortPopular => '人気';
+
+  @override
+  String get sortTopRated => '高評価';
+
+  @override
+  String get sortReleaseDate => '公開日';
+
+  @override
+  String get sortLastUpdated => '最終更新';
+
+  @override
+  String get seasons => 'シーズン数';
+
+  @override
+  String get episodes => 'エピソード';
+
+  @override
+  String get sortLongest => '長い順';
+
+  @override
+  String get genres => 'ジャンル';
+
+  @override
+  String get themes => 'テーマ';
+
+  @override
+  String get networks => '放送局';
+
+  @override
+  String get studios => 'スタジオ';
+
+  @override
+  String get releaseYear => '公開年';
+
+  @override
+  String get runtimeLength => 'エピソード／再生時間';
+
+  @override
+  String get filterAny => 'すべて';
+
+  @override
+  String get triStateHint => 'タップ：含める → 除外 → オフ';
+
+  @override
+  String get statusContinuing => '放送中';
+
+  @override
+  String get statusEnded => '終了';
+
+  @override
+  String get statusUpcoming => '近日公開';
+
+  @override
+  String get noFollowingYet => 'まだ誰もフォローしていません。\n上で検索して人を見つけましょう。';
+
+  @override
+  String sortedBy(String sort) {
+    return '$sortで並べ替え';
+  }
+
+  @override
+  String filteredSummary(int count, String sort) {
+    return 'フィルター · $count件 · $sort';
+  }
+
+  @override
+  String get showFollowing => 'フォロー中';
+
+  @override
+  String yourRating(int rating) {
+    return 'あなたの評価 · $rating/10';
+  }
+
+  @override
+  String searchIn(String name) {
+    return '$nameを検索…';
+  }
+
+  @override
+  String get refineSearch => '検索を絞り込むと、さらに表示されます…';
+
+  @override
+  String get runtimeUnder30 => '30分未満';
+
+  @override
+  String get runtime30to60 => '30〜60分';
+
+  @override
+  String get runtimeOver60 => '60分以上';
+
+  @override
+  String get sortName => '名前順';
+
+  @override
+  String nSelected(int count) {
+    return '$count件選択';
+  }
+
+  @override
+  String get calendarEmpty => '予定はありません。\n放送中の番組をフォローするとここに表示されます。';
+
+  @override
+  String seriesFallback(int id) {
+    return 'シリーズ $id';
+  }
+
+  @override
+  String get discoverEmpty =>
+      'カタログにまだ一致するものがありません。\nインポートまたは検索して番組を追加してから、ここで絞り込んでください。';
+
+  @override
+  String get noUsersFound => 'ユーザーが見つかりません。';
+
+  @override
+  String get reviewImportMatches => 'インポートの一致を確認';
+
+  @override
+  String get nothingToReview => '確認する項目はありません。\nインポートしたすべての番組が一致しています。';
+
+  @override
+  String get importMatchesIntro =>
+      'これらの番組の元のIDはTheTVDBから消えています。可能性の高い一致を見つけました。正しいものを確認し、残りは破棄してください。';
+
+  @override
+  String get youImported => 'インポートしたもの';
+
+  @override
+  String get likelyMatch => '可能性の高い一致';
+
+  @override
+  String get notIt => '違う';
+
+  @override
+  String get confirm => '確認';
+
+  @override
+  String matchedTo(String name) {
+    return '$name に一致';
+  }
+
+  @override
+  String dismissedImport(String name) {
+    return '「$name」を破棄しました';
+  }
+
+  @override
+  String seriesWithId(int id) {
+    return 'シリーズ $id';
+  }
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String get gridView => 'グリッド表示';
+
+  @override
+  String get carouselView => 'カルーセル表示';
+
+  @override
+  String get filterLibrary => 'ライブラリを絞り込む';
+
+  @override
+  String get kindMovie => '映画';
+
+  @override
+  String watchedTimes(int count) {
+    return '視聴済み ×$count';
+  }
+
+  @override
+  String get favorite => 'お気に入り';
+
+  @override
+  String get unfavorite => 'お気に入りから削除';
+
+  @override
+  String get movie => '映画';
+
+  @override
+  String movieNumbered(int id) {
+    return '映画 $id';
+  }
+
+  @override
+  String usersFavorites(String name) {
+    return '$nameのお気に入り';
+  }
+
+  @override
+  String usersShows(String name) {
+    return '$nameの番組';
+  }
+
+  @override
+  String get yourShows => 'あなたの番組';
+
+  @override
+  String importGdprSuccess(int shows, int watches, int favorites) {
+    return '$shows件の番組・$watches件の視聴・$favorites件のお気に入りをインポートしました。\n不足している番組をバックグラウンドで照合中です。まもなく「インポートの一致を確認」をご確認ください。';
+  }
+
+  @override
+  String get deleteAccountConfirmBody =>
+      'これによりアカウントとすべてのデータ（追跡中の番組、視聴履歴、お気に入り、フォロー）が完全に削除されます。この操作は取り消せません。';
+
+  @override
+  String get deleteAnyway => 'それでも削除';
+
+  @override
+  String get keepMyAccount => 'アカウントを保持';
+
+  @override
+  String get nameCannotBeEmpty => '名前を入力してください';
+
+  @override
+  String get enterValidEmail => '有効なメールアドレスを入力してください';
+
+  @override
+  String get profileUpdated => 'プロフィールを更新しました。';
+
+  @override
+  String showsNeedConfirming(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の番組を確認する必要があります',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String showFallback(int id) {
+    return '番組 $id';
+  }
+
+  @override
+  String get filterAndSort => 'フィルターと並べ替え';
+
+  @override
+  String movieFallback(int id) {
+    return '映画 $id';
+  }
+
+  @override
+  String ratingStars(int rating) {
+    return '★ $rating/10';
+  }
+
+  @override
+  String get markWatchedAgain => '再び視聴済みにする';
+
+  @override
+  String get addToFavorites => 'お気に入りに追加';
+
+  @override
+  String get addedToFavorites => 'お気に入りに追加しました';
+
+  @override
+  String get watchLater => '後で見る';
+
+  @override
+  String get markedForLater => '後で見るに設定しました';
+
+  @override
+  String get stoppedWatching => '視聴を停止しました';
+
+  @override
+  String get removeFromLibrary => 'ライブラリから削除';
+
+  @override
+  String get removed => '削除しました';
+
+  @override
+  String get seriesGeneric => 'シリーズ';
 }

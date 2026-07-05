@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
 
 /// A circular "×N watched" badge: filled green with the count when seen, an
 /// outlined eye when unseen. Fixed circular shape for a consistent control.
@@ -40,6 +41,7 @@ class WatchControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -48,7 +50,7 @@ class WatchControl extends StatelessWidget {
           const SizedBox(width: Insets.sm),
         ],
         Tooltip(
-          message: count > 0 ? 'Mark watched again' : 'Mark watched',
+          message: count > 0 ? t.markWatchedAgain : t.markWatched,
           child: InkResponse(onTap: onWatch, radius: size / 2, child: CountBadge(count: count, size: size)),
         ),
       ],

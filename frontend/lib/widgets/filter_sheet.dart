@@ -8,16 +8,29 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 
-const kSorts = {
-  'popularity': 'Popular',
-  'rating': 'Top rated',
-  'year': 'Release date',
-  'updated': 'Last updated',
-  'seasons': 'Seasons',
-  'episodes': 'Episodes',
-  'runtime': 'Longest',
-  'name': 'A–Z',
-};
+/// Sort option ids in display order. Labels resolve via [sortLabel] so they localize.
+const kSortKeys = ['popularity', 'rating', 'year', 'updated', 'seasons', 'episodes', 'runtime', 'name'];
+
+/// Localized label for a sort id.
+String sortLabel(AppLocalizations t, String key) => switch (key) {
+      'popularity' => t.sortPopular,
+      'rating' => t.sortTopRated,
+      'year' => t.sortReleaseDate,
+      'updated' => t.sortLastUpdated,
+      'seasons' => t.seasons,
+      'episodes' => t.episodes,
+      'runtime' => t.sortLongest,
+      'name' => t.sortName,
+      _ => key,
+    };
+
+/// Localized label for a catalog status value (from the backend).
+String statusLabel(AppLocalizations t, String s) => switch (s) {
+      'Continuing' => t.statusContinuing,
+      'Ended' => t.statusEnded,
+      'Upcoming' => t.statusUpcoming,
+      _ => s,
+    };
 
 // TheTVDB uses ISO 639-2 (3-letter) language codes, but CLDR (via
 // flutter_localized_locales) is keyed by 2-letter — map the common ones. Names
@@ -73,6 +86,7 @@ class _FilterSheetState extends State<FilterSheet> {
   @override
   Widget build(BuildContext context) {
     final thisYear = DateTime.now().year;
+    final t = AppLocalizations.of(context);
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.75,
@@ -84,7 +98,7 @@ class _FilterSheetState extends State<FilterSheet> {
         children: [
           Row(
             children: [
-              Text('Filters', style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+              Text(t.filters, style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
               const Spacer(),
               TextButton(onPressed: () => setState(f.reset), child: Text(AppLocalizations.of(context).reset)),
             ],
@@ -103,15 +117,15 @@ class _FilterSheetState extends State<FilterSheet> {
 
           _label(context, AppLocalizations.of(context).sortBy),
           Wrap(spacing: Insets.sm, children: [
-            for (final e in kSorts.entries)
-              ChoiceChip(label: Text(e.value), selected: f.sort == e.key, onSelected: (_) => setState(() => f.sort = e.key)),
+            for (final key in kSortKeys)
+              ChoiceChip(label: Text(sortLabel(t, key)), selected: f.sort == key, onSelected: (_) => setState(() => f.sort = key)),
           ]),
 
           // Every option facet is a collapsible section (see [_ChipSection]).
           if (o.genres.isNotEmpty)
-            _triSection('Genres', [for (final g in o.genres) (g.id, g.name)], f.genresInc, f.genresExc),
+            _triSection(t.genres, [for (final g in o.genres) (g.id, g.name)], f.genresInc, f.genresExc),
           if (o.statuses.isNotEmpty)
-            _multiSection<String>('Status', [for (final s in o.statuses) (s, s)], f.statuses),
+            _multiSection<String>(t.status, [for (final s in o.statuses) (s, statusLabel(t, s))], f.statuses),
           if (o.languages.isNotEmpty)
             _multiSection<String>(AppLocalizations.of(context).filterOrigLanguage,
                 [for (final c in o.languages) (c, _langName(context, c))], f.originalLanguages),
@@ -120,24 +134,30 @@ class _FilterSheetState extends State<FilterSheet> {
                 [for (final c in o.countries) (c, _countryName(context, c))], f.originalCountries),
 
           if (o.tags.isNotEmpty)
-            _triSection('Themes', [for (final t in o.tags) (t.id, t.name)], f.tagsInc, f.tagsExc),
+            _triSection(t.themes, [for (final tag in o.tags) (tag.id, tag.name)], f.tagsInc, f.tagsExc),
           if (o.networks.isNotEmpty)
-            _multiSection<int>('Networks', [for (final c in o.networks) (c.id, c.name)], f.networks),
+            _multiSection<int>(t.networks, [for (final c in o.networks) (c.id, c.name)], f.networks),
           if (o.studios.isNotEmpty)
-            _multiSection<int>('Studios', [for (final c in o.studios) (c.id, c.name)], f.studios),
+            _multiSection<int>(t.studios, [for (final c in o.studios) (c.id, c.name)], f.studios),
 
-          _rangeSection(context, 'Release year', f.years ?? RangeValues(1950, thisYear.toDouble()),
+          _rangeSection(context, t.releaseYear, f.years ?? RangeValues(1950, thisYear.toDouble()),
               1950, thisYear.toDouble(), (v) => f.years = v, () => f.years = null, f.years != null),
-          _rangeSection(context, 'Seasons', f.seasons ?? const RangeValues(1, 20), 1, 20,
+          _rangeSection(context, t.seasons, f.seasons ?? const RangeValues(1, 20), 1, 20,
               (v) => f.seasons = v, () => f.seasons = null, f.seasons != null),
-          _rangeSection(context, 'Episodes', f.episodes ?? const RangeValues(0, 1000), 0, 1000,
+          _rangeSection(context, t.episodes, f.episodes ?? const RangeValues(0, 1000), 0, 1000,
               (v) => f.episodes = v, () => f.episodes = null, f.episodes != null, step: 25),
 
-          _label(context, 'Episode / runtime length'),
+          _label(context, t.runtimeLength),
           Wrap(spacing: Insets.sm, children: [
             for (final b in _runtimeBuckets)
               ChoiceChip(
-                label: Text(b.$1),
+                label: Text(switch (b.$1) {
+                  'Any' => t.filterAny,
+                  '< 30m' => t.runtimeUnder30,
+                  '30–60m' => t.runtime30to60,
+                  '> 60m' => t.runtimeOver60,
+                  _ => b.$1,
+                }),
                 selected: _isRuntime(b.$2, b.$3),
                 onSelected: (_) => setState(() {
                   f.runtimeMin = b.$2;
@@ -194,7 +214,7 @@ class _FilterSheetState extends State<FilterSheet> {
   Widget _triSection(String title, List<(int, String)> items, Set<int> inc, Set<int> exc) =>
       _ChipSection<int>(
         title: title,
-        subtitle: 'tap: include → exclude → off',
+        subtitle: AppLocalizations.of(context).triStateHint,
         items: items,
         selectedCount: inc.length + exc.length,
         chipBuilder: (id, name) => _triChip(name, inc, exc, id),
@@ -284,14 +304,14 @@ class _ChipSectionState<K> extends State<_ChipSection<K>> {
         childrenPadding: const EdgeInsets.only(bottom: Insets.md),
         title: Text(widget.title, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
         subtitle: widget.selectedCount > 0
-            ? Text('${widget.selectedCount} selected', style: TextStyle(color: context.scheme.primary))
+            ? Text(AppLocalizations.of(context).nSelected(widget.selectedCount), style: TextStyle(color: context.scheme.primary))
             : (widget.subtitle != null ? Text(widget.subtitle!, style: context.text.labelSmall) : null),
         children: [
           if (searchable) ...[
             TextField(
               decoration: InputDecoration(
                 isDense: true,
-                hintText: 'Search ${widget.title.toLowerCase()}…',
+                hintText: AppLocalizations.of(context).searchIn(widget.title.toLowerCase()),
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
               ),
               onChanged: (v) => setState(() => _q = v),
@@ -306,7 +326,7 @@ class _ChipSectionState<K> extends State<_ChipSection<K>> {
           if (matches.length > 60)
             Padding(
               padding: const EdgeInsets.only(top: Insets.sm),
-              child: Text('Refine your search to see more…',
+              child: Text(AppLocalizations.of(context).refineSearch,
                   style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant)),
             ),
         ],

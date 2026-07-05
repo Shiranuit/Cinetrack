@@ -174,7 +174,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget _userResultsView() {
     if (_searchBusy && _userResults == null) return const LoadingView();
     final users = _userResults ?? [];
-    if (users.isEmpty) return const MessageView(icon: Icons.person_off_rounded, message: 'No users found.');
+    if (users.isEmpty) return MessageView(icon: Icons.person_off_rounded, message: AppLocalizations.of(context).noUsersFound);
     return ListView.builder(itemCount: users.length, itemBuilder: (context, i) => _userTile(users[i]));
   }
 
@@ -199,11 +199,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
               if (loading)
                 const Padding(padding: EdgeInsets.all(Insets.xl), child: Center(child: CircularProgressIndicator()))
               else if (friends.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: Insets.xl),
+                Padding(
+                  padding: const EdgeInsets.only(top: Insets.xl),
                   child: MessageView(
                     icon: Icons.group_add_rounded,
-                    message: "You aren't following anyone yet.\nSearch above to find people.",
+                    message: AppLocalizations.of(context).noFollowingYet,
                   ),
                 )
               else

@@ -68,6 +68,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: Column(
@@ -80,16 +81,16 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
                   child: SegmentedButton<_Tab>(
                     showSelectedIcon: false,
                     style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                           value: _Tab.series,
-                          label: Text('Series', maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
+                          label: Text(t.typeSeries, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
                       ButtonSegment(
                           value: _Tab.movies,
-                          label: Text('Movies', maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
+                          label: Text(t.typeMovies, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
                       ButtonSegment(
                           value: _Tab.all,
-                          label: Text('All', maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
+                          label: Text(t.typeAll, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
                     ],
                     selected: {_tab},
                     onSelectionChanged: (s) => setState(() => _tab = s.first),
@@ -100,7 +101,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
                   isLabelVisible: _f.activeCount > 0,
                   label: Text('${_f.activeCount}'),
                   child: IconButton(
-                    tooltip: 'Filter & sort',
+                    tooltip: t.filterAndSort,
                     icon: const Icon(Icons.tune_rounded),
                     onPressed: _openFilters,
                   ),
@@ -148,7 +149,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
                 itemBuilder: (context, i) {
                   final s = shows[i];
                   return ShowCard(
-                    title: s.name ?? 'Series ${s.seriesId}',
+                    title: s.name ?? t.seriesFallback(s.seriesId),
                     imageUrl: s.imageUrl,
                     favorite: s.isFavorited,
                     progress: s.progress,
@@ -198,9 +199,10 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
         if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
         final movies = snap.data ?? [];
+        final t = AppLocalizations.of(context);
         if (movies.isEmpty) {
           return MessageView(
-              icon: Icons.theaters_rounded, message: AppLocalizations.of(context).noTrackedMovies);
+              icon: Icons.theaters_rounded, message: t.noTrackedMovies);
         }
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
@@ -209,7 +211,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
           itemBuilder: (context, i) {
             final m = movies[i];
             return ShowCard(
-              title: m.name ?? 'Movie ${m.movieId}',
+              title: m.name ?? t.movieFallback(m.movieId),
               imageUrl: m.imageUrl,
               subtitle: m.year?.toString(),
               favorite: m.isFavorited,
@@ -245,10 +247,10 @@ class ShowsGridScreen extends StatelessWidget {
               itemBuilder: (context, i) {
                 final s = shows[i];
                 return ShowCard(
-                  title: s.name ?? 'Series ${s.seriesId}',
+                  title: s.name ?? t.seriesFallback(s.seriesId),
                   imageUrl: s.imageUrl,
                   favorite: s.isFavorited,
-                  subtitle: s.rating != null ? '★ ${s.rating}/10' : null,
+                  subtitle: s.rating != null ? t.ratingStars(s.rating!) : null,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: s.seriesId)),
                   ),

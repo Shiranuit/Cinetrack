@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
 import 'drag_scroll_behavior.dart';
 import 'show_card.dart';
 
@@ -76,7 +77,7 @@ class PosterRail extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: const Text('See all'))
+                  child: Text(AppLocalizations.of(context).seeAll))
               : Text('$count', style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
         ),
         SizedBox(

@@ -142,9 +142,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           child: InfiniteGrid(
             resetKey: _reloadToken,
             fetchPage: _pageFetch,
-            empty: const MessageView(
+            empty: MessageView(
               icon: Icons.auto_awesome_rounded,
-              message: 'No matches in your catalog yet.\nImport or search shows to fill it, then filter here.',
+              message: t.discoverEmpty,
             ),
             itemBuilder: (context, r) => ShowCard(
               title: r.name ?? '—',
