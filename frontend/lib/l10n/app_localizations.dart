@@ -283,7 +283,7 @@ abstract class AppLocalizations {
   /// No description provided for @statWatched.
   ///
   /// In en, this message translates to:
-  /// **'Watched'**
+  /// **'Time Spent'**
   String get statWatched;
 
   /// No description provided for @statMovies.

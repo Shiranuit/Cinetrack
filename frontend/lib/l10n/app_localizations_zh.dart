@@ -93,7 +93,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statEpisodes => '集数';
 
   @override
-  String get statWatched => '已观看';
+  String get statWatched => '观看时长';
 
   @override
   String get statMovies => '电影';

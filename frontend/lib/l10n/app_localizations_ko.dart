@@ -93,7 +93,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get statEpisodes => '에피소드';
 
   @override
-  String get statWatched => '시청함';
+  String get statWatched => '시청 시간';
 
   @override
   String get statMovies => '영화';

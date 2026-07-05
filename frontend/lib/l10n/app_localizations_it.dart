@@ -93,7 +93,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get statEpisodes => 'Episodi';
 
   @override
-  String get statWatched => 'Visti';
+  String get statWatched => 'Tempo trascorso';
 
   @override
   String get statMovies => 'Film';
