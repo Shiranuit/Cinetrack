@@ -151,6 +151,58 @@ pub async fn mirror_translations(
     Ok(())
 }
 
+/// Mirror ONE episode's per-language name/overview. Used when `/updates` (re)syncs
+/// a single episode (enqueued as "episode"), where the series-level bulk pass in
+/// [`mirror_translations`] does not run — e.g. a newly aired episode or an edited
+/// episode translation. Reads the episode's available languages from its cached base
+/// record and pulls the per-episode translation endpoint for each, so ongoing
+/// episode updates keep translations current.
+pub async fn mirror_translations_for_episode(state: &AppState, episode_id: i64) -> AppResult<()> {
+    let row: Option<(Option<i64>, Value)> = sqlx::query_as(
+        "SELECT series_id, raw FROM catalog.episode WHERE id = $1 AND NOT deleted",
+    )
+    .bind(episode_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((series_id, raw)) = row else { return Ok(()) };
+
+    // The base record already holds the original language; skip it.
+    let original: Option<String> = match series_id {
+        Some(sid) => sqlx::query_scalar("SELECT original_language FROM catalog.series WHERE id = $1")
+            .bind(sid)
+            .fetch_optional(&state.db)
+            .await?
+            .flatten(),
+        None => None,
+    };
+
+    let mut langs: Vec<String> = ["nameTranslations", "overviewTranslations"]
+        .iter()
+        .filter_map(|k| raw[*k].as_array())
+        .flatten()
+        .filter_map(|v| v.as_str())
+        .filter(|l| !l.is_empty() && Some(*l) != original.as_deref())
+        .map(str::to_string)
+        .collect();
+    langs.sort();
+    langs.dedup();
+
+    for lang in &langs {
+        match state.tvdb.translation("episodes", episode_id, lang).await {
+            Ok(data) => {
+                let name = data["name"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
+                let overview = data["overview"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
+                if name.is_some() || overview.is_some() {
+                    translation::store_many(state, "episode", lang, &[episode_id], &[name], &[overview]).await?;
+                }
+            }
+            Err(AppError::NotFound) => {} // no translation for this language; skip
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
 /// Catalog-wide backfill of per-episode translations (see [`mirror_translations`]).
 /// Resumable: a per-series marker (`episode_translations_synced_at`) is set on
 /// success, and a cursor advances past failures within a run so one bad series

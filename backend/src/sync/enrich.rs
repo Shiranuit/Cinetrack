@@ -163,7 +163,14 @@ async fn enrich_one(state: &AppState, item: &queue::QueueItem) -> AppResult<()> 
         }
         "movie" => catalog::movie::refresh_full(state, item.id).await?,
         "season" => catalog::season::refresh(state, item.id).await?,
-        "episode" => catalog::episode::refresh(state, item.id).await?,
+        "episode" => {
+            catalog::episode::refresh(state, item.id).await?;
+            // A single-episode /updates sync doesn't trigger the series-level bulk
+            // pass, so mirror this episode's translations directly (best effort).
+            if let Err(e) = catalog::episode::mirror_translations_for_episode(state, item.id).await {
+                tracing::debug!("enrich episode {} translations skipped: {e}", item.id);
+            }
+        }
         other => tracing::debug!("enrich: unknown entity_type '{other}', skipping"),
     }
     Ok(())
