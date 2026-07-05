@@ -77,6 +77,13 @@ jobs:
           DEFINES="$DEFINES --dart-define=APP_VERSION=${APP_VER}"
           DEFINES="$DEFINES --dart-define=GITHUB_REPO=${{ github.repository }}"
 
+          # Guard: a tag build must carry its real version, never "dev". If this ever
+          # resolves to dev/empty on a tag the update check would be silently disabled.
+          if [ "${{ github.ref_type }}" = "tag" ] && { [ -z "$APP_VER" ] || [ "$APP_VER" = "dev" ]; }; then
+            echo "::error::Tag build resolved APP_VERSION to '$APP_VER'; refusing to ship an APK that reports itself as dev."
+            exit 1
+          fi
+
           VERSION="${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
           mkdir -p ../dist
 
@@ -89,6 +96,24 @@ jobs:
           #    browser can't probe the visitor's phone CPU.
           flutter build apk --release $DEFINES $VERSION_ARGS
           cp build/app/outputs/flutter-apk/app-release.apk "../dist/cinetrack-${VERSION}.apk"
+
+          # Prove APP_VERSION actually reached the compiled app. String.fromEnvironment
+          # folds it into the AOT snapshot (libapp.so), so the exact version string must
+          # be present in the binary. This catches the --dart-define ever being dropped
+          # again, which would ship the APK as "dev" and disable the update check.
+          # (Extract then grep a file rather than piping: grep -q would close the pipe
+          # early on match, and with bash pipefail the SIGPIPE'd unzip would fail a good
+          # build.)
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            rm -rf /tmp/apkcheck
+            unzip -o -q build/app/outputs/flutter-apk/app-release.apk 'lib/*/libapp.so' -d /tmp/apkcheck
+            if grep -qra "$APP_VER" /tmp/apkcheck; then
+              echo "Verified APP_VERSION=$APP_VER is baked into the APK snapshot."
+            else
+              echo "::error::APP_VERSION ($APP_VER) is not present in the built APK; the update check would be disabled. Aborting."
+              exit 1
+            fi
+          fi
 
           # 2) Per-ABI splits — ~a third the size; the in-app updater downloads the one
           #    matching the device's ABI.
