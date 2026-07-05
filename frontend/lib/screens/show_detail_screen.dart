@@ -215,13 +215,16 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   }
 
   Widget _backButton() => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(Insets.sm),
-          child: CircleAvatar(
-            backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
+        child: Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: const EdgeInsets.all(Insets.sm),
+            child: CircleAvatar(
+              backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
           ),
         ),
