@@ -21,7 +21,16 @@ impl CatalogMode {
         match s.trim().to_ascii_lowercase().as_str() {
             "mirror" => Self::Mirror,
             "proxy" => Self::Proxy,
-            _ => Self::Hybrid,
+            "hybrid" | "" => Self::Hybrid,
+            // An unrecognized value silently defaulting to Hybrid is a footgun
+            // (e.g. CATALOG_MODE=full — a MIRROR_SCOPE value — quietly enabling
+            // on-view TheTVDB fetches). Surface it loudly.
+            other => {
+                tracing::warn!(
+                    "CATALOG_MODE='{other}' is not valid (expected mirror|hybrid|proxy); falling back to hybrid"
+                );
+                Self::Hybrid
+            }
         }
     }
 

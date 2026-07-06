@@ -360,14 +360,21 @@ pub async fn list_for_series(
         translation::prefetch(state, "episode", &stale, lang).await;
     }
 
+    // LATERAL (not a plain LEFT JOIN): forces one indexed lookup per episode against
+    // the translation PK (entity_type, entity_id, language). On production the
+    // translation table is huge (all episodes x all languages), and a plain join lets
+    // the planner flip to hashing/scanning that whole table for the language, which
+    // measured ~14 s for a long series. The lateral keeps it a nested-loop index scan.
     let rows = sqlx::query_as::<_, EpisodeRow>(
         "SELECT e.id, e.series_id, e.season_number, e.number, e.absolute_number, \
                 COALESCE(NULLIF(t.name, ''), e.name) AS name, \
                 COALESCE(NULLIF(t.overview, ''), e.overview) AS overview, \
                 e.aired::text AS aired, e.runtime, e.image_url \
          FROM catalog.episode e \
-         LEFT JOIN catalog.translation t \
-           ON t.entity_type = 'episode' AND t.entity_id = e.id AND t.language = $2 \
+         LEFT JOIN LATERAL ( \
+             SELECT tr.name, tr.overview FROM catalog.translation tr \
+             WHERE tr.entity_type = 'episode' AND tr.entity_id = e.id AND tr.language = $2 \
+         ) t ON true \
          WHERE e.series_id = $1 AND NOT e.deleted \
          ORDER BY e.season_number NULLS LAST, e.number NULLS LAST",
     )

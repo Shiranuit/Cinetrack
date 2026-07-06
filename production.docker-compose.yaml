@@ -105,6 +105,11 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-100}
+      # Diagnostics (off by default): DB_PROFILE=1 logs slow SQL (with EXPLAIN) above
+      # DB_PROFILE_MIN_MS ms; BACKEND_PROFILE=1 adds per-request timing + pool stats.
+      DB_PROFILE: ${DB_PROFILE:-}
+      DB_PROFILE_MIN_MS: ${DB_PROFILE_MIN_MS:-50}
+      BACKEND_PROFILE: ${BACKEND_PROFILE:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
       S3_REGION: ${S3_REGION:-garage}
       S3_BUCKET: ${S3_BUCKET:-artwork}

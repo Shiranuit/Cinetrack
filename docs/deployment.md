@@ -161,6 +161,32 @@ must own the DNS and the server's reverse DNS:
 Even done correctly, expect deliverability to lag a managed provider. Prefer external SMTP
 unless full self-containment is a hard requirement.
 
+### Hardening DMARC (none -> quarantine -> reject)
+
+Start DMARC in monitor mode (`p=none`) so nothing legitimate is blocked while you confirm your
+mail authenticates. The `rua=` address receives daily aggregate reports (XML, one per reporter);
+each lists every source that sent as your domain and whether it passed SPF/DKIM/DMARC. Once your
+own server consistently shows `dkim=pass` + `spf=pass` aligned to your domain, tighten the
+`_dmarc.<domain>` TXT record in two steps, watching the reports between each:
+
+```
+# Phase 0 - monitor (start here)
+v=DMARC1; p=none; rua=mailto:you@example.com
+
+# Phase 1 - quarantine (failing mail -> spam). Hold ~1-2 weeks, verify no legit source fails.
+v=DMARC1; p=quarantine; sp=quarantine; adkim=r; aspf=r; pct=100; rua=mailto:you@example.com
+
+# Phase 2 - reject (spoofed mail refused). Full protection.
+v=DMARC1; p=reject; sp=reject; np=reject; adkim=r; aspf=r; rua=mailto:you@example.com
+```
+
+- `sp=` applies the policy to subdomains; `np=reject` refuses mail from non-existent subdomains
+  (a common spoofing trick). Keep alignment relaxed (`adkim=r`/`aspf=r`) unless you have a reason not to.
+- **Before `reject`, authorize every legitimate sender** (SPF `ip4:`/`include:` + its DKIM key):
+  your own server, plus any transactional-email provider, newsletter tool, or Google Workspace
+  mailboxes you later add. `reject` bounces anything from your domain that isn't authorized.
+- Optionally switch SPF's `~all` (softfail) to `-all` (hardfail) once you are confident.
+
 ## Updating / releasing
 
 Tagging a `v*` release on GitHub builds the images, publishes them to GHCR, attaches the APK to
