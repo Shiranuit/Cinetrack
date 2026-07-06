@@ -60,7 +60,7 @@ async fn library_categorizes_and_hides_unavailable() {
     common::follow(&state.db, 1, 60, true, false).await;
     common::set_user_show(&state.db, 1, 60, "unavailable", "true").await;
 
-    let lib = tracking::library(&state, common::uid(1), &langs()).await.unwrap();
+    let lib = tracking::library(&state, common::uid(1), &langs(), "popularity").await.unwrap();
 
     let names = |v: &[tracking::LibraryShow]| v.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>();
     assert_eq!(names(&lib.not_started), vec!["NotStarted"]);
