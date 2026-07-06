@@ -42,6 +42,13 @@ void main() {
     // Server-stored languages follow the user across devices: hydrate the local
     // cache from the profile whenever it (re)loads.
     ..onMe = ((me) => settings.hydrateFromServer(me.languages))
+    // On signup, seed the account's primary language from the device (if we ship
+    // that translation) so the user reads everything in their language right away,
+    // without visiting settings. Done once; changeable later in settings.
+    ..onRegistered = ((me) async {
+      final device = settings.deviceContentLanguage();
+      if (device != null) await settings.setLanguages([device]);
+    })
     ..restore();
   runApp(
     MultiProvider(

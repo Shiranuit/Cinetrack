@@ -40,6 +40,11 @@ class AuthController extends ChangeNotifier {
   /// SettingsController) can sync server-stored preferences. Set by main.dart.
   void Function(Me me)? onMe;
 
+  /// Fired ONCE right after a new account is created, so the app can seed
+  /// account-level defaults (e.g. the primary language from the device). Set by
+  /// main.dart. Runs after [onMe] so it overrides the fresh-account default.
+  Future<void> Function(Me me)? onRegistered;
+
   bool get isAuthed => me != null;
 
   /// Restore a session on startup: try to mint an access token from the refresh
@@ -78,6 +83,7 @@ class AuthController extends ChangeNotifier {
     await api.register(email, password, screenName, inviteCode: inviteCode);
     me = await api.me();
     onMe?.call(me!);
+    if (onRegistered != null) await onRegistered!(me!);
     notifyListeners();
   }
 
