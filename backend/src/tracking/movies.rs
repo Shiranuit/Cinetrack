@@ -100,15 +100,17 @@ pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value:
 /// The user's tracked movies (watched or favorited), ordered by `sort` to match the
 /// series categories (default = newest-watched first). Sorts that don't apply to a
 /// movie (rating/seasons/episodes) fall back to recency.
-pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str) -> AppResult<Vec<LibraryMovie>> {
-    // Whitelisted ORDER BY (never interpolate raw input).
-    let order = match sort {
-        "name" => "name ASC NULLS LAST",
-        "year" => "m.year DESC NULLS LAST, name NULLS LAST",
-        "runtime" => "m.runtime DESC NULLS LAST, name NULLS LAST",
-        "updated" => "m.last_updated DESC NULLS LAST, name NULLS LAST",
-        _ => "um.last_watched DESC NULLS LAST, name NULLS LAST",
+pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str, desc: bool) -> AppResult<Vec<LibraryMovie>> {
+    // Whitelisted column + direction (never interpolate raw input).
+    let dir = if desc { "DESC" } else { "ASC" };
+    let col = match sort {
+        "name" => "name",
+        "year" => "m.year",
+        "runtime" => "m.runtime",
+        "updated" => "m.last_updated",
+        _ => "um.last_watched",
     };
+    let order = format!("{col} {dir} NULLS LAST, name NULLS LAST");
     let rows = sqlx::query_as::<_, LibraryMovie>(&format!(
         "SELECT um.movie_id, \
                 COALESCE((SELECT tr.name FROM catalog.translation tr \

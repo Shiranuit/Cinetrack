@@ -25,6 +25,8 @@ pub struct MoviesQuery {
     pub langs: Option<String>,
     /// Orders the movies list; defaults to recency ("popularity").
     pub sort: Option<String>,
+    /// Sort direction: "desc" (default) or "asc".
+    pub dir: Option<String>,
 }
 
 /// The user's tracked movies (library Movies section).
@@ -35,7 +37,8 @@ pub async fn list_movies(
 ) -> AppResult<Json<Vec<LibraryMovie>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
     let sort = q.sort.as_deref().unwrap_or("popularity");
-    Ok(Json(movies::list(&state, uid, &langs, sort).await?))
+    let desc = q.dir.as_deref() != Some("asc");
+    Ok(Json(movies::list(&state, uid, &langs, sort, desc).await?))
 }
 
 /// The authenticated user's relationship to a movie (watched/favorite/count).

@@ -459,5 +459,11 @@
   "updateOpenToInstall": "Downloading the update. Open the file to install.",
   "@updateOpenToInstall": {},
   "sortMyRating": "Your rating",
-  "@sortMyRating": {}
+  "@sortMyRating": {},
+  "sortAscending": "Ascending",
+  "@sortAscending": {},
+  "sortDescending": "Descending",
+  "@sortDescending": {},
+  "inMyLibrary": "In my library",
+  "@inMyLibrary": {}
 }

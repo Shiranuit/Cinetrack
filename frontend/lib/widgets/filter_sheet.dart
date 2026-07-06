@@ -92,7 +92,34 @@ class _FilterSheetState extends State<FilterSheet> {
               ),
             ),
 
-          _label(context, AppLocalizations.of(context).sortBy),
+          // Discover only: also include shows already in your library (Discover
+          // hides tracked shows by default).
+          if (!widget.showFavorites)
+            Padding(
+              padding: const EdgeInsets.only(top: Insets.sm),
+              child: FilterChip(
+                avatar: Icon(Icons.video_library_rounded, size: 18, color: f.includeLibrary ? context.scheme.primary : null),
+                label: Text(t.inMyLibrary),
+                selected: f.includeLibrary,
+                onSelected: (v) => setState(() => f.includeLibrary = v),
+              ),
+            ),
+
+          // "Sort by" header with an ascending/descending toggle on the right.
+          Padding(
+            padding: const EdgeInsets.only(top: Insets.lg, bottom: Insets.sm),
+            child: Row(
+              children: [
+                Text(t.sortBy, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                ActionChip(
+                  avatar: Icon(f.sortDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded, size: 18),
+                  label: Text(f.sortDesc ? t.sortDescending : t.sortAscending),
+                  onPressed: () => setState(() => f.sortDesc = !f.sortDesc),
+                ),
+              ],
+            ),
+          ),
           Wrap(spacing: Insets.sm, children: [
             // "Your rating" (my_rating) is offered only in the Library: Discover
             // hides your tracked shows, and you can only rate what you track, so
@@ -100,7 +127,16 @@ class _FilterSheetState extends State<FilterSheet> {
             for (final key in [
               for (final k in kSortKeys) ...[k, if (k == 'rating' && widget.showFavorites) 'my_rating'],
             ])
-              ChoiceChip(label: Text(sortLabel(t, key)), selected: f.sort == key, onSelected: (_) => setState(() => f.sort = key)),
+              ChoiceChip(
+                label: Text(sortLabel(t, key)),
+                selected: f.sort == key,
+                // Default each sort to its natural direction (names A->Z, everything
+                // else high/new first); the toggle above can flip it.
+                onSelected: (_) => setState(() {
+                  f.sort = key;
+                  f.sortDesc = key != 'name';
+                }),
+              ),
           ]),
 
           // Every option facet is a collapsible section (see [_ChipSection]).

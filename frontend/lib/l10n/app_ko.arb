@@ -317,5 +317,11 @@
   "updateOpenToInstall": "업데이트를 다운로드하는 중입니다. 파일을 열어 설치하세요.",
   "@updateOpenToInstall": {},
   "sortMyRating": "내 평가",
-  "@sortMyRating": {}
+  "@sortMyRating": {},
+  "sortAscending": "오름차순",
+  "@sortAscending": {},
+  "sortDescending": "내림차순",
+  "@sortDescending": {},
+  "inMyLibrary": "내 라이브러리",
+  "@inMyLibrary": {}
 }

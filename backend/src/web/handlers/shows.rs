@@ -135,6 +135,8 @@ pub struct LibraryQuery {
     pub langs: Option<String>,
     /// Orders shows within each category; defaults to recency ("popularity").
     pub sort: Option<String>,
+    /// Sort direction: "desc" (default) or "asc".
+    pub dir: Option<String>,
 }
 
 /// The user's tracked shows grouped into categories (watching / stale / not started / stopped).
@@ -145,7 +147,8 @@ pub async fn library(
 ) -> AppResult<Json<tracking::Library>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
     let sort = q.sort.as_deref().unwrap_or("popularity");
-    Ok(Json(tracking::library(&state, user_id, &langs, sort).await?))
+    let desc = q.dir.as_deref() != Some("asc");
+    Ok(Json(tracking::library(&state, user_id, &langs, sort, desc).await?))
 }
 
 #[derive(Deserialize)]

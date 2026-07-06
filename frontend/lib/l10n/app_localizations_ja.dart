@@ -873,4 +873,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get sortMyRating => 'あなたの評価';
+
+  @override
+  String get sortAscending => '昇順';
+
+  @override
+  String get sortDescending => '降順';
+
+  @override
+  String get inMyLibrary => 'ライブラリ内';
 }

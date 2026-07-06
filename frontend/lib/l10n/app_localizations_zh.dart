@@ -871,4 +871,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sortMyRating => '你的评分';
+
+  @override
+  String get sortAscending => '升序';
+
+  @override
+  String get sortDescending => '降序';
+
+  @override
+  String get inMyLibrary => '在我的库中';
 }

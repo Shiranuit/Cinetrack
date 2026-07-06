@@ -888,4 +888,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sortMyRating => 'Your rating';
+
+  @override
+  String get sortAscending => 'Ascending';
+
+  @override
+  String get sortDescending => 'Descending';
+
+  @override
+  String get inMyLibrary => 'In my library';
 }

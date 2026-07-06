@@ -317,5 +317,11 @@
   "updateOpenToInstall": "Baixando a atualização. Abra o arquivo para instalar.",
   "@updateOpenToInstall": {},
   "sortMyRating": "Sua avaliação",
-  "@sortMyRating": {}
+  "@sortMyRating": {},
+  "sortAscending": "Crescente",
+  "@sortAscending": {},
+  "sortDescending": "Decrescente",
+  "@sortDescending": {},
+  "inMyLibrary": "Na minha biblioteca",
+  "@inMyLibrary": {}
 }

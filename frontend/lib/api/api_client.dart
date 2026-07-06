@@ -237,8 +237,8 @@ class ApiClient extends ChangeNotifier {
       Series.fromJson(await _get('/api/movies/$id', {'lang': lang}));
 
   // ---- movie tracking ----
-  Future<List<LibraryMovie>> movies({String? langs, String? sort}) async =>
-      _list(await _get('/api/movies', {'langs': ?langs, 'sort': ?sort}), LibraryMovie.fromJson);
+  Future<List<LibraryMovie>> movies({String? langs, String? sort, String? dir}) async =>
+      _list(await _get('/api/movies', {'langs': ?langs, 'sort': ?sort, 'dir': ?dir}), LibraryMovie.fromJson);
   Future<MovieRelation> movieRelation(int id) async =>
       MovieRelation.fromJson(await _get('/api/movies/$id/relation'));
   Future<MovieRelation> watchMovie(int id) async =>
@@ -261,8 +261,8 @@ class ApiClient extends ChangeNotifier {
   Future<List<UserShow>> shows({String? langs}) async =>
       _list(await _get('/api/shows', {'langs': ?langs}), UserShow.fromJson);
 
-  Future<Library> library({String? langs, String? sort}) async =>
-      Library.fromJson(await _get('/api/library', {'langs': ?langs, 'sort': ?sort}));
+  Future<Library> library({String? langs, String? sort, String? dir}) async =>
+      Library.fromJson(await _get('/api/library', {'langs': ?langs, 'sort': ?sort, 'dir': ?dir}));
 
   Future<Stats> stats() async => Stats.fromJson(await _get('/api/stats'));
 

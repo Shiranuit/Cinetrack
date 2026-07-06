@@ -9,6 +9,8 @@ class AdvancedFilters {
   String query = '';
   String type = 'series'; // series | movie | anime
   String sort = 'popularity';
+  bool sortDesc = true; // sort direction; false = ascending
+  bool includeLibrary = false; // Discover only: also show shows already in your library
   final Set<int> genresInc = {}, genresExc = {};
   final Set<int> tagsInc = {}, tagsExc = {};
   final Set<int> networks = {}, studios = {};
@@ -29,6 +31,7 @@ class AdvancedFilters {
 
   int get activeCount =>
       (favoritesOnly ? 1 : 0) +
+      (includeLibrary ? 1 : 0) +
       genresInc.length +
       genresExc.length +
       tagsInc.length +
@@ -61,7 +64,9 @@ class AdvancedFilters {
     episodes = null;
     scoreMin = null;
     favoritesOnly = false;
+    includeLibrary = false;
     sort = 'popularity';
+    sortDesc = true;
   }
 
   static String? _ids(Set<int> s) => s.isEmpty ? null : s.join(',');
@@ -72,6 +77,8 @@ class AdvancedFilters {
       'q': query.trim().isEmpty ? null : query.trim(),
       'type': type,
       'sort': sort,
+      'dir': sortDesc ? 'desc' : 'asc',
+      'include_library': includeLibrary ? 'true' : null,
       'genres': _ids(genresInc),
       'exclude_genres': _ids(genresExc),
       'tags': _ids(tagsInc),

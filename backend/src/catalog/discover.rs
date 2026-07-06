@@ -63,6 +63,7 @@ pub struct Filters {
     pub original_languages: Vec<String>, // any-of (e.g. "jpn", "eng")
     pub original_countries: Vec<String>, // any-of (e.g. "jpn", "usa")
     pub sort: String,                    // popularity | year | name | runtime | seasons | episodes
+    pub sort_desc: bool,                 // sort direction (false = ascending)
     pub limit: i64,
     pub offset: i64,
     /// When set, restrict to this user's tracked (non-unavailable) shows.
@@ -197,27 +198,30 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND x.search_text ILIKE ").push_bind(format!("%{query}%"));
     }
 
+    let dir = if f.sort_desc { "DESC" } else { "ASC" };
     // "my_rating" orders by the viewer's OWN note (a bound uuid, so it can't be a
-    // plain &str in the match). Series-only, since movies have no per-user rating.
+    // plain &str). Series-only, since movies have no per-user rating.
     if f.sort == "my_rating" && !is_movie && f.viewer.is_some() {
         qb.push(" ORDER BY (SELECT us2.rating FROM app.user_show us2 \
                    WHERE us2.series_id = x.id AND us2.user_id = ");
         qb.push_bind(f.viewer.unwrap());
-        qb.push(") DESC NULLS LAST, x.name");
+        qb.push(format!(") {dir} NULLS LAST, x.name"));
     } else {
-        qb.push(match f.sort.as_str() {
-            "year" => " ORDER BY x.year DESC NULLS LAST, x.name",
-            "name" => " ORDER BY x.name ASC NULLS LAST",
-            "runtime" => " ORDER BY x.runtime DESC NULLS LAST, x.name",
-            "updated" => " ORDER BY x.last_updated DESC NULLS LAST, x.name",
-            "seasons" if !is_movie => " ORDER BY x.season_count DESC NULLS LAST, x.name",
-            "episodes" if !is_movie => " ORDER BY x.episode_count DESC NULLS LAST, x.name",
+        // Column to sort by; the direction is applied uniformly below.
+        let col = match f.sort.as_str() {
+            "year" => "x.year",
+            "name" => "x.name",
+            "runtime" => "x.runtime",
+            "updated" => "x.last_updated",
+            "seasons" if !is_movie => "x.season_count",
+            "episodes" if !is_movie => "x.episode_count",
             // "rating" is the cross-user average everywhere ("my_rating" is yours).
             "rating" if !is_movie => {
-                " ORDER BY (SELECT avg(rating) FROM app.user_show WHERE series_id = x.id AND rating IS NOT NULL) DESC NULLS LAST, x.name"
+                "(SELECT avg(rating) FROM app.user_show WHERE series_id = x.id AND rating IS NOT NULL)"
             }
-            _ => " ORDER BY x.score DESC NULLS LAST, x.name",
-        });
+            _ => "x.score",
+        };
+        qb.push(format!(" ORDER BY {col} {dir} NULLS LAST, x.name"));
     }
     // `id` as a final tiebreaker → a total, stable order so offset paging can't
     // repeat or skip rows across pages.

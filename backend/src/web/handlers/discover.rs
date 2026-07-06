@@ -28,6 +28,11 @@ pub struct DiscoverQuery {
     pub kind: Option<String>,
     /// "popularity" (default), "year", "name", "runtime", "seasons", "episodes".
     pub sort: Option<String>,
+    /// Sort direction: "desc" (default) or "asc".
+    pub dir: Option<String>,
+    /// Discover only: when true, also include shows already in the user's library
+    /// (default false = show only shows they don't track).
+    pub include_library: Option<bool>,
     pub genres: Option<String>,         // comma ids, must have ALL
     pub exclude_genres: Option<String>, // comma ids, must have NONE
     pub tags: Option<String>,
@@ -82,6 +87,7 @@ fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Op
         original_languages: csv_strings(q.orig_langs.as_deref()),
         original_countries: csv_strings(q.orig_countries.as_deref()),
         sort: q.sort.clone().unwrap_or_else(|| "popularity".to_string()),
+        sort_desc: q.dir.as_deref() != Some("asc"),
         limit: q.limit.unwrap_or(120),
         offset: q.offset.unwrap_or(0).max(0),
         library_user,
@@ -99,7 +105,10 @@ pub async fn discover(
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, Some(uid), Some(uid)), &langs).await?))
+    // Default: exclude the user's tracked shows (Discover = new shows). The
+    // "include_library" toggle lets them browse their library shows here too.
+    let exclude = if q.include_library.unwrap_or(false) { None } else { Some(uid) };
+    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, exclude, Some(uid)), &langs).await?))
 }
 
 /// Same advanced filter, scoped to the user's own tracked shows.

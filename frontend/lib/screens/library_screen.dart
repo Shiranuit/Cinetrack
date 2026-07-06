@@ -62,13 +62,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late final ApiClient _api;
   Timer? _refreshDebounce;
   final _selection = SelectionController();
+  final _bodyScroll = ScrollController(); // kept across reloads so scroll survives
 
   @override
   void initState() {
     super.initState();
     _api = context.read<ApiClient>();
-    _libFuture = _api.library(langs: _langs, sort: _f.sort);
-    _moviesFuture = _api.movies(langs: _langs, sort: _f.sort);
+    _libFuture = _api.library(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
+    _moviesFuture = _api.movies(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
     _content = _combine(_libFuture, _moviesFuture);
     _searchCtrl.addListener(_onSearchChanged);
     _api.addListener(_onExternalMutation);
@@ -133,6 +134,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _api.removeListener(_onExternalMutation);
     _searchCtrl.dispose();
     _selection.dispose();
+    _bodyScroll.dispose();
     super.dispose();
   }
 
@@ -146,8 +148,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   /// Refresh both series and movies (used by the pull-to-refresh on the body).
   Future<void> _reloadContent() async {
-    final lf = context.read<ApiClient>().library(langs: _langs, sort: _f.sort);
-    final mf = context.read<ApiClient>().movies(langs: _langs, sort: _f.sort);
+    final lf = context.read<ApiClient>().library(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
+    final mf = context.read<ApiClient>().movies(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
     setState(() {
       _libFuture = lf;
       _moviesFuture = mf;
@@ -410,6 +412,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
           final grid = context.watch<SettingsController>().libraryLayout == LibraryLayout.grid;
           var section = 0; // running index for staggered reveal
           return CustomScrollView(
+            // Persistent controller so a content reload (bulk action / auto-refresh)
+            // keeps the scroll position instead of jumping to the top.
+            controller: _bodyScroll,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               for (final (cat, shows) in cats)

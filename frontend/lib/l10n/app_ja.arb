@@ -317,5 +317,11 @@
   "updateOpenToInstall": "アップデートをダウンロード中です。ファイルを開いてインストールしてください。",
   "@updateOpenToInstall": {},
   "sortMyRating": "あなたの評価",
-  "@sortMyRating": {}
+  "@sortMyRating": {},
+  "sortAscending": "昇順",
+  "@sortAscending": {},
+  "sortDescending": "降順",
+  "@sortDescending": {},
+  "inMyLibrary": "ライブラリ内",
+  "@inMyLibrary": {}
 }

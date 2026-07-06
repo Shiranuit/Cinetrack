@@ -317,5 +317,11 @@
   "updateOpenToInstall": "Téléchargement de la mise à jour. Ouvrez le fichier pour l'installer.",
   "@updateOpenToInstall": {},
   "sortMyRating": "Votre note",
-  "@sortMyRating": {}
+  "@sortMyRating": {},
+  "sortAscending": "Croissant",
+  "@sortAscending": {},
+  "sortDescending": "Décroissant",
+  "@sortDescending": {},
+  "inMyLibrary": "Dans ma bibliothèque",
+  "@inMyLibrary": {}
 }

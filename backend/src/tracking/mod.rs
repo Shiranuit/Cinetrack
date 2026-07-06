@@ -170,20 +170,22 @@ const STALE_DAYS: i64 = 30;
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
 /// `sort` orders shows WITHIN each category (default = recency), so the categorized
 /// view honours the same sort options as the flat filter.
-pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &str) -> AppResult<Library> {
-    // Whitelisted ORDER BY (never interpolate raw input into SQL). Default and
-    // "popularity" keep the familiar most-recently-watched-first ordering.
-    let order = match sort {
-        "name" => "name ASC NULLS LAST",
-        "rating" => "(SELECT avg(rating) FROM app.user_show WHERE series_id = lib.series_id AND rating IS NOT NULL) DESC NULLS LAST, name NULLS LAST",
-        "my_rating" => "lib.rating DESC NULLS LAST, name NULLS LAST",
-        "year" => "lib.year DESC NULLS LAST, name NULLS LAST",
-        "seasons" => "lib.season_count DESC NULLS LAST, name NULLS LAST",
-        "episodes" => "lib.episode_count DESC NULLS LAST, name NULLS LAST",
-        "runtime" => "lib.runtime DESC NULLS LAST, name NULLS LAST",
-        "updated" => "lib.last_updated DESC NULLS LAST, name NULLS LAST",
-        _ => "last_watched DESC NULLS LAST, name NULLS LAST",
+pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &str, desc: bool) -> AppResult<Library> {
+    // Whitelisted column + direction (never interpolate raw input into SQL). Default
+    // and "popularity" keep the familiar most-recently-watched-first ordering.
+    let dir = if desc { "DESC" } else { "ASC" };
+    let col = match sort {
+        "name" => "name",
+        "rating" => "(SELECT avg(rating) FROM app.user_show WHERE series_id = lib.series_id AND rating IS NOT NULL)",
+        "my_rating" => "lib.rating",
+        "year" => "lib.year",
+        "seasons" => "lib.season_count",
+        "episodes" => "lib.episode_count",
+        "runtime" => "lib.runtime",
+        "updated" => "lib.last_updated",
+        _ => "last_watched",
     };
+    let order = format!("{col} {dir} NULLS LAST, name NULLS LAST");
     // Every per-series metric is aggregated ONCE (grouped by series_id) in a CTE
     // instead of as a correlated subquery evaluated per tracked show. The old
     // per-row `caught_up` EXISTS made Postgres re-scan the user's entire watch
@@ -913,7 +915,7 @@ pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[Str
     if !profile_visible(state, me, target).await? {
         return Ok(Library::default());
     }
-    library(state, target, langs, "popularity").await
+    library(state, target, langs, "popularity", true).await
 }
 
 /// Recent watch activity from the people the user follows.

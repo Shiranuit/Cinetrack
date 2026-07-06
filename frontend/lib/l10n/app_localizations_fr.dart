@@ -889,4 +889,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get sortMyRating => 'Votre note';
+
+  @override
+  String get sortAscending => 'Croissant';
+
+  @override
+  String get sortDescending => 'Décroissant';
+
+  @override
+  String get inMyLibrary => 'Dans ma bibliothèque';
 }

@@ -58,12 +58,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     super.dispose();
   }
 
-  /// After a bulk action, refresh the grid (follow/watch may change what's shown)
-  /// and drop selection mode.
-  Future<void> _afterBulk() async {
-    if (mounted) setState(() => _reloadToken++);
-  }
-
   // Name search composes with the facet filters (both go into `_f`). Debounced,
   // and only fires once the query clears the backend's 2-char minimum.
   void _onSearchChanged() {
@@ -229,7 +223,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         ListenableBuilder(
           listenable: _selection,
           builder: (_, _) => _selection.active
-              ? BulkActionBar(controller: _selection, onChanged: _afterBulk)
+              // No onChanged: a bulk action must NOT reset the grid (resetKey), or
+              // it reloads from page 1 and jumps to the top, losing scroll. The bar
+              // clears the selection itself; acted items refresh on the next
+              // pull-to-refresh. (Follow/watch-later just track the show.)
+              ? BulkActionBar(controller: _selection)
               : const SizedBox.shrink(),
         ),
       ],

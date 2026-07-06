@@ -111,7 +111,7 @@ pub async fn user_movies(
     if !tracking::profile_visible(&state, me, target_id).await? {
         return Ok(Json(vec![]));
     }
-    Ok(Json(tracking::movies::list(&state, target_id, &q.list(), "popularity").await?))
+    Ok(Json(tracking::movies::list(&state, target_id, &q.list(), "popularity", true).await?))
 }
 
 /// Incoming pending follow requests.

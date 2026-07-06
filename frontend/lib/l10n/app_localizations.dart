@@ -1725,6 +1725,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your rating'**
   String get sortMyRating;
+
+  /// No description provided for @sortAscending.
+  ///
+  /// In en, this message translates to:
+  /// **'Ascending'**
+  String get sortAscending;
+
+  /// No description provided for @sortDescending.
+  ///
+  /// In en, this message translates to:
+  /// **'Descending'**
+  String get sortDescending;
+
+  /// No description provided for @inMyLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'In my library'**
+  String get inMyLibrary;
 }
 
 class _AppLocalizationsDelegate
