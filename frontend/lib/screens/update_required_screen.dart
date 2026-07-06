@@ -42,12 +42,15 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
         },
       );
       // The OS installer is now in front; leave the button in a busy state.
-    } catch (e) {
+    } catch (_) {
+      // In-app install failed (e.g. the "install unknown apps" permission was
+      // declined). Fall back to a browser download so the user can install by hand.
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = AppLocalizations.of(context).updateFailed;
+          _error = AppLocalizations.of(context).updateOpenToInstall;
         });
+        await downloadApkInBrowser(version);
       }
     }
   }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatf
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
 
@@ -73,3 +74,11 @@ Future<void> downloadAndInstallApk(String version, {void Function(double?)? onPr
     client.close();
   }
 }
+
+/// Manual-install fallback: open the browser to download the fat (all-ABI) APK for
+/// [version]. Used when the in-app installer can't run - the user declined the
+/// "install unknown apps" permission, the system installer failed to launch, or
+/// we're on web-on-Android where an in-app install isn't possible. The fat APK is
+/// used so the downloaded file installs regardless of the device's ABI.
+Future<void> downloadApkInBrowser(String version) =>
+    launchUrl(Uri.parse(Config.fatApkUrl(version)), mode: LaunchMode.externalApplication);

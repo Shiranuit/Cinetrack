@@ -867,4 +867,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get rateLove => '최고예요';
+
+  @override
+  String get updateOpenToInstall => '업데이트를 다운로드하는 중입니다. 파일을 열어 설치하세요.';
 }

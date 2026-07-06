@@ -313,5 +313,7 @@
   "rateLike": "喜欢",
   "@rateLike": {},
   "rateLove": "超爱",
-  "@rateLove": {}
+  "@rateLove": {},
+  "updateOpenToInstall": "正在下载更新。打开文件进行安装。",
+  "@updateOpenToInstall": {}
 }

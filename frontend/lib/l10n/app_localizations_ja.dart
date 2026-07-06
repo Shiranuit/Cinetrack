@@ -867,4 +867,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get rateLove => '大好き';
+
+  @override
+  String get updateOpenToInstall => 'アップデートをダウンロード中です。ファイルを開いてインストールしてください。';
 }

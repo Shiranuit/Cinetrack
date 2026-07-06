@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../config.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
@@ -28,6 +26,45 @@ class UpdateBanner extends StatefulWidget {
 }
 
 class _UpdateBannerState extends State<UpdateBanner> {
+  bool _busy = false;
+  double? _progress; // 0..1 while downloading; null = indeterminate
+
+  /// Same behaviour as the forced-update screen: on a native Android build,
+  /// download the matching APK and hand it to the system installer (one tap,
+  /// no manual "open the download" step). On web-on-Android we can't install
+  /// in-app, so we fall back to letting the browser download the fat APK.
+  Future<void> _update(String version) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final t = AppLocalizations.of(context);
+    // web-on-Android can't install in-app: just download the APK in the browser.
+    if (!canInstallApk) {
+      await downloadApkInBrowser(version);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _progress = null;
+    });
+    try {
+      await downloadAndInstallApk(
+        version,
+        onProgress: (p) {
+          if (mounted) setState(() => _progress = p);
+        },
+      );
+      // The OS installer is now in front; leave the button busy.
+    } catch (_) {
+      // Couldn't install in-app (e.g. the "install unknown apps" permission was
+      // declined). Fall back to a browser download so the user can install it by
+      // hand from their Downloads.
+      if (mounted) {
+        setState(() => _busy = false);
+        await downloadApkInBrowser(version);
+        messenger.showSnackBar(SnackBar(content: Text(t.updateOpenToInstall)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
@@ -53,22 +90,27 @@ class _UpdateBannerState extends State<UpdateBanner> {
               ),
               if (_isAndroid && auth.serverVersion != null)
                 TextButton(
-                  // The backend reports the newest version (deployed in lockstep), so
-                  // we build an exact link to it. Browser downloads it; the forced
-                  // screen does the one-tap in-app install instead. Native apps probe
-                  // the CPU for the small per-ABI split; web-on-Android gets the fat APK.
-                  onPressed: () async {
-                    final v = auth.serverVersion!;
-                    final url = kIsWeb
-                        ? Config.fatApkUrl(v)
-                        : Config.apkUrl(v, abi: await deviceApkAbi());
-                    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                  },
-                  child: Text(t.update),
+                  onPressed: _busy ? null : () => _update(auth.serverVersion!),
+                  child: _busy
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, value: _progress),
+                            ),
+                            if (_progress != null) ...[
+                              const SizedBox(width: 6),
+                              Text('${(_progress! * 100).round()}%'),
+                            ],
+                          ],
+                        )
+                      : Text(t.update),
                 ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: () => setState(() => _dismissed = true),
+                onPressed: _busy ? null : () => setState(() => _dismissed = true),
               ),
             ],
           ),

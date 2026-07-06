@@ -881,4 +881,8 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get rateLove => 'Me encanta';
+
+  @override
+  String get updateOpenToInstall =>
+      'Descargando la actualización. Abre el archivo para instalar.';
 }

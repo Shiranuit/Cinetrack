@@ -313,5 +313,7 @@
   "rateLike": "Me gusta",
   "@rateLike": {},
   "rateLove": "Me encanta",
-  "@rateLove": {}
+  "@rateLove": {},
+  "updateOpenToInstall": "Descargando la actualización. Abre el archivo para instalar.",
+  "@updateOpenToInstall": {}
 }

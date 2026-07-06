@@ -1713,6 +1713,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Love it'**
   String get rateLove;
+
+  /// No description provided for @updateOpenToInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the update. Open the file to install.'**
+  String get updateOpenToInstall;
 }
 
 class _AppLocalizationsDelegate
