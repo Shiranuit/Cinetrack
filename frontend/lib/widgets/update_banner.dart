@@ -41,6 +41,15 @@ class _UpdateBannerState extends State<UpdateBanner> {
       await downloadApkInBrowser(version);
       return;
     }
+    // Check the "install unknown apps" permission up front (prompting for it if
+    // needed). If it's not granted, don't bother with the in-app installer - which
+    // would hand off and silently do nothing - and download for a manual install.
+    if (!await ensureInstallPermission()) {
+      if (!mounted) return;
+      await downloadApkInBrowser(version);
+      messenger.showSnackBar(SnackBar(content: Text(t.updateOpenToInstall)));
+      return;
+    }
     setState(() {
       _busy = true;
       _progress = null;

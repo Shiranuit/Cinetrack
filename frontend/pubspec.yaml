@@ -59,6 +59,7 @@ dependencies:
   # Reads the device's supported CPU ABIs so the updater fetches the matching
   # split APK (arm64-v8a / armeabi-v7a / x86_64) instead of a fat build.
   device_info_plus: ^11.1.0
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:

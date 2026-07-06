@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatf
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
@@ -73,6 +74,18 @@ Future<void> downloadAndInstallApk(String version, {void Function(double?)? onPr
   } finally {
     client.close();
   }
+}
+
+/// Ensure this app may install APKs (Android's "install unknown apps" toggle,
+/// required since Android 8). Returns true if it's already granted, otherwise sends
+/// the user to the system settings page and re-checks on return. A `false` result
+/// means the user declined - callers should fall back to a manual browser download
+/// rather than a hand-off that would silently do nothing.
+Future<bool> ensureInstallPermission() async {
+  if (!canInstallApk) return false;
+  if (await Permission.requestInstallPackages.isGranted) return true;
+  final status = await Permission.requestInstallPackages.request();
+  return status.isGranted;
 }
 
 /// Manual-install fallback: open the browser to download the fat (all-ABI) APK for

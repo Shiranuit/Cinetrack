@@ -29,6 +29,14 @@ class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
       setState(() => _error = AppLocalizations.of(context).updateFailed);
       return;
     }
+    // Check "install unknown apps" up front (prompting if needed); if declined,
+    // download the APK so the user can install it manually.
+    if (!await ensureInstallPermission()) {
+      if (!mounted) return;
+      setState(() => _error = AppLocalizations.of(context).updateOpenToInstall);
+      await downloadApkInBrowser(version);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
