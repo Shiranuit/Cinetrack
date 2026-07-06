@@ -99,7 +99,13 @@ class RatingThumbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    // Cap the width and centre it: the Expanded slots spread the thumbs across the
+    // full row (great on a phone), but on a wide (web) viewport that flings them
+    // to the edges. Capping keeps the phone spacing everywhere.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
@@ -150,6 +156,8 @@ class RatingThumbs extends StatelessWidget {
                 ),
         ),
       ],
+        ),
+      ),
     );
   }
 }
