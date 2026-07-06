@@ -457,5 +457,7 @@
   "rateLove": "Love it",
   "@rateLove": {},
   "updateOpenToInstall": "Downloading the update. Open the file to install.",
-  "@updateOpenToInstall": {}
+  "@updateOpenToInstall": {},
+  "sortMyRating": "Your rating",
+  "@sortMyRating": {}
 }

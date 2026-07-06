@@ -69,6 +69,9 @@ pub struct Filters {
     pub library_user: Option<Uuid>,
     /// When set, EXCLUDE this user's tracked shows (Discover: show new shows only).
     pub exclude_user: Option<Uuid>,
+    /// The current viewer, used by the "my_rating" sort to order by THEIR own rating
+    /// (as opposed to the cross-user average used by the "rating" sort).
+    pub viewer: Option<Uuid>,
     /// Library-only: restrict to favorited shows.
     pub favorites_only: bool,
 }
@@ -194,20 +197,28 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND x.search_text ILIKE ").push_bind(format!("%{query}%"));
     }
 
-    qb.push(match f.sort.as_str() {
-        "year" => " ORDER BY x.year DESC NULLS LAST, x.name",
-        "name" => " ORDER BY x.name ASC NULLS LAST",
-        "runtime" => " ORDER BY x.runtime DESC NULLS LAST, x.name",
-        "updated" => " ORDER BY x.last_updated DESC NULLS LAST, x.name",
-        "seasons" if !is_movie => " ORDER BY x.season_count DESC NULLS LAST, x.name",
-        "episodes" if !is_movie => " ORDER BY x.episode_count DESC NULLS LAST, x.name",
-        // Rating: in the Library use YOUR rating; elsewhere the cross-user average.
-        "rating" if f.library_user.is_some() && !is_movie => " ORDER BY us.rating DESC NULLS LAST, x.name",
-        "rating" if !is_movie => {
-            " ORDER BY (SELECT avg(rating) FROM app.user_show WHERE series_id = x.id AND rating IS NOT NULL) DESC NULLS LAST, x.name"
-        }
-        _ => " ORDER BY x.score DESC NULLS LAST, x.name",
-    });
+    // "my_rating" orders by the viewer's OWN note (a bound uuid, so it can't be a
+    // plain &str in the match). Series-only, since movies have no per-user rating.
+    if f.sort == "my_rating" && !is_movie && f.viewer.is_some() {
+        qb.push(" ORDER BY (SELECT us2.rating FROM app.user_show us2 \
+                   WHERE us2.series_id = x.id AND us2.user_id = ");
+        qb.push_bind(f.viewer.unwrap());
+        qb.push(") DESC NULLS LAST, x.name");
+    } else {
+        qb.push(match f.sort.as_str() {
+            "year" => " ORDER BY x.year DESC NULLS LAST, x.name",
+            "name" => " ORDER BY x.name ASC NULLS LAST",
+            "runtime" => " ORDER BY x.runtime DESC NULLS LAST, x.name",
+            "updated" => " ORDER BY x.last_updated DESC NULLS LAST, x.name",
+            "seasons" if !is_movie => " ORDER BY x.season_count DESC NULLS LAST, x.name",
+            "episodes" if !is_movie => " ORDER BY x.episode_count DESC NULLS LAST, x.name",
+            // "rating" is the cross-user average everywhere ("my_rating" is yours).
+            "rating" if !is_movie => {
+                " ORDER BY (SELECT avg(rating) FROM app.user_show WHERE series_id = x.id AND rating IS NOT NULL) DESC NULLS LAST, x.name"
+            }
+            _ => " ORDER BY x.score DESC NULLS LAST, x.name",
+        });
+    }
     // `id` as a final tiebreaker → a total, stable order so offset paging can't
     // repeat or skip rows across pages.
     qb.push(", x.id DESC");

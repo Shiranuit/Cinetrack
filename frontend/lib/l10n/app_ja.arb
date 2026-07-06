@@ -315,5 +315,7 @@
   "rateLove": "大好き",
   "@rateLove": {},
   "updateOpenToInstall": "アップデートをダウンロード中です。ファイルを開いてインストールしてください。",
-  "@updateOpenToInstall": {}
+  "@updateOpenToInstall": {},
+  "sortMyRating": "あなたの評価",
+  "@sortMyRating": {}
 }

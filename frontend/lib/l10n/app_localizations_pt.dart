@@ -885,4 +885,7 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get updateOpenToInstall =>
       'Baixando a atualização. Abra o arquivo para instalar.';
+
+  @override
+  String get sortMyRating => 'Sua avaliação';
 }

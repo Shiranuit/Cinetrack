@@ -1719,6 +1719,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloading the update. Open the file to install.'**
   String get updateOpenToInstall;
+
+  /// No description provided for @sortMyRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Your rating'**
+  String get sortMyRating;
 }
 
 class _AppLocalizationsDelegate

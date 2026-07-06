@@ -886,4 +886,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get updateOpenToInstall =>
       'Téléchargement de la mise à jour. Ouvrez le fichier pour l\'installer.';
+
+  @override
+  String get sortMyRating => 'Votre note';
 }

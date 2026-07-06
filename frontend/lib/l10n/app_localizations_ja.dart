@@ -870,4 +870,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get updateOpenToInstall => 'アップデートをダウンロード中です。ファイルを開いてインストールしてください。';
+
+  @override
+  String get sortMyRating => 'あなたの評価';
 }

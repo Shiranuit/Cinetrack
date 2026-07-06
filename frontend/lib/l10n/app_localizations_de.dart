@@ -885,4 +885,7 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get updateOpenToInstall =>
       'Update wird heruntergeladen. Öffnen Sie die Datei zum Installieren.';
+
+  @override
+  String get sortMyRating => 'Deine Bewertung';
 }

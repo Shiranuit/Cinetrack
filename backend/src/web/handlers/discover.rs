@@ -52,7 +52,7 @@ pub struct DiscoverQuery {
     pub langs: Option<String>,
 }
 
-fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>) -> Filters {
+fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>, viewer: Option<Uuid>) -> Filters {
     Filters {
         // Trimmed; ignored if under 2 chars (a 1-char substring is meaningless and
         // can't use the trigram index on the whole-catalog Discover query).
@@ -86,6 +86,7 @@ fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Op
         offset: q.offset.unwrap_or(0).max(0),
         library_user,
         exclude_user,
+        viewer,
         favorites_only: q.favorites.unwrap_or(false),
     }
 }
@@ -98,7 +99,7 @@ pub async fn discover(
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, Some(uid)), &langs).await?))
+    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, Some(uid), Some(uid)), &langs).await?))
 }
 
 /// Same advanced filter, scoped to the user's own tracked shows.
@@ -108,7 +109,7 @@ pub async fn library_filter(
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(uid), None), &langs).await?))
+    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(uid), None, Some(uid)), &langs).await?))
 }
 
 /// Advanced filter scoped to ANOTHER user's shows (empty unless their profile is
@@ -123,7 +124,7 @@ pub async fn user_filter(
         return Ok(Json(vec![]));
     }
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(target), None), &langs).await?))
+    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(target), None, Some(me)), &langs).await?))
 }
 
 #[derive(Deserialize)]

@@ -868,4 +868,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateOpenToInstall => '正在下载更新。打开文件进行安装。';
+
+  @override
+  String get sortMyRating => '你的评分';
 }

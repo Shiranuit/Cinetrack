@@ -14,6 +14,7 @@ const kSortKeys = ['popularity', 'rating', 'year', 'updated', 'seasons', 'episod
 String sortLabel(AppLocalizations t, String key) => switch (key) {
       'popularity' => t.sortPopular,
       'rating' => t.sortTopRated,
+      'my_rating' => t.sortMyRating,
       'year' => t.sortReleaseDate,
       'updated' => t.sortLastUpdated,
       'seasons' => t.seasons,
@@ -93,7 +94,12 @@ class _FilterSheetState extends State<FilterSheet> {
 
           _label(context, AppLocalizations.of(context).sortBy),
           Wrap(spacing: Insets.sm, children: [
-            for (final key in kSortKeys)
+            // "Your rating" (my_rating) is offered only in the Library: Discover
+            // hides your tracked shows, and you can only rate what you track, so
+            // it would be empty there. Slot it right after "Top rated".
+            for (final key in [
+              for (final k in kSortKeys) ...[k, if (k == 'rating' && widget.showFavorites) 'my_rating'],
+            ])
               ChoiceChip(label: Text(sortLabel(t, key)), selected: f.sort == key, onSelected: (_) => setState(() => f.sort = key)),
           ]),
 

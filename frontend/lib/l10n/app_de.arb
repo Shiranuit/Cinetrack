@@ -315,5 +315,7 @@
   "rateLove": "Liebe es",
   "@rateLove": {},
   "updateOpenToInstall": "Update wird heruntergeladen. Öffnen Sie die Datei zum Installieren.",
-  "@updateOpenToInstall": {}
+  "@updateOpenToInstall": {},
+  "sortMyRating": "Deine Bewertung",
+  "@sortMyRating": {}
 }
