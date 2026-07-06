@@ -53,6 +53,10 @@ GARAGE_MIN_FOR_RATIO="${GARAGE_MIN_FOR_RATIO:-1048576}"  # skip garage shrink ch
 
 # Where backups live remotely, local scratch, and tooling.
 FTP_DIR="${FTP_DIR:-cinetrack}"
+FTP_PORT="${FTP_PORT:-21}"
+# TLS mode for the FTP: explicit (AUTH TLS, port 21) | implicit (port 990) | off.
+# Scaleway/Dedibox Dedibackup is PLAIN FTP only, so set FTP_TLS=off for it.
+FTP_TLS="${FTP_TLS:-explicit}"
 BASE="${BACKUP_BASE:-$HOME/.cinetrack-backup}"
 RCLONE_IMAGE="${RCLONE_IMAGE:-rclone/rclone:latest}"
 S3_BUCKET="${S3_BUCKET:-artwork}"
@@ -130,8 +134,14 @@ NET="$($DC ps -q garage | head -n1 | xargs -r docker inspect \
         -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')"
 [[ -n "$NET" ]] || die 1 "could not find the running Garage container / its network"
 
-# --- rclone config (garage S3 + dedibackup FTPS), 600, generated per run ------
+# --- rclone config (garage S3 + dedibackup FTP), 600, generated per run --------
 FTP_PASS_OBSCURED="$(docker run --rm "$RCLONE_IMAGE" obscure "$FTP_PASS")"
+case "$FTP_TLS" in
+  explicit)     FTP_TLS_LINE="explicit_tls = true" ;;
+  implicit)     FTP_TLS_LINE="tls = true" ;;
+  off|none|"")  FTP_TLS_LINE="" ;;
+  *) die 1 "FTP_TLS must be explicit | implicit | off (got '$FTP_TLS')" ;;
+esac
 cat > "$RCLONE_CONF" <<EOF
 [garage]
 type = s3
@@ -147,19 +157,33 @@ type = ftp
 host = $FTP_HOST
 user = $FTP_USER
 pass = $FTP_PASS_OBSCURED
-explicit_tls = true
+port = $FTP_PORT
+$FTP_TLS_LINE
 EOF
 
 # rclone, on the compose network, as this (non-root) user, config read-only.
+# Fail reasonably fast instead of hanging/retrying for minutes on a dead endpoint.
 RCLONE() {
   docker run --rm --network "$NET" --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$RCLONE_CONF":/cfg/rclone.conf:ro -v "$WORK":/work -v "$MIRROR":/mirror \
-    "$RCLONE_IMAGE" --config /cfg/rclone.conf "$@"
+    "$RCLONE_IMAGE" --config /cfg/rclone.conf \
+    --contimeout=30s --timeout=300s --retries=2 --low-level-retries=3 "$@"
 }
+
+# Verify the FTP target is reachable AND accepts our login BEFORE the expensive
+# dump. A bad/blank password (e.g. the Dedibackup space not initialised) returns
+# "530 login first"; without this gate the script would dump for minutes and only
+# then fail. `rclone lsd ftp:` lists the FTP root, which requires a real login.
+ftp_err="$(RCLONE lsd "ftp:" 2>&1)" || die 1 \
+  "cannot log into FTP $FTP_HOST as $FTP_USER: ${ftp_err##*$'\n'}
+   -> check FTP_PASS in scripts/backup.env, and that the Dedibackup password is
+      configured (Dedibox console > Backup tab; the space must not be 'Uninitialised')."
 
 # --- small helpers -----------------------------------------------------------
 frac_lt() { awk -v a="$1" -v b="$2" -v r="$3" 'BEGIN{exit !(a < r*b)}'; }  # a < r*b ?
-used_bytes() { RCLONE size --json "ftp:$FTP_DIR" 2>/dev/null | grep -oE '"bytes":[0-9]+' | head -1 | cut -d: -f2; }
+# Never let a transient FTP hiccup here kill the script via set -e/pipefail; the
+# upload step is the real gate. Empty output -> callers treat it as 0 bytes used.
+used_bytes() { RCLONE size --json "ftp:$FTP_DIR" 2>/dev/null | grep -oE '"bytes":[0-9]+' | head -1 | cut -d: -f2 || true; }
 
 count_rows() {
   local out
