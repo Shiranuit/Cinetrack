@@ -478,16 +478,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             children: [
               for (var i = 0; i < settings.languages.length; i++)
-                Card(
+                // The whole card is the drag surface - a far bigger target than a
+                // small handle. The drag icon stays as a visual affordance; the
+                // remove button still taps normally (tap wins over drag).
+                ReorderableDragStartListener(
                   key: ValueKey(settings.languages[i]),
-                  margin: const EdgeInsets.only(bottom: Insets.sm),
-                  color: context.scheme.surfaceContainerHighest,
-                  child: ListTile(
-                    leading: ReorderableDragStartListener(
-                      index: i,
-                      child: const Icon(Icons.drag_handle_rounded),
-                    ),
-                    title: Text(
+                  index: i,
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: Insets.sm),
+                    color: context.scheme.surfaceContainerHighest,
+                    child: ListTile(
+                      leading: Icon(Icons.drag_handle_rounded, color: context.scheme.onSurfaceVariant),
+                      title: Text(
                       kLanguages[settings.languages[i]] ??
                           settings.languages[i],
                     ),
@@ -497,21 +499,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             style: TextStyle(color: context.scheme.primary),
                           )
                         : null,
-                    trailing: settings.languages.length > 1
-                        ? IconButton(
-                            icon: const Icon(
-                              Icons.remove_circle_outline_rounded,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Priority number (1 = primary) on the right of each card.
+                        Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == 0 ? context.scheme.primary : Colors.transparent,
+                            border: i == 0 ? null : Border.all(color: context.scheme.outlineVariant),
+                          ),
+                          child: Text(
+                            '${i + 1}',
+                            style: context.text.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: i == 0 ? context.scheme.onPrimary : context.scheme.onSurfaceVariant,
                             ),
+                          ),
+                        ),
+                        if (settings.languages.length > 1)
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline_rounded),
                             onPressed: () {
-                              final langs = List<String>.from(
-                                settings.languages,
-                              )..removeAt(i);
+                              final langs = List<String>.from(settings.languages)..removeAt(i);
                               settings.setLanguages(langs);
                             },
-                          )
-                        : null,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
+              ),
             ],
           ),
           if (available.isNotEmpty) ...[
