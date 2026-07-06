@@ -168,17 +168,33 @@ pub struct Library {
 const STALE_DAYS: i64 = 30;
 
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
-pub async fn library(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Library> {
+/// `sort` orders shows WITHIN each category (default = recency), so the categorized
+/// view honours the same sort options as the flat filter.
+pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &str) -> AppResult<Library> {
+    // Whitelisted ORDER BY (never interpolate raw input into SQL). Default and
+    // "popularity" keep the familiar most-recently-watched-first ordering.
+    let order = match sort {
+        "name" => "name ASC NULLS LAST",
+        "rating" => "(SELECT avg(rating) FROM app.user_show WHERE series_id = lib.series_id AND rating IS NOT NULL) DESC NULLS LAST, name NULLS LAST",
+        "my_rating" => "lib.rating DESC NULLS LAST, name NULLS LAST",
+        "year" => "lib.year DESC NULLS LAST, name NULLS LAST",
+        "seasons" => "lib.season_count DESC NULLS LAST, name NULLS LAST",
+        "episodes" => "lib.episode_count DESC NULLS LAST, name NULLS LAST",
+        "runtime" => "lib.runtime DESC NULLS LAST, name NULLS LAST",
+        "updated" => "lib.last_updated DESC NULLS LAST, name NULLS LAST",
+        _ => "last_watched DESC NULLS LAST, name NULLS LAST",
+    };
     // Every per-series metric is aggregated ONCE (grouped by series_id) in a CTE
     // instead of as a correlated subquery evaluated per tracked show. The old
     // per-row `caught_up` EXISTS made Postgres re-scan the user's entire watch
     // history once per show (e.g. 313 shows × 5.5k watches ≈ 1.7M episode probes),
     // which measured ~3.3 s; this bulk form runs in ~45 ms for the same result.
     // `$1` = user_id, `$2` = preferred languages (text[]).
-    let sql = "\
+    let sql = &format!("\
         WITH lib AS ( \
-            SELECT us.series_id, us.nb_episodes_seen, us.status, us.archived, us.is_favorited, \
-                   s.name AS base_name, s.image_url, s.original_language \
+            SELECT us.series_id, us.nb_episodes_seen, us.status, us.archived, us.is_favorited, us.rating, \
+                   s.name AS base_name, s.image_url, s.original_language, \
+                   s.year, s.season_count, s.episode_count, s.runtime, s.last_updated \
             FROM app.user_show us \
             LEFT JOIN catalog.series s ON s.id = us.series_id \
             WHERE us.user_id = $1 AND NOT us.unavailable \
@@ -228,7 +244,7 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String]) -> AppRe
         LEFT JOIN lw ON lw.series_id = lib.series_id \
         LEFT JOIN seen ON seen.series_id = lib.series_id \
         LEFT JOIN caught ON caught.series_id = lib.series_id \
-        ORDER BY last_watched DESC NULLS LAST, name NULLS LAST";
+        ORDER BY {order}");
     let started = std::time::Instant::now();
     let rows = sqlx::query_as::<_, LibraryShow>(sql)
         .bind(user_id)
@@ -897,7 +913,7 @@ pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[Str
     if !profile_visible(state, me, target).await? {
         return Ok(Library::default());
     }
-    library(state, target, langs).await
+    library(state, target, langs, "popularity").await
 }
 
 /// Recent watch activity from the people the user follows.

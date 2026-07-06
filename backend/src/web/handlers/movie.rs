@@ -20,13 +20,22 @@ pub async fn get_movie(
     Ok(Json(catalog::movie::get(&state, id, q.resolve().as_deref()).await?))
 }
 
+#[derive(serde::Deserialize)]
+pub struct MoviesQuery {
+    pub langs: Option<String>,
+    /// Orders the movies list; defaults to recency ("popularity").
+    pub sort: Option<String>,
+}
+
 /// The user's tracked movies (library Movies section).
 pub async fn list_movies(
     AuthUser(uid): AuthUser,
     State(state): State<AppState>,
-    Query(q): Query<LangsQuery>,
+    Query(q): Query<MoviesQuery>,
 ) -> AppResult<Json<Vec<LibraryMovie>>> {
-    Ok(Json(movies::list(&state, uid, &q.list()).await?))
+    let langs = LangsQuery { langs: q.langs.clone() }.list();
+    let sort = q.sort.as_deref().unwrap_or("popularity");
+    Ok(Json(movies::list(&state, uid, &langs, sort).await?))
 }
 
 /// The authenticated user's relationship to a movie (watched/favorite/count).

@@ -67,8 +67,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _api = context.read<ApiClient>();
-    _libFuture = _api.library(langs: _langs);
-    _moviesFuture = _api.movies(langs: _langs);
+    _libFuture = _api.library(langs: _langs, sort: _f.sort);
+    _moviesFuture = _api.movies(langs: _langs, sort: _f.sort);
     _content = _combine(_libFuture, _moviesFuture);
     _searchCtrl.addListener(_onSearchChanged);
     _api.addListener(_onExternalMutation);
@@ -96,7 +96,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       showDragHandle: true,
       builder: (_) => FilterSheet(filters: _f, options: _filterOptions, showFavorites: true),
     );
-    setState(() => _filterToken++);
+    setState(() => _filterToken++); // reset the flat/filtered grid
+    // The sort may have changed; the categorized view is ordered server-side, so
+    // reload it with the new sort.
+    _reloadContent();
   }
 
   /// Backend kinds for the current type toggles. "series" already includes anime,
@@ -143,8 +146,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   /// Refresh both series and movies (used by the pull-to-refresh on the body).
   Future<void> _reloadContent() async {
-    final lf = context.read<ApiClient>().library(langs: _langs);
-    final mf = context.read<ApiClient>().movies(langs: _langs);
+    final lf = context.read<ApiClient>().library(langs: _langs, sort: _f.sort);
+    final mf = context.read<ApiClient>().movies(langs: _langs, sort: _f.sort);
     setState(() {
       _libFuture = lf;
       _moviesFuture = mf;

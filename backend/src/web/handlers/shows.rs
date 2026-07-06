@@ -130,13 +130,22 @@ pub async fn seen(
     Ok(Json(json!({ "series_id": series_id, "counts": map })))
 }
 
+#[derive(Deserialize)]
+pub struct LibraryQuery {
+    pub langs: Option<String>,
+    /// Orders shows within each category; defaults to recency ("popularity").
+    pub sort: Option<String>,
+}
+
 /// The user's tracked shows grouped into categories (watching / stale / not started / stopped).
 pub async fn library(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
-    Query(q): Query<LangsQuery>,
+    Query(q): Query<LibraryQuery>,
 ) -> AppResult<Json<tracking::Library>> {
-    Ok(Json(tracking::library(&state, user_id, &q.list()).await?))
+    let langs = LangsQuery { langs: q.langs.clone() }.list();
+    let sort = q.sort.as_deref().unwrap_or("popularity");
+    Ok(Json(tracking::library(&state, user_id, &langs, sort).await?))
 }
 
 #[derive(Deserialize)]

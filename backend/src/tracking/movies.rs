@@ -97,9 +97,19 @@ pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value:
     relation(state, user_id, movie_id).await
 }
 
-/// The user's tracked movies (watched or favorited), newest-watched first.
-pub async fn list(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResult<Vec<LibraryMovie>> {
-    let rows = sqlx::query_as::<_, LibraryMovie>(
+/// The user's tracked movies (watched or favorited), ordered by `sort` to match the
+/// series categories (default = newest-watched first). Sorts that don't apply to a
+/// movie (rating/seasons/episodes) fall back to recency.
+pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str) -> AppResult<Vec<LibraryMovie>> {
+    // Whitelisted ORDER BY (never interpolate raw input).
+    let order = match sort {
+        "name" => "name ASC NULLS LAST",
+        "year" => "m.year DESC NULLS LAST, name NULLS LAST",
+        "runtime" => "m.runtime DESC NULLS LAST, name NULLS LAST",
+        "updated" => "m.last_updated DESC NULLS LAST, name NULLS LAST",
+        _ => "um.last_watched DESC NULLS LAST, name NULLS LAST",
+    };
+    let rows = sqlx::query_as::<_, LibraryMovie>(&format!(
         "SELECT um.movie_id, \
                 COALESCE((SELECT tr.name FROM catalog.translation tr \
                           WHERE tr.entity_type = 'movie' AND tr.entity_id = um.movie_id AND tr.name IS NOT NULL \
@@ -109,8 +119,8 @@ pub async fn list(state: &AppState, user_id: Uuid, langs: &[String]) -> AppResul
          FROM app.user_movie um \
          LEFT JOIN catalog.movie m ON m.id = um.movie_id \
          WHERE um.user_id = $1 AND (um.watched OR um.is_favorited) \
-         ORDER BY um.last_watched DESC NULLS LAST, name NULLS LAST",
-    )
+         ORDER BY {order}"
+    ))
     .bind(user_id)
     .bind(langs)
     .fetch_all(&state.db)

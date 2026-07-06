@@ -22,9 +22,10 @@ class AdvancedFilters {
   bool favoritesOnly = false; // library only
 
   /// Whether the library should switch from categorized rails to a flat, sorted
-  /// results view — true when a name search or any filter is set, or a non-default
-  /// sort is chosen.
-  bool get isActive => query.trim().isNotEmpty || activeCount > 0 || sort != 'popularity';
+  /// results view — true only when a name search or a facet filter narrows the set.
+  /// A sort alone does NOT switch views: it reorders WITHIN the categorized rails
+  /// (the backend applies it per category), keeping the categories + layout toggle.
+  bool get isActive => query.trim().isNotEmpty || activeCount > 0;
 
   int get activeCount =>
       (favoritesOnly ? 1 : 0) +
