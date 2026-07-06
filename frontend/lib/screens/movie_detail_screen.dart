@@ -52,6 +52,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     final watched = rel?.watched ?? false;
     final count = rel?.watchedCount ?? 0;
     final fav = rel?.isFavorited ?? false;
+    final later = rel?.watchlist ?? false;
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0),
       child: Row(
@@ -72,6 +73,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               onPressed: () => _do(() => api.unwatchMovie(widget.movieId)),
             ),
           ],
+          const SizedBox(width: Insets.sm),
+          IconButton.outlined(
+            tooltip: AppLocalizations.of(context).watchLater,
+            icon: Icon(later ? Icons.schedule_rounded : Icons.schedule_outlined,
+                color: later ? context.scheme.tertiary : null),
+            onPressed: () => _do(() => api.watchlistMovie(widget.movieId, !later)),
+          ),
           const SizedBox(width: Insets.sm),
           IconButton.outlined(
             tooltip: fav ? AppLocalizations.of(context).unfavorite : AppLocalizations.of(context).favorite,

@@ -388,25 +388,39 @@ class _LibraryScreenState extends State<LibraryScreen> {
           // it's anime and Anime is on, or non-anime and Series is on.
           List<LibraryShow> pick(List<LibraryShow> l) =>
               l.where((s) => (wantAnime && s.isAnime) || (wantSeries && !s.isAnime)).toList();
-          final cats = (wantSeries || wantAnime)
-              ? <(_Cat, List<LibraryShow>)>[
-                  (_cats[0], pick(lib.watching)),
-                  (_cats[2], pick(lib.stale)), // Haven't watched in a while
-                  (_cats[3], pick(lib.notStarted)), // Haven't started
-                  (_cats[5], pick(lib.forLater)), // Watch later
-                  (_cats[1], pick(lib.upToDate)), // Up to date
-                  (_cats[4], pick(lib.stopped)),
-                ].where((e) => e.$2.isNotEmpty).toList()
-              : const <(_Cat, List<LibraryShow>)>[];
-          final movieList = wantMovies ? movies : const <LibraryMovie>[];
+          // Build the sections in display order. "Watch later" mixes series
+          // (status = for_later) with watchlisted, not-yet-watched MOVIES so both
+          // live together; watched/favorited movies get their own Movies section.
+          final sections = <(String, IconData, Color, int, Widget Function(int))>[];
+          void addShows(_Cat cat, List<LibraryShow> shows) {
+            if (shows.isNotEmpty) {
+              sections.add((cat.title(t), cat.icon, cat.accent(context), shows.length, (j) => _libraryCard(shows[j])));
+            }
+          }
 
-          if (cats.isEmpty && movieList.isEmpty) {
-            return _Scroll(
-              child: MessageView(
-                icon: Icons.video_library_rounded,
-                message: t.libEmpty,
-              ),
-            );
+          final wlShows = pick(lib.forLater); // pick() already drops non-selected kinds
+          final wlMovies =
+              wantMovies ? movies.where((m) => m.watchlist && m.watchedCount == 0).toList() : const <LibraryMovie>[];
+          final otherMovies =
+              wantMovies ? movies.where((m) => !(m.watchlist && m.watchedCount == 0)).toList() : const <LibraryMovie>[];
+
+          addShows(_cats[0], pick(lib.watching));
+          addShows(_cats[2], pick(lib.stale)); // Haven't watched in a while
+          addShows(_cats[3], pick(lib.notStarted)); // Haven't started
+          if (wlShows.isNotEmpty || wlMovies.isNotEmpty) {
+            final wl = _cats[5]; // Watch later
+            sections.add((wl.title(t), wl.icon, wl.accent(context), wlShows.length + wlMovies.length,
+                (j) => j < wlShows.length ? _libraryCard(wlShows[j]) : _movieCard(wlMovies[j - wlShows.length])));
+          }
+          addShows(_cats[1], pick(lib.upToDate)); // Up to date
+          addShows(_cats[4], pick(lib.stopped));
+          if (otherMovies.isNotEmpty) {
+            sections.add((t.typeMovies, Icons.theaters_rounded, context.scheme.tertiary, otherMovies.length,
+                (j) => _movieCard(otherMovies[j])));
+          }
+
+          if (sections.isEmpty) {
+            return _Scroll(child: MessageView(icon: Icons.video_library_rounded, message: t.libEmpty));
           }
 
           final grid = context.watch<SettingsController>().libraryLayout == LibraryLayout.grid;
@@ -417,12 +431,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             controller: _bodyScroll,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              for (final (cat, shows) in cats)
-                ..._section(cat.title(t), cat.icon, cat.accent(context), shows.length, grid, section++,
-                    (j) => _libraryCard(shows[j])),
-              if (movieList.isNotEmpty)
-                ..._section(t.typeMovies, Icons.theaters_rounded, context.scheme.tertiary, movieList.length, grid,
-                    section++, (j) => _movieCard(movieList[j])),
+              for (final (title, icon, accent, count, builder) in sections)
+                ..._section(title, icon, accent, count, grid, section++, builder),
               const SliverToBoxAdapter(child: SizedBox(height: Insets.xxl)),
             ],
           );

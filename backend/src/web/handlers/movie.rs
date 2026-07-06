@@ -81,3 +81,19 @@ pub async fn unfavorite_movie(
 ) -> AppResult<Json<MovieRelation>> {
     Ok(Json(movies::set_favorite(&state, uid, id, false).await?))
 }
+
+pub async fn watchlist_movie(
+    AuthUser(uid): AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<MovieRelation>> {
+    Ok(Json(movies::set_watchlist(&state, uid, id, true).await?))
+}
+
+pub async fn unwatchlist_movie(
+    AuthUser(uid): AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<MovieRelation>> {
+    Ok(Json(movies::set_watchlist(&state, uid, id, false).await?))
+}

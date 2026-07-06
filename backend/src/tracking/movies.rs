@@ -11,6 +11,7 @@ pub struct MovieRelation {
     pub is_favorited: bool,
     pub watched: bool,
     pub watched_count: i32,
+    pub watchlist: bool, // "watch later"
 }
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -21,20 +22,21 @@ pub struct LibraryMovie {
     pub year: Option<i32>,
     pub is_favorited: bool,
     pub watched_count: i32,
+    pub watchlist: bool,
     pub last_watched: Option<i64>,
 }
 
 /// The user's relationship to a movie (defaults to "not tracked").
 pub async fn relation(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<MovieRelation> {
-    let row: Option<(bool, bool, i32)> = sqlx::query_as(
-        "SELECT is_favorited, watched, watched_count FROM app.user_movie WHERE user_id = $1 AND movie_id = $2",
+    let row: Option<(bool, bool, i32, bool)> = sqlx::query_as(
+        "SELECT is_favorited, watched, watched_count, watchlist FROM app.user_movie WHERE user_id = $1 AND movie_id = $2",
     )
     .bind(user_id)
     .bind(movie_id)
     .fetch_optional(&state.db)
     .await?;
-    let (is_favorited, watched, watched_count) = row.unwrap_or((false, false, 0));
-    Ok(MovieRelation { movie_id, is_favorited, watched, watched_count })
+    let (is_favorited, watched, watched_count, watchlist) = row.unwrap_or((false, false, 0, false));
+    Ok(MovieRelation { movie_id, is_favorited, watched, watched_count, watchlist })
 }
 
 /// Mark a movie watched (each call is one watch; increments the rewatch count).
@@ -97,6 +99,23 @@ pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value:
     relation(state, user_id, movie_id).await
 }
 
+/// Add/remove a movie from the "watch later" list (the movie equivalent of a
+/// series' `for_later` status).
+pub async fn set_watchlist(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
+    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    sqlx::query(
+        "INSERT INTO app.user_movie (user_id, movie_id, watchlist, updated_at) \
+         VALUES ($1, $2, $3, now()) \
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET watchlist = $3, updated_at = now()",
+    )
+    .bind(user_id)
+    .bind(movie_id)
+    .bind(value)
+    .execute(&state.db)
+    .await?;
+    relation(state, user_id, movie_id).await
+}
+
 /// The user's tracked movies (watched or favorited), ordered by `sort` to match the
 /// series categories (default = newest-watched first). Sorts that don't apply to a
 /// movie (rating/seasons/episodes) fall back to recency.
@@ -116,11 +135,11 @@ pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str,
                 COALESCE((SELECT tr.name FROM catalog.translation tr \
                           WHERE tr.entity_type = 'movie' AND tr.entity_id = um.movie_id AND tr.name IS NOT NULL \
                             AND tr.language = ANY($2) ORDER BY array_position($2, tr.language) LIMIT 1), m.name) AS name, \
-                m.image_url, m.year, um.is_favorited, um.watched_count, \
+                m.image_url, m.year, um.is_favorited, um.watched_count, um.watchlist, \
                 extract(epoch FROM um.last_watched)::bigint AS last_watched \
          FROM app.user_movie um \
          LEFT JOIN catalog.movie m ON m.id = um.movie_id \
-         WHERE um.user_id = $1 AND (um.watched OR um.is_favorited) \
+         WHERE um.user_id = $1 AND (um.watched OR um.is_favorited OR um.watchlist) \
          ORDER BY {order}"
     ))
     .bind(user_id)

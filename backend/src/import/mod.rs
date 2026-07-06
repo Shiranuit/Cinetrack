@@ -483,6 +483,7 @@ struct MovieAcc {
     runtime_secs: Option<i32>,
     watched: bool,               // has at least one `watch` row
     watched_count: i32,          // watches + rewatches
+    watchlist: bool,             // has a `towatch` (plan-to-watch) row
     last_watched: Option<String>,
     followed_at: Option<String>,
 }
@@ -520,6 +521,7 @@ fn build_movies(records: &[Row]) -> HashMap<String, MovieAcc> {
             }
             Some("rewatch_count") => a.watched_count += i32v(r, "rewatch_count").unwrap_or(0),
             Some("follow") => a.followed_at = ts_utc(r, "created_at"),
+            Some("towatch") => a.watchlist = true,
             _ => {}
         }
     }
@@ -547,14 +549,15 @@ fn movie_year(r: &Row) -> Option<i32> {
     rd.get(0..4)?.parse().ok()
 }
 
-/// Stage every *watched* movie from the export into `app.import_movie` (idempotent
-/// per uuid). Plan-to-watch-only entries are skipped for now: the app has no movie
-/// watchlist, so there's nowhere to surface them. Returns the number staged.
+/// Stage every *watched* or *plan-to-watch* movie from the export into
+/// `app.import_movie` (idempotent per uuid). Entries with neither intent (e.g. a
+/// bare follow with no watch/towatch) are skipped, as there's nothing to surface.
+/// Returns the number staged.
 async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyhow::Result<usize> {
     let movies = build_movies(records);
     let (mut staged, mut skipped) = (0usize, 0usize);
     for (uuid, a) in &movies {
-        if !a.watched {
+        if !a.watched && !a.watchlist {
             skipped += 1;
             continue;
         }
@@ -562,13 +565,13 @@ async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyho
         sqlx::query(
             "INSERT INTO app.import_movie \
                (user_id, source_uuid, name, search_name, year, runtime_secs, \
-                watched, watched_count, last_watched, followed_at) \
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz) \
+                watched, watched_count, watchlist, last_watched, followed_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz,$11::timestamptz) \
              ON CONFLICT (user_id, source_uuid) DO UPDATE SET \
                name=EXCLUDED.name, search_name=EXCLUDED.search_name, year=EXCLUDED.year, \
                runtime_secs=EXCLUDED.runtime_secs, watched=EXCLUDED.watched, \
-               watched_count=EXCLUDED.watched_count, last_watched=EXCLUDED.last_watched, \
-               followed_at=EXCLUDED.followed_at, updated_at=now()",
+               watched_count=EXCLUDED.watched_count, watchlist=EXCLUDED.watchlist, \
+               last_watched=EXCLUDED.last_watched, followed_at=EXCLUDED.followed_at, updated_at=now()",
         )
         .bind(user_id)
         .bind(uuid)
@@ -578,6 +581,7 @@ async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyho
         .bind(a.runtime_secs)
         .bind(a.watched)
         .bind(a.watched_count.max(1))
+        .bind(a.watchlist)
         .bind(a.last_watched.as_deref())
         .bind(a.followed_at.as_deref())
         .execute(&state.db)
@@ -585,7 +589,7 @@ async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyho
         staged += 1;
     }
     if staged > 0 || skipped > 0 {
-        tracing::info!("stage_movies user {user_id}: {staged} watched staged, {skipped} plan-to-watch skipped");
+        tracing::info!("stage_movies user {user_id}: {staged} staged (watched/plan-to-watch), {skipped} skipped");
     }
     Ok(staged)
 }
@@ -746,12 +750,13 @@ async fn link_movie(state: &AppState, user_id: Uuid, source_uuid: &str, movie_id
 
     sqlx::query(
         "INSERT INTO app.user_movie \
-           (user_id, movie_id, watched, watched_count, last_watched, created_at, updated_at) \
-         SELECT im.user_id, $3, im.watched, GREATEST(im.watched_count, 1), im.last_watched, now(), now() \
+           (user_id, movie_id, watched, watched_count, watchlist, last_watched, created_at, updated_at) \
+         SELECT im.user_id, $3, im.watched, GREATEST(im.watched_count, 1), im.watchlist, im.last_watched, now(), now() \
          FROM app.import_movie im WHERE im.user_id = $1 AND im.source_uuid = $2 \
          ON CONFLICT (user_id, movie_id) DO UPDATE SET \
            watched = app.user_movie.watched OR EXCLUDED.watched, \
            watched_count = GREATEST(app.user_movie.watched_count, EXCLUDED.watched_count), \
+           watchlist = app.user_movie.watchlist OR EXCLUDED.watchlist, \
            last_watched = GREATEST(app.user_movie.last_watched, EXCLUDED.last_watched), \
            updated_at = now()",
     )

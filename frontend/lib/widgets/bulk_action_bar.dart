@@ -115,7 +115,7 @@ class _BulkActionBarState extends State<BulkActionBar> {
                         _action(t.follow, Icons.add_rounded,
                             () => _act(_isSeries, (api, it) => api.setFollow(it.id, true))),
                       _action(t.watchLater, Icons.schedule_rounded,
-                          () => _act(_isSeries, (api, it) => api.setStatus(it.id, 'for_later'))),
+                          () => _act((_) => true, (api, it) => it.kind == SelKind.series ? api.setStatus(it.id, 'for_later') : api.watchlistMovie(it.id, true))),
                       _action(t.addToFavorites, Icons.favorite_rounded,
                           () => _act((_) => true, (api, it) => it.kind == SelKind.series ? api.setFavorite(it.id, true) : api.favoriteMovie(it.id, true))),
                       _action(t.stopWatching, Icons.pause_circle_rounded,
