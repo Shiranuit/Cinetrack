@@ -61,12 +61,30 @@ S3_ENDPOINT_INTERNAL="${S3_ENDPOINT_INTERNAL:-http://garage:3900}"
 ENCRYPT_CMD="${ENCRYPT_CMD:-}"   # e.g. 'age -r age1...' ; empty = store unencrypted
 ALERT_CMD="${ALERT_CMD:-}"       # e.g. a curl to a webhook; receives the message on stdin
 
-# Pull in FTP creds + any overrides (kept out of git; chmod 600).
+# Pull in FTP creds + tuning overrides. This is OUR file (shell KEY='value'), so
+# sourcing it is fine — just remember to single-quote values with spaces/specials.
 # shellcheck disable=SC1090,SC1091
 [[ -f scripts/backup.env ]] && { set -a; . scripts/backup.env; set +a; }
-# S3 access/secret for Garage come from the production env file.
-# shellcheck disable=SC1090,SC1091
-[[ -f "$ENV_FILE" ]] && { set -a; . "$ENV_FILE"; set +a; }
+
+# The Garage S3 credentials live in the production env file, but that file is
+# docker-compose format: values are NOT shell-quoted, so `source`-ing it breaks on
+# any value containing shell metacharacters. Read only the keys we need, literally,
+# without executing the file.
+read_env() {
+  local key="$1" file="$2" v
+  v="$(grep -E "^[[:space:]]*${key}=" "$file" 2>/dev/null | tail -n1)" || return 0
+  v="${v#*=}"
+  v="${v%$'\r'}"                 # tolerate CRLF line endings
+  v="${v#\"}"; v="${v%\"}"       # strip optional surrounding quotes
+  v="${v#\'}"; v="${v%\'}"
+  printf '%s' "$v"
+}
+if [[ -f "$ENV_FILE" ]]; then
+  S3_ACCESS_KEY="${S3_ACCESS_KEY:-$(read_env S3_ACCESS_KEY "$ENV_FILE")}"
+  S3_SECRET_KEY="${S3_SECRET_KEY:-$(read_env S3_SECRET_KEY "$ENV_FILE")}"
+  _b="$(read_env S3_BUCKET "$ENV_FILE")"; [[ -n "$_b" ]] && S3_BUCKET="$_b"
+  _r="$(read_env S3_REGION "$ENV_FILE")"; [[ -n "$_r" ]] && S3_REGION="$_r"
+fi
 
 # --- logging / alerting ------------------------------------------------------
 ts_now() { date '+%Y-%m-%d %H:%M:%S'; }

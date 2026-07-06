@@ -46,3 +46,4 @@ architecture
 gdpr-data
 # local backup FTP credentials/config
 scripts/backup.env
+cinetrack-backup-key.txt
