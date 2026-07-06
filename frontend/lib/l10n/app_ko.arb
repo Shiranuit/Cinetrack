@@ -303,5 +303,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "싫어요",
+  "@rateHate": {},
+  "rateDislike": "별로예요",
+  "@rateDislike": {},
+  "rateOk": "보통",
+  "@rateOk": {},
+  "rateLike": "좋아요",
+  "@rateLike": {},
+  "rateLove": "최고예요",
+  "@rateLove": {}
 }

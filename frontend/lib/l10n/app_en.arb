@@ -445,5 +445,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "Hate it",
+  "@rateHate": {},
+  "rateDislike": "Dislike it",
+  "@rateDislike": {},
+  "rateOk": "OK",
+  "@rateOk": {},
+  "rateLike": "Like it",
+  "@rateLike": {},
+  "rateLove": "Love it",
+  "@rateLove": {}
 }

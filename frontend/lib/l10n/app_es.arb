@@ -303,5 +303,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "Lo odio",
+  "@rateHate": {},
+  "rateDislike": "No me gusta",
+  "@rateDislike": {},
+  "rateOk": "Regular",
+  "@rateOk": {},
+  "rateLike": "Me gusta",
+  "@rateLike": {},
+  "rateLove": "Me encanta",
+  "@rateLove": {}
 }

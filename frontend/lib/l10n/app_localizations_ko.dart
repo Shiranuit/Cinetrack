@@ -852,4 +852,19 @@ class AppLocalizationsKo extends AppLocalizations {
   String bulkUpdated(int count) {
     return '$count개 업데이트됨';
   }
+
+  @override
+  String get rateHate => '싫어요';
+
+  @override
+  String get rateDislike => '별로예요';
+
+  @override
+  String get rateOk => '보통';
+
+  @override
+  String get rateLike => '좋아요';
+
+  @override
+  String get rateLove => '최고예요';
 }

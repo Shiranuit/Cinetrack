@@ -867,4 +867,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String bulkUpdated(int count) {
     return '$count mis à jour';
   }
+
+  @override
+  String get rateHate => 'Je déteste';
+
+  @override
+  String get rateDislike => 'Je n\'aime pas';
+
+  @override
+  String get rateOk => 'Bof';
+
+  @override
+  String get rateLike => 'J\'aime bien';
+
+  @override
+  String get rateLove => 'J\'adore';
 }

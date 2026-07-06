@@ -106,7 +106,7 @@ class SeriesDetails {
   final int? runtime; // avg episode length, minutes
   final int? seasonCount;
   final int? episodeCount;
-  final double? communityRating; // avg 1..10, this app's users
+  final double? communityRating; // avg 1..5, this app's users
   final int? ratingCount;
   final List<String> aliases;
   final List<String> genres;
@@ -212,7 +212,7 @@ class UserShow {
   final String? status;
   final bool archived;
   final int nbEpisodesSeen;
-  final int? rating; // 1..10, null = unrated
+  final int? rating; // 1..5, null = unrated
   const UserShow({
     required this.seriesId,
     this.name,

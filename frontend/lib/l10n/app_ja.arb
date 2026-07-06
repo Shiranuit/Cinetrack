@@ -303,5 +303,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "嫌い",
+  "@rateHate": {},
+  "rateDislike": "好きじゃない",
+  "@rateDislike": {},
+  "rateOk": "普通",
+  "@rateOk": {},
+  "rateLike": "好き",
+  "@rateLike": {},
+  "rateLove": "大好き",
+  "@rateLove": {}
 }

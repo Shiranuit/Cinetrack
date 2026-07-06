@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/poster_grid.dart';
+import '../widgets/rating_thumbs.dart';
 import '../widgets/section.dart';
 import '../widgets/show_card.dart';
 import '../widgets/states.dart';
@@ -296,7 +297,7 @@ class ShowsGridScreen extends StatelessWidget {
                   title: s.name ?? t.seriesFallback(s.seriesId),
                   imageUrl: s.imageUrl,
                   favorite: s.isFavorited,
-                  subtitle: s.rating != null ? t.ratingStars(s.rating!) : null,
+                  subtitle: s.rating != null ? ratingLevelLabel(context, s.rating!) : null,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => ShowDetailScreen(seriesId: s.seriesId)),
                   ),

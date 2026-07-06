@@ -866,4 +866,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String bulkUpdated(int count) {
     return '$count atualizado(s)';
   }
+
+  @override
+  String get rateHate => 'Detestei';
+
+  @override
+  String get rateDislike => 'Não gostei';
+
+  @override
+  String get rateOk => 'Ok';
+
+  @override
+  String get rateLike => 'Gostei';
+
+  @override
+  String get rateLove => 'Adorei';
 }

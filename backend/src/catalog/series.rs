@@ -54,7 +54,7 @@ pub struct SeriesDetails {
     pub runtime: Option<i32>, // average episode length, minutes
     pub season_count: Option<i32>,
     pub episode_count: Option<i32>,
-    /// Average of this app's users' 1..10 ratings, and how many rated it (TheTVDB's
+    /// Average of this app's users' 1..5 ratings, and how many rated it (TheTVDB's
     /// own `score` is a popularity metric, not a rating, so we don't surface it).
     pub community_rating: Option<f64>,
     pub rating_count: Option<i64>,

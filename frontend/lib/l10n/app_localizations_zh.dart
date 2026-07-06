@@ -850,4 +850,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String bulkUpdated(int count) {
     return '已更新$count个';
   }
+
+  @override
+  String get rateHate => '讨厌';
+
+  @override
+  String get rateDislike => '不喜欢';
+
+  @override
+  String get rateOk => '一般';
+
+  @override
+  String get rateLike => '喜欢';
+
+  @override
+  String get rateLove => '超爱';
 }

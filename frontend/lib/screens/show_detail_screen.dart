@@ -14,7 +14,7 @@ import '../widgets/badges.dart';
 import '../widgets/episode_sheet.dart';
 import '../widgets/net_image.dart';
 import '../widgets/poster.dart';
-import '../widgets/rating_bar.dart';
+import '../widgets/rating_thumbs.dart';
 import '../widgets/states.dart';
 
 class ShowDetailScreen extends StatefulWidget {
@@ -132,14 +132,9 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     final r = _rel?.rating;
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0),
-      child: Row(
-        children: [
-          Text(r == null ? AppLocalizations.of(context).rateThisShow : AppLocalizations.of(context).yourRating(r),
-              style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Flexible(child: RatingBar(value: r, onRate: _rate)),
-        ],
-      ),
+      // Full-width control: thumbs spread across the row (aligned with the action
+      // bar above), label under the selected one. Self-contained in RatingThumbs.
+      child: RatingThumbs(value: r, onRate: _rate),
     );
   }
 
@@ -617,9 +612,9 @@ class _MetaStripState extends State<_MetaStrip> {
               child: Row(
                 children: [
                   if (details.communityRating != null) ...[
-                    Icon(Icons.star_rounded, size: 16, color: context.colors.favorite),
-                    const SizedBox(width: 3),
-                    Text(details.communityRating!.toStringAsFixed(1),
+                    RatingThumbBadge(level: details.communityRating!.round().clamp(1, 5), size: 17),
+                    const SizedBox(width: 4),
+                    Text('${details.communityRating!.toStringAsFixed(1)} / 5',
                         style: context.text.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
                     if ((details.ratingCount ?? 0) > 0)
                       Text(' (${details.ratingCount})', style: context.text.labelMedium?.copyWith(color: muted)),
@@ -689,7 +684,7 @@ class _DetailsSheet extends StatelessWidget {
     }
 
     if (d.communityRating != null) {
-      row(t.communityRating, '${d.communityRating!.toStringAsFixed(1)} / 10${(d.ratingCount ?? 0) > 0 ? '  (${d.ratingCount})' : ''}');
+      row(t.communityRating, '${d.communityRating!.toStringAsFixed(1)} / 5${(d.ratingCount ?? 0) > 0 ? '  (${d.ratingCount})' : ''}');
     }
     chips(t.genres, d.genres);
     chips(t.themes, d.tags);

@@ -303,5 +303,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "讨厌",
+  "@rateHate": {},
+  "rateDislike": "不喜欢",
+  "@rateDislike": {},
+  "rateOk": "一般",
+  "@rateOk": {},
+  "rateLike": "喜欢",
+  "@rateLike": {},
+  "rateLove": "超爱",
+  "@rateLove": {}
 }

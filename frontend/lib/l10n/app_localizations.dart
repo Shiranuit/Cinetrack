@@ -1683,6 +1683,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} updated'**
   String bulkUpdated(int count);
+
+  /// No description provided for @rateHate.
+  ///
+  /// In en, this message translates to:
+  /// **'Hate it'**
+  String get rateHate;
+
+  /// No description provided for @rateDislike.
+  ///
+  /// In en, this message translates to:
+  /// **'Dislike it'**
+  String get rateDislike;
+
+  /// No description provided for @rateOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get rateOk;
+
+  /// No description provided for @rateLike.
+  ///
+  /// In en, this message translates to:
+  /// **'Like it'**
+  String get rateLike;
+
+  /// No description provided for @rateLove.
+  ///
+  /// In en, this message translates to:
+  /// **'Love it'**
+  String get rateLove;
 }
 
 class _AppLocalizationsDelegate

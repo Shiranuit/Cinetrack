@@ -393,7 +393,7 @@ class ApiClient extends ChangeNotifier {
   Future<void> setStatus(int seriesId, String? status) =>
       _send('PUT', '/api/shows/$seriesId/status', body: {'status': status});
 
-  /// Set (1..10) or clear (null) your rating for a show.
+  /// Set (1..5) or clear (null) your rating for a show.
   Future<void> rateShow(int seriesId, int? rating) =>
       _send('PUT', '/api/shows/$seriesId/rating', body: {'rating': rating});
 

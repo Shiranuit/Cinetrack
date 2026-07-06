@@ -852,4 +852,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String bulkUpdated(int count) {
     return '$count件を更新しました';
   }
+
+  @override
+  String get rateHate => '嫌い';
+
+  @override
+  String get rateDislike => '好きじゃない';
+
+  @override
+  String get rateOk => '普通';
+
+  @override
+  String get rateLike => '好き';
+
+  @override
+  String get rateLove => '大好き';
 }

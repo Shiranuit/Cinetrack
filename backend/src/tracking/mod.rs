@@ -91,8 +91,9 @@ pub async fn get_show(
     Ok(row)
 }
 
-/// Set (or clear with `None`) the user's 1..10 rating for a show. Upserts the
-/// `user_show` row — rating a show you watched implicitly tracks it.
+/// Set (or clear with `None`) the user's 1..5 rating for a show (Hate/Dislike/OK/
+/// Like/Love). Upserts the `user_show` row — rating a show you watched implicitly
+/// tracks it.
 pub async fn set_show_rating(
     state: &AppState,
     user_id: Uuid,
@@ -100,9 +101,9 @@ pub async fn set_show_rating(
     rating: Option<i16>,
 ) -> AppResult<()> {
     if let Some(r) = rating
-        && !(1..=10).contains(&r)
+        && !(1..=5).contains(&r)
     {
-        return Err(crate::error::AppError::BadRequest("rating must be between 1 and 10".into()));
+        return Err(crate::error::AppError::BadRequest("rating must be between 1 and 5".into()));
     }
     sqlx::query(
         "INSERT INTO app.user_show (user_id, series_id, rating) VALUES ($1, $2, $3) \

@@ -303,5 +303,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "rateHate": "Hasse es",
+  "@rateHate": {},
+  "rateDislike": "Mag ich nicht",
+  "@rateDislike": {},
+  "rateOk": "Geht so",
+  "@rateOk": {},
+  "rateLike": "Mag ich",
+  "@rateLike": {},
+  "rateLove": "Liebe es",
+  "@rateLove": {}
 }
