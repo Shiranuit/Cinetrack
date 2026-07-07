@@ -220,10 +220,10 @@ class _CalendarEpisodeSheetState extends State<_CalendarEpisodeSheet> {
 
   Future<void> _load() async {
     final api = context.read<ApiClient>();
-    final lang = context.read<SettingsController>().langsParam.split(',').first;
+    final langs = context.read<SettingsController>().langsParam;
     try {
       final results = await Future.wait([
-        api.episodes(widget.item.seriesId, lang: lang),
+        api.episodes(widget.item.seriesId, langs: langs),
         api.seenCounts(widget.item.seriesId),
       ]);
       if (!mounted) return;

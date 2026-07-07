@@ -817,7 +817,7 @@ async fn prefetch_series(state: &AppState, ids: impl Iterator<Item = i64>) -> (u
                     mark_unavailable(&state, id, false).await;
                     // Cache the episode list too, so "up to date" / progress are
                     // computed correctly at import time (no need to open each show).
-                    let _ = catalog::episode::list_for_series(&state, id, "default", Some("eng")).await;
+                    let _ = catalog::episode::list_for_series(&state, id, "default", &["eng".to_string()]).await;
                     true
                 }
                 // A 404 means the id was merged/deleted on TheTVDB — flag it (later
@@ -912,7 +912,7 @@ async fn resolve_one(
     // Tier 1: exact match → apply automatically.
     if let Some(new_id) = results.iter().find_map(|r| exact_name_match(r, name)) {
         if new_id != old_id && catalog::series::get(state, new_id, Some("eng")).await.is_ok() {
-            let _ = catalog::episode::list_for_series(state, new_id, "official", Some("eng")).await;
+            let _ = catalog::episode::list_for_series(state, new_id, "official", &["eng".to_string()]).await;
             remap_user_series(state, user_id, old_id, new_id).await?;
             return Ok(ResolveOutcome::Applied);
         }
@@ -1122,7 +1122,7 @@ pub async fn confirm_suggestion(state: &AppState, user_id: Uuid, id: i64) -> cra
 
     // Make sure the live series + episodes are cached (episodes power the S/E remap).
     let _ = catalog::series::get(state, suggested, Some("eng")).await;
-    let _ = catalog::episode::list_for_series(state, suggested, "official", Some("eng")).await;
+    let _ = catalog::episode::list_for_series(state, suggested, "official", &["eng".to_string()]).await;
     remap_user_series(state, user_id, dead, suggested).await?;
 
     sqlx::query("UPDATE app.import_match SET status = 'confirmed' WHERE id = $1")

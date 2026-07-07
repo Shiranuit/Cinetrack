@@ -294,10 +294,13 @@ pub async fn list_for_series(
     state: &AppState,
     series_id: i64,
     season_type: &str,
-    lang: Option<&str>,
+    langs: &[String],
 ) -> AppResult<Vec<EpisodeRow>> {
+    // Highest-priority language drives the base episode-list fetch and series caching;
+    // the full ordered list is used for the per-episode name/overview overlay below.
+    let primary = langs.first().map(String::as_str);
     // Make sure the series exists (also caches it / its seasons).
-    super::series::get(state, series_id, lang).await?;
+    super::series::get(state, series_id, primary).await?;
 
     // episodes_synced_at is nullable → COALESCE so a NULL (never synced) decodes as false.
     let fresh: Option<bool> = sqlx::query_scalar(&format!(
@@ -311,7 +314,7 @@ pub async fn list_for_series(
     if fresh != Some(true) && state.config.catalog_mode.allow_remote() {
         let mut page = 0u32;
         loop {
-            let data = state.tvdb.series_episodes(series_id, season_type, lang, page).await?;
+            let data = state.tvdb.series_episodes(series_id, season_type, primary, page).await?;
             let episodes = data["episodes"].as_array().cloned().unwrap_or_default();
             if episodes.is_empty() {
                 break;
@@ -345,19 +348,25 @@ pub async fn list_for_series(
     // warm the translation cache for any episodes missing a fresh entry, then read
     // it back with a COALESCE. Cached (incl. negative results), so this only calls
     // out on the first view per (series, language).
-    if let (Some(lang), true) = (lang, state.config.catalog_mode.allow_remote()) {
-        let stale: Vec<i64> = sqlx::query_scalar(&format!(
-            "SELECT e.id FROM catalog.episode e \
-             LEFT JOIN catalog.translation t \
-               ON t.entity_type = 'episode' AND t.entity_id = e.id AND t.language = $2 \
-             WHERE e.series_id = $1 AND NOT e.deleted \
-               AND (t.entity_id IS NULL OR t.last_synced_at <= now() - interval '{TTL}')"
-        ))
-        .bind(series_id)
-        .bind(lang)
-        .fetch_all(&state.db)
-        .await?;
-        translation::prefetch(state, "episode", &stale, lang).await;
+    // Warm the cache for EACH preferred language (non-mirror only; mirror serves
+    // whatever is cached), so the best-language overlay below can fall back through
+    // the list offline. Cached incl. negative results, so it only calls out once per
+    // (series, language).
+    if state.config.catalog_mode.allow_remote() {
+        for lang in langs {
+            let stale: Vec<i64> = sqlx::query_scalar(&format!(
+                "SELECT e.id FROM catalog.episode e \
+                 LEFT JOIN catalog.translation t \
+                   ON t.entity_type = 'episode' AND t.entity_id = e.id AND t.language = $2 \
+                 WHERE e.series_id = $1 AND NOT e.deleted \
+                   AND (t.entity_id IS NULL OR t.last_synced_at <= now() - interval '{TTL}')"
+            ))
+            .bind(series_id)
+            .bind(lang)
+            .fetch_all(&state.db)
+            .await?;
+            translation::prefetch(state, "episode", &stale, lang).await;
+        }
     }
 
     // LATERAL (not a plain LEFT JOIN): forces one indexed lookup per episode against
@@ -373,13 +382,14 @@ pub async fn list_for_series(
          FROM catalog.episode e \
          LEFT JOIN LATERAL ( \
              SELECT tr.name, tr.overview FROM catalog.translation tr \
-             WHERE tr.entity_type = 'episode' AND tr.entity_id = e.id AND tr.language = $2 \
+             WHERE tr.entity_type = 'episode' AND tr.entity_id = e.id AND tr.language = ANY($2) \
+             ORDER BY array_position($2, tr.language) LIMIT 1 \
          ) t ON true \
          WHERE e.series_id = $1 AND NOT e.deleted \
          ORDER BY e.season_number NULLS LAST, e.number NULLS LAST",
     )
     .bind(series_id)
-    .bind(lang.unwrap_or(""))
+    .bind(langs)
     .fetch_all(&state.db)
     .await?;
     Ok(rows)

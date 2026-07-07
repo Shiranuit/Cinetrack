@@ -143,7 +143,7 @@ async fn enrich_one(state: &AppState, item: &queue::QueueItem) -> AppResult<()> 
             catalog::series::refresh_full(state, item.id).await?;
             // Episodes (default season order) for offline completeness — best
             // effort so a missing/edge episode set doesn't fail the whole item.
-            if let Err(e) = catalog::episode::list_for_series(state, item.id, "default", None).await {
+            if let Err(e) = catalog::episode::list_for_series(state, item.id, "default", &[]).await {
                 tracing::debug!("enrich series {} episodes skipped: {e}", item.id);
             }
             // Mirror per-episode translations (every available language) so Mirror

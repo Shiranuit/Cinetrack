@@ -161,15 +161,19 @@ pub async fn filter_options(
     Query(s): Query<ScopeQuery>,
 ) -> AppResult<Json<FilterOptions>> {
     let lib = if s.library.unwrap_or(false) { Some(uid) } else { None };
-    Ok(Json(FilterOptions {
-        genres: catalog::discover::genres_in_catalog(&state, lib).await?,
-        tags: catalog::discover::tags_in_catalog(&state, lib).await?,
-        networks: catalog::discover::companies_in_catalog(&state, "Network", lib).await?,
-        studios: catalog::discover::companies_in_catalog(&state, "Studio", lib).await?,
-        statuses: catalog::discover::statuses_in_catalog(&state).await?,
-        languages: catalog::discover::languages_in_catalog(&state, lib).await?,
-        countries: catalog::discover::countries_in_catalog(&state, lib).await?,
-    }))
+    // The seven facet queries are independent catalog-wide aggregations. Run them
+    // concurrently (each takes its own pooled connection) so total latency is the
+    // slowest one, not their sum — turns ~900ms cold into ~one-query cold.
+    let (genres, tags, networks, studios, statuses, languages, countries) = tokio::try_join!(
+        catalog::discover::genres_in_catalog(&state, lib),
+        catalog::discover::tags_in_catalog(&state, lib),
+        catalog::discover::companies_in_catalog(&state, "Network", lib),
+        catalog::discover::companies_in_catalog(&state, "Studio", lib),
+        catalog::discover::statuses_in_catalog(&state),
+        catalog::discover::languages_in_catalog(&state, lib),
+        catalog::discover::countries_in_catalog(&state, lib),
+    )?;
+    Ok(Json(FilterOptions { genres, tags, networks, studios, statuses, languages, countries }))
 }
 
 /// Genres present in the mirror (kept for the existing discover chips).

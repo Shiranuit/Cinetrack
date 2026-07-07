@@ -57,7 +57,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       final r = await Future.wait([
         _api.series(widget.seriesId, lang: _langs.split(',').first),
         _api.showRelation(widget.seriesId, langs: _langs),
-        _api.episodes(widget.seriesId, lang: _langs.split(',').first),
+        _api.episodes(widget.seriesId, langs: _langs),
         _api.seenCounts(widget.seriesId),
       ]);
       if (!mounted) return;

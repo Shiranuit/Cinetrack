@@ -8,7 +8,7 @@ use crate::{
     catalog::{self, models::{EpisodeRow, SeasonRow}, models::SeriesRow},
     error::AppResult,
     state::AppState,
-    web::query::LangQuery,
+    web::query::{LangQuery, LangsQuery},
 };
 
 /// Read-through series. `?lang=eng` (default), `?lang=fra|jpn|...`, `?lang=original`.
@@ -37,8 +37,10 @@ pub async fn list_episodes(
     Query(q): Query<EpisodesQuery>,
 ) -> AppResult<Json<Vec<EpisodeRow>>> {
     let season_type = q.season_type.as_deref().unwrap_or("default");
-    let lang = LangQuery { lang: q.lang }.resolve();
-    Ok(Json(catalog::episode::list_for_series(&state, id, season_type, lang.as_deref()).await?))
+    // Prefer the ordered `langs` list; fall back to legacy single `lang` (older app
+    // builds) so episode names resolve through the same preference chain as titles.
+    let langs = LangsQuery { langs: q.langs.or(q.lang) }.list();
+    Ok(Json(catalog::episode::list_for_series(&state, id, season_type, &langs).await?))
 }
 
 /// Rich metadata (genres/networks/studios/themes + facts) for the show page.
@@ -60,5 +62,8 @@ pub async fn list_seasons(
 #[derive(serde::Deserialize)]
 pub struct EpisodesQuery {
     pub season_type: Option<String>,
+    /// Legacy single language (older app builds).
     pub lang: Option<String>,
+    /// Ordered language preference list (comma-separated); takes precedence.
+    pub langs: Option<String>,
 }

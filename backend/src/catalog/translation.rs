@@ -20,8 +20,27 @@ pub struct Translation {
 pub async fn store_bundle(state: &AppState, entity_type: &str, id: i64, data: &Value) -> AppResult<()> {
     use std::collections::HashMap;
     let bundle = &data["translations"];
+
+    // Persist the raw bundle first (durable: routine base refresh leaves this column
+    // alone), so any future change to how we derive display names / handle aliases can
+    // re-run from local data instead of re-querying the whole of TheTVDB.
+    if !bundle.is_null() && let Some(tbl) = raw_translations_table(entity_type) {
+        sqlx::query(&format!("UPDATE {tbl} SET raw_translations = $2 WHERE id = $1"))
+            .bind(id)
+            .bind(sqlx::types::Json(bundle))
+            .execute(&state.db)
+            .await?;
+    }
+
     let mut by_lang: HashMap<&str, (Option<&str>, Option<&str>)> = HashMap::new();
     for n in bundle["nameTranslations"].as_array().into_iter().flatten() {
+        // TheTVDB mixes the real translated name with ALIASES in this array, tagged
+        // `isAlias: true` (e.g. a romanized original title). The real name is listed
+        // first; if we don't skip aliases, the trailing alias wins last-write and we
+        // show "Cike Wu Liu Qi" instead of the French "Scissor Seven". Keep real names.
+        if n["isAlias"].as_bool() == Some(true) {
+            continue;
+        }
         if let Some(lang) = n["language"].as_str() {
             by_lang.entry(lang).or_default().0 = n["name"].as_str().filter(|s| !s.is_empty());
         }
@@ -75,6 +94,121 @@ fn table(entity_type: &str) -> &'static str {
         "season" => "catalog.season",
         _ => "catalog.series",
     }
+}
+
+/// Entities whose table has a `raw_translations` cache column (series & movies use
+/// the bundled `?meta=translations` path; episodes/seasons don't).
+fn raw_translations_table(entity_type: &str) -> Option<&'static str> {
+    match entity_type {
+        "series" => Some("catalog.series"),
+        "movie" => Some("catalog.movie"),
+        _ => None,
+    }
+}
+
+/// One-off catalog-wide backfill: re-fetch the `?meta=translations` bundle for every
+/// series and movie and re-ingest it through [`store_bundle`], which now (a) stores
+/// the real translated names instead of TheTVDB's `isAlias` romanizations and (b)
+/// caches the raw bundle in `raw_translations` for future offline re-derivation.
+///
+/// Resumable: an entity is skipped once `raw_translations` is set, so re-running
+/// continues where it left off. Mirrors regardless of `CATALOG_MODE` (calls TheTVDB
+/// directly), matching the episode-translation backfill. Returns entities processed.
+pub async fn backfill_all_bundles(state: &AppState) -> AppResult<u64> {
+    let series = backfill_bundles(state, "series").await?;
+    let movies = backfill_bundles(state, "movie").await?;
+    Ok(series + movies)
+}
+
+async fn backfill_bundles(state: &AppState, entity_type: &str) -> AppResult<u64> {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use tokio::sync::Semaphore;
+
+    let tbl = table(entity_type);
+    // Separate process with its own pool: keep concurrency modest so it plus the live
+    // server don't exhaust Postgres. The TheTVDB client's global pacer caps total rps.
+    let concurrency = std::env::var("BACKFILL_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(8);
+
+    let sem = Arc::new(Semaphore::new(concurrency));
+    let done = Arc::new(AtomicU64::new(0));
+    let mut cursor = 0i64;
+    loop {
+        // Page through ids not yet backfilled (raw_translations still NULL); the cursor
+        // advances past each page so a failing entity can't loop within this run.
+        let ids: Vec<i64> = sqlx::query_scalar(&format!(
+            "SELECT id FROM {tbl} WHERE id > $1 AND NOT deleted AND raw_translations IS NULL \
+             ORDER BY id LIMIT 2000"
+        ))
+        .bind(cursor)
+        .fetch_all(&state.db)
+        .await?;
+        if ids.is_empty() {
+            break;
+        }
+        cursor = *ids.last().unwrap();
+
+        let mut set = tokio::task::JoinSet::new();
+        for id in ids {
+            let permit = sem.clone().acquire_owned().await.expect("semaphore closed");
+            let st = state.clone();
+            let et = entity_type.to_string();
+            let done = done.clone();
+            set.spawn(async move {
+                let _permit = permit; // released when this entity finishes → next starts
+                if let Err(e) = backfill_one(&st, &et, id).await {
+                    tracing::warn!("translation-bundle backfill: {et} {id} failed: {e}");
+                }
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 500 == 0 {
+                    tracing::info!("translation-bundle backfill ({et}): {n} processed");
+                }
+            });
+        }
+        while set.join_next().await.is_some() {}
+    }
+    Ok(done.load(Ordering::Relaxed))
+}
+
+/// Targeted backfill of specific catalog ids (series or movie, auto-detected by
+/// which table holds the id). For testing the sweep or repairing individual entries
+/// without a full run. Returns the number successfully re-ingested.
+pub async fn backfill_ids(state: &AppState, ids: &[i64]) -> AppResult<u64> {
+    let mut n = 0;
+    for &id in ids {
+        let kind: Option<String> = sqlx::query_scalar(
+            "SELECT CASE \
+               WHEN EXISTS (SELECT 1 FROM catalog.series WHERE id = $1) THEN 'series' \
+               WHEN EXISTS (SELECT 1 FROM catalog.movie  WHERE id = $1) THEN 'movie'  END",
+        )
+        .bind(id)
+        .fetch_one(&state.db)
+        .await?;
+        match kind.as_deref() {
+            Some(kind) => match backfill_one(state, kind, id).await {
+                Ok(()) => {
+                    n += 1;
+                    tracing::info!("translation-bundle backfill: {kind} {id} done");
+                }
+                Err(e) => tracing::warn!("translation-bundle backfill: {kind} {id} failed: {e}"),
+            },
+            None => tracing::warn!("translation-bundle backfill: id {id} not in series or movie"),
+        }
+    }
+    Ok(n)
+}
+
+/// Fetch one entity's `?meta=translations` bundle and re-ingest it.
+async fn backfill_one(state: &AppState, entity_type: &str, id: i64) -> AppResult<()> {
+    let data = match entity_type {
+        "movie" => state.tvdb.movie_extended_translated(id).await?,
+        _ => state.tvdb.series_extended_translated(id).await?,
+    };
+    store_bundle(state, entity_type, id, &data).await
 }
 
 /// Fetch (read-through) a single translation, returning `None` if TheTVDB has
