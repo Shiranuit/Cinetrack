@@ -154,14 +154,19 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     ),
                 ],
               ),
+              // Close affordance matches the show screen: a cross in the top-right
+              // corner rather than a back arrow in the top-left.
               SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(Insets.sm),
-                  child: CircleAvatar(
-                    backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(Insets.sm),
+                    child: CircleAvatar(
+                      backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
+                      child: IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ),
                   ),
                 ),
