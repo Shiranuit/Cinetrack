@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "これによりアカウントとすべてのデータ（追跡中の番組、視聴履歴、お気に入り、フォロー）が完全に削除されます。この操作は取り消せません。",
   "deleteAnyway": "それでも削除",
   "keepMyAccount": "アカウントを保持",
+  "deleteConfirmKeyword": "削除",
+  "deleteConfirmPrompt": "{word} と入力して確認",
   "nameCannotBeEmpty": "名前を入力してください",
   "enterValidEmail": "有効なメールアドレスを入力してください",
   "profileUpdated": "プロフィールを更新しました。",

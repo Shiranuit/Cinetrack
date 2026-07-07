@@ -762,6 +762,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get keepMyAccount => 'Conservar mi cuenta';
 
   @override
+  String get deleteConfirmKeyword => 'ELIMINAR';
+
+  @override
+  String deleteConfirmPrompt(String word) {
+    return 'Escribe $word para confirmar';
+  }
+
+  @override
   String get nameCannotBeEmpty => 'El nombre no puede estar vacío';
 
   @override

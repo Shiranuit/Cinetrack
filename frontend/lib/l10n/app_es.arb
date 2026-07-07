@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "Esto elimina permanentemente tu cuenta y todos tus datos — series seguidas, historial de reproducción, favoritos y seguimientos. Esta acción no se puede deshacer.",
   "deleteAnyway": "Eliminar de todos modos",
   "keepMyAccount": "Conservar mi cuenta",
+  "deleteConfirmKeyword": "ELIMINAR",
+  "deleteConfirmPrompt": "Escribe {word} para confirmar",
   "nameCannotBeEmpty": "El nombre no puede estar vacío",
   "enterValidEmail": "Introduce un correo electrónico válido",
   "profileUpdated": "Perfil actualizado.",

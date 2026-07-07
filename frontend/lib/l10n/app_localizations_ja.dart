@@ -749,6 +749,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get keepMyAccount => 'アカウントを保持';
 
   @override
+  String get deleteConfirmKeyword => '削除';
+
+  @override
+  String deleteConfirmPrompt(String word) {
+    return '$word と入力して確認';
+  }
+
+  @override
   String get nameCannotBeEmpty => '名前を入力してください';
 
   @override

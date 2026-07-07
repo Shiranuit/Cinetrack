@@ -6,6 +6,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/confirm_actions.dart';
 
 /// Create invitations (link to share or emailed) and review their status.
 class InvitesScreen extends StatefulWidget {
@@ -54,10 +55,14 @@ class _InvitesScreenState extends State<InvitesScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(t.revoke),
         content: Text(t.revokeInviteConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.revoke)),
-        ],
+        actions: confirmActions(
+          ctx,
+          confirmLabel: t.revoke,
+          onConfirm: () => Navigator.pop(ctx, true),
+          cancelLabel: t.cancel,
+          onCancel: () => Navigator.pop(ctx, false),
+          destructive: true,
+        ),
       ),
     );
     if (ok != true) return;

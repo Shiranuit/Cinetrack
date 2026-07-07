@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "这将永久删除您的账户及所有数据 — 追踪的剧集、观看记录、收藏和关注。此操作无法撤销。",
   "deleteAnyway": "仍然删除",
   "keepMyAccount": "保留我的账户",
+  "deleteConfirmKeyword": "删除",
+  "deleteConfirmPrompt": "输入 {word} 以确认",
   "nameCannotBeEmpty": "名称不能为空",
   "enterValidEmail": "请输入有效的电子邮箱",
   "profileUpdated": "个人资料已更新。",

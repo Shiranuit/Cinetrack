@@ -749,6 +749,14 @@ class AppLocalizationsKo extends AppLocalizations {
   String get keepMyAccount => '계정 유지';
 
   @override
+  String get deleteConfirmKeyword => '삭제';
+
+  @override
+  String deleteConfirmPrompt(String word) {
+    return '$word을(를) 입력하여 확인';
+  }
+
+  @override
   String get nameCannotBeEmpty => '이름을 비워둘 수 없습니다';
 
   @override

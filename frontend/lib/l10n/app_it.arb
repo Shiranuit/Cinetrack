@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "Questa operazione elimina definitivamente il tuo account e tutti i tuoi dati — serie seguite, cronologia di visione, preferiti e follow. L'operazione non può essere annullata.",
   "deleteAnyway": "Elimina comunque",
   "keepMyAccount": "Mantieni il mio account",
+  "deleteConfirmKeyword": "ELIMINA",
+  "deleteConfirmPrompt": "Digita {word} per confermare",
   "nameCannotBeEmpty": "Il nome non può essere vuoto",
   "enterValidEmail": "Inserisci un'email valida",
   "profileUpdated": "Profilo aggiornato.",

@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "Dadurch werden dein Konto und alle deine Daten dauerhaft gelöscht — verfolgte Serien, Wiedergabeverlauf, Favoriten und Abonnements. Dies kann nicht rückgängig gemacht werden.",
   "deleteAnyway": "Trotzdem löschen",
   "keepMyAccount": "Konto behalten",
+  "deleteConfirmKeyword": "LÖSCHEN",
+  "deleteConfirmPrompt": "Geben Sie {word} ein, um zu bestätigen",
   "nameCannotBeEmpty": "Der Name darf nicht leer sein",
   "enterValidEmail": "Gib eine gültige E-Mail-Adresse ein",
   "profileUpdated": "Profil aktualisiert.",

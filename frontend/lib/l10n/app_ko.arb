@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "계정과 모든 데이터(추적 중인 프로그램, 시청 기록, 즐겨찾기 및 팔로우)가 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
   "deleteAnyway": "그래도 삭제",
   "keepMyAccount": "계정 유지",
+  "deleteConfirmKeyword": "삭제",
+  "deleteConfirmPrompt": "{word}을(를) 입력하여 확인",
   "nameCannotBeEmpty": "이름을 비워둘 수 없습니다",
   "enterValidEmail": "유효한 이메일을 입력하세요",
   "profileUpdated": "프로필이 업데이트되었습니다.",

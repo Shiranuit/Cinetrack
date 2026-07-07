@@ -241,6 +241,8 @@
   "deleteAccountConfirmBody": "Cette action supprime définitivement votre compte et toutes vos données — séries suivies, historique de visionnage, favoris et abonnements. Cette action est irréversible.",
   "deleteAnyway": "Supprimer quand même",
   "keepMyAccount": "Conserver mon compte",
+  "deleteConfirmKeyword": "SUPPRIMER",
+  "deleteConfirmPrompt": "Saisissez {word} pour confirmer",
   "nameCannotBeEmpty": "Le nom ne peut pas être vide",
   "enterValidEmail": "Saisissez une adresse e-mail valide",
   "profileUpdated": "Profil mis à jour.",

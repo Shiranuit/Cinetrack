@@ -1516,6 +1516,18 @@ abstract class AppLocalizations {
   /// **'Keep my account'**
   String get keepMyAccount;
 
+  /// No description provided for @deleteConfirmKeyword.
+  ///
+  /// In en, this message translates to:
+  /// **'DELETE'**
+  String get deleteConfirmKeyword;
+
+  /// No description provided for @deleteConfirmPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Type {word} to confirm'**
+  String deleteConfirmPrompt(String word);
+
   /// No description provided for @nameCannotBeEmpty.
   ///
   /// In en, this message translates to:

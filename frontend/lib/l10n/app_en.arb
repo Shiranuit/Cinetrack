@@ -362,6 +362,11 @@
   "deleteAccountConfirmBody": "This permanently deletes your account and all your data — tracked shows, watch history, favorites and follows. This cannot be undone.",
   "deleteAnyway": "Delete anyway",
   "keepMyAccount": "Keep my account",
+  "deleteConfirmKeyword": "DELETE",
+  "deleteConfirmPrompt": "Type {word} to confirm",
+  "@deleteConfirmPrompt": {
+    "placeholders": { "word": { "type": "String" } }
+  },
   "nameCannotBeEmpty": "Name cannot be empty",
   "enterValidEmail": "Enter a valid email",
   "profileUpdated": "Profile updated.",

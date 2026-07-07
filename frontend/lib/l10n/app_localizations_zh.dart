@@ -747,6 +747,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keepMyAccount => '保留我的账户';
 
   @override
+  String get deleteConfirmKeyword => '删除';
+
+  @override
+  String deleteConfirmPrompt(String word) {
+    return '输入 $word 以确认';
+  }
+
+  @override
   String get nameCannotBeEmpty => '名称不能为空';
 
   @override

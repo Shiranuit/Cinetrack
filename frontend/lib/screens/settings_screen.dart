@@ -9,6 +9,7 @@ import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/auth.dart';
 import '../state/settings.dart';
+import '../widgets/confirm_actions.dart';
 import '../widgets/password_strength.dart';
 import '../widgets/section.dart';
 import 'import_matches_screen.dart';
@@ -99,30 +100,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    final t = AppLocalizations.of(context);
+    final keyword = t.deleteConfirmKeyword;
+    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${AppLocalizations.of(context).deleteAccount}?'),
-        content: Text(AppLocalizations.of(context).deleteAccountConfirmBody),
-        // Sensitive action: make Cancel the obvious, prominent default and Delete
-        // the deliberately-understated (subtle text) choice so it's hard to hit by
-        // accident.
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: context.scheme.onSurfaceVariant,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // Enabled only once the user types the confirmation word (trimmed,
+          // case-insensitive) — deletion is irreversible, so require a deliberate act.
+          final matches = controller.text.trim().toUpperCase() == keyword.toUpperCase();
+          return AlertDialog(
+            title: Text('${t.deleteAccount}?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.deleteAccountConfirmBody),
+                const SizedBox(height: Insets.lg),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.characters,
+                  onChanged: (_) => setLocal(() {}),
+                  onSubmitted: matches ? (_) => Navigator.of(ctx).pop(true) : null,
+                  decoration: InputDecoration(
+                    labelText: t.deleteConfirmPrompt(keyword),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
-            child: Text(AppLocalizations.of(ctx).deleteAnyway),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(AppLocalizations.of(ctx).keepMyAccount),
-          ),
-        ],
+            // Keep is the prominent (filled) default; Delete is the outlined-red
+            // action, disabled until the confirmation word is typed.
+            actions: confirmActions(
+              ctx,
+              confirmLabel: t.deleteAnyway,
+              onConfirm: matches ? () => Navigator.of(ctx).pop(true) : null,
+              cancelLabel: t.keepMyAccount,
+              onCancel: () => Navigator.of(ctx).pop(false),
+              destructive: true,
+            ),
+          );
+        },
       ),
     );
+    controller.dispose();
     if (confirmed != true || !mounted) return;
 
     final api = context.read<ApiClient>();
@@ -188,20 +213,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppLocalizations.of(ctx).cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, ctrl.text.trim());
-              }
-            },
-            child: Text(AppLocalizations.of(ctx).save),
-          ),
-        ],
+        actions: confirmActions(
+          ctx,
+          confirmLabel: AppLocalizations.of(ctx).save,
+          onConfirm: () {
+            if (formKey.currentState!.validate()) {
+              Navigator.pop(ctx, ctrl.text.trim());
+            }
+          },
+          cancelLabel: AppLocalizations.of(ctx).cancel,
+          onCancel: () => Navigator.pop(ctx),
+        ),
       ),
     );
     ctrl.dispose();
@@ -312,18 +334,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(AppLocalizations.of(ctx).cancel),
-              ),
-              FilledButton(
-                onPressed: canSubmit
-                    ? () => Navigator.pop(ctx, (cur.text, p1.text))
-                    : null,
-                child: Text(AppLocalizations.of(ctx).update),
-              ),
-            ],
+            actions: confirmActions(
+              ctx,
+              confirmLabel: AppLocalizations.of(ctx).update,
+              onConfirm: canSubmit
+                  ? () => Navigator.pop(ctx, (cur.text, p1.text))
+                  : null,
+              cancelLabel: AppLocalizations.of(ctx).cancel,
+              onCancel: () => Navigator.pop(ctx),
+            ),
           );
         },
       ),
