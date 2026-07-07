@@ -170,8 +170,10 @@ pub async fn register(
     // here so there's no MAX(id)+1 read-then-insert race on signup.
     let new_id = uuid::Uuid::now_v7();
     let mut tx = state.db.begin().await?;
+    // New profiles start private: the user opts into visibility later from settings,
+    // rather than being public the moment they sign up.
     let ins = sqlx::query(
-        "INSERT INTO app.users (id, email, password_hash, screen_name) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO app.users (id, email, password_hash, screen_name, is_private) VALUES ($1, $2, $3, $4, true)",
     )
     .bind(new_id)
     .bind(&email)
