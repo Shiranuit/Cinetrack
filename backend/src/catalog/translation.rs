@@ -264,24 +264,20 @@ async fn ensure(state: &AppState, entity_type: &str, id: i64, lang: &str) -> App
 async fn upsert(state: &AppState, entity_type: &str, id: i64, lang: &str, data: &Value) -> AppResult<()> {
     let name = data["name"].as_str();
     let overview = data["overview"].as_str();
-    let is_alias = data["isAlias"].as_bool();
-    let is_primary = data["isPrimary"].as_bool();
 
     sqlx::query(
         "INSERT INTO catalog.translation \
-           (entity_type, entity_id, language, name, overview, is_alias, is_primary, raw, last_synced_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now()) \
+           (entity_type, entity_id, language, name, overview, raw, last_synced_at) \
+         VALUES ($1,$2,$3,$4,$5,$6, now()) \
          ON CONFLICT (entity_type, entity_id, language) DO UPDATE SET \
-           name=EXCLUDED.name, overview=EXCLUDED.overview, is_alias=EXCLUDED.is_alias, \
-           is_primary=EXCLUDED.is_primary, raw=EXCLUDED.raw, last_synced_at=now()",
+           name=EXCLUDED.name, overview=EXCLUDED.overview, \
+           raw=EXCLUDED.raw, last_synced_at=now()",
     )
     .bind(entity_type)
     .bind(id)
     .bind(lang)
     .bind(name)
     .bind(overview)
-    .bind(is_alias)
-    .bind(is_primary)
     .bind(sqlx::types::Json(data))
     .execute(&state.db)
     .await?;

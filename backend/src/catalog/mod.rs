@@ -12,7 +12,6 @@ pub mod episode;
 pub mod facets;
 pub mod models;
 pub mod movie;
-pub mod search;
 pub mod season;
 pub mod series;
 pub mod translation;
@@ -26,6 +25,18 @@ use crate::{error::AppResult, state::AppState};
 
 /// How long a cached catalog row is considered fresh before we re-fetch.
 pub(crate) const TTL: &str = "24 hours";
+
+/// A series/movie hit returned by browse/filter (Discover, Library). `name` is
+/// resolved to the caller's preferred language when a translation exists.
+#[derive(serde::Serialize)]
+pub struct SearchResult {
+    pub tvdb_id: Option<i64>,
+    pub kind: Option<String>, // "series" | "movie"
+    pub name: Option<String>,
+    pub year: Option<i32>,
+    pub image_url: Option<String>,
+    pub overview: Option<String>,
+}
 
 /// Insert a minimal, deliberately-stale catalog stub for a series/movie we saw
 /// via a remote list/search (which carry only lightweight fields). This makes

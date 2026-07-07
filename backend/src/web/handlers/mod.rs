@@ -7,7 +7,6 @@ pub mod invites;
 pub mod media;
 pub mod meta;
 pub mod movie;
-pub mod search;
 pub mod season;
 pub mod series;
 pub mod shows;

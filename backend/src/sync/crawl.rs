@@ -74,7 +74,7 @@ async fn crawl_entity(state: &AppState, entity: &str, summary: &mut CrawlSummary
 
 /// Batch-insert a page of basic records as stubs (one query). Aliases are left
 /// empty here (rectangular-array limitation) — enrichment fills them from
-/// `/extended`; the trigger recomputes `search_text` then.
+/// `/extended` (into catalog.entity_alias).
 async fn upsert_stubs(state: &AppState, table: &str, records: &[Value]) -> AppResult<u64> {
     let mut ids = Vec::with_capacity(records.len());
     let mut names = Vec::with_capacity(records.len());

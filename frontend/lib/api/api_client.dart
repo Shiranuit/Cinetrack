@@ -266,9 +266,6 @@ class ApiClient extends ChangeNotifier {
   Future<List<Episode>> episodes(int id, {String? langs}) async =>
       _list(await _get('/api/series/$id/episodes', {'langs': ?langs}), Episode.fromJson);
 
-  Future<List<SearchResult>> search(String q, {String? type, String? langs}) async =>
-      _list(await _get('/api/search', {'q': q, 'type': ?type, 'langs': ?langs}), SearchResult.fromJson);
-
   // ---- tracking ----
   Future<List<UserShow>> shows({String? langs}) async =>
       _list(await _get('/api/shows', {'langs': ?langs}), UserShow.fromJson);

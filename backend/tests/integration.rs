@@ -95,7 +95,7 @@ async fn discover_applies_advanced_filters() {
     common::insert_series(&state.db, 101, "OldAction", Some(1999), Some(45), Some(70.0), Some("eng"), serde_json::json!({})).await;
     common::set_genres(&state.db, 101, &[(19, "Action")]).await;
 
-    let ids = |v: &[backend::catalog::search::SearchResult]| v.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>();
+    let ids = |v: &[backend::catalog::SearchResult]| v.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>();
 
     // anime type → only the jpn-original series.
     let r = discover::search_db(&state, &filters("anime"), &langs()).await.unwrap();
@@ -149,7 +149,7 @@ async fn library_filter_scopes_to_tracked_shows() {
     common::insert_series(&state.db, 20, "Untracked", Some(2011), Some(24), Some(7.0), Some("jpn"), serde_json::json!({})).await;
     common::set_genres(&state.db, 20, &[(19, "Action")]).await;
 
-    let ids = |v: &[backend::catalog::search::SearchResult]| v.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>();
+    let ids = |v: &[backend::catalog::SearchResult]| v.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>();
 
     // No filters → both tracked shows, not the untracked one.
     let f = Filters { library_user: Some(common::uid(1)), ..filters("series") };

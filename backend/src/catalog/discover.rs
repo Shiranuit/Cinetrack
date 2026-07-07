@@ -11,7 +11,7 @@ use serde_json::Value;
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
-    catalog::{as_i32, as_i64, image_url, search::SearchResult, store_stub},
+    catalog::{as_i32, as_i64, image_url, store_stub, SearchResult},
     error::AppResult,
     state::AppState,
 };
@@ -191,22 +191,22 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND x.original_country = ANY(").push_bind(f.original_countries.clone()).push(")");
     }
 
-    // Name search: substring match on the searchable doc (base name + all-language
-    // aliases) OR any TRANSLATED name, so a show is found by the localized title the
-    // user actually sees, not only its original-language / alias forms (e.g. a show
-    // shown as "Hanamonogatari" whose base name is Japanese with no aliases). Both
-    // sides hit their pg_trgm GIN index (series_search_trgm / translation_name_trgm);
-    // a UNION of two indexed lookups stays fast, whereas an OR couldn't use them.
+    // Name search: substring match on the base name OR any TRANSLATED name, so a show
+    // is found by the localized title the user actually sees, not only its
+    // original-language form (e.g. a show shown as "Hanamonogatari" whose base name is
+    // Japanese with no aliases). Both sides hit their pg_trgm GIN index (series/movie
+    // _name_trgm / translation_search_idx); a UNION of indexed lookups stays fast,
+    // whereas an OR couldn't use them.
     if let Some(query) = f.query.as_deref() {
         let like = format!("%{query}%");
-        // Match the base name (search_text, original language) OR a translated title
-        // OR an alias — the latter two only in the user's OWN languages, not all ~113.
+        // Match the base name (original language) OR a translated title OR an alias
+        // — the latter two only in the user's OWN languages, not all ~113.
         if f.library_user.is_some() {
             // Library: `x` is already restricted to the user's (few hundred) shows by
             // the JOIN above, so OR EXISTS on their translations/aliases is cheap
             // (single-digit ms) even for common substrings that would match huge slices
             // of the catalog-wide translation/alias tables.
-            qb.push(" AND (x.search_text ILIKE ").push_bind(like.clone());
+            qb.push(" AND (x.name ILIKE ").push_bind(like.clone());
             qb.push(" OR EXISTS (SELECT 1 FROM catalog.translation tr WHERE tr.entity_type = ");
             qb.push_bind(etype);
             qb.push(" AND tr.entity_id = x.id AND tr.language = ANY(").push_bind(langs.to_vec());
@@ -221,7 +221,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             // base name, translated titles, and aliases (the last two user-language-only).
             qb.push(" AND x.id IN (SELECT id FROM ");
             qb.push(table);
-            qb.push(" WHERE search_text ILIKE ").push_bind(like.clone());
+            qb.push(" WHERE name ILIKE ").push_bind(like.clone());
             qb.push(" UNION SELECT entity_id FROM catalog.translation WHERE entity_type = ");
             qb.push_bind(etype);
             qb.push(" AND language = ANY(").push_bind(langs.to_vec());

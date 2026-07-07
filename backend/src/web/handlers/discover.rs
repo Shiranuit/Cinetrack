@@ -8,9 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     auth::AuthUser,
     catalog::{
-        self,
+        self, SearchResult,
         discover::{Company, Filters, Genre, Tag},
-        search::SearchResult,
     },
     error::AppResult,
     state::AppState,
