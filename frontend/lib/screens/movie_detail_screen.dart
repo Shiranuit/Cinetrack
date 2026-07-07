@@ -178,7 +178,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                   if (m.overview?.isNotEmpty ?? false)
                     Padding(
                       padding: const EdgeInsets.all(Insets.lg),
-                      child: Text(
+                      child: SelectableText(
                         m.overview!,
                         style: context.text.bodyMedium?.copyWith(height: 1.5),
                       ),
@@ -257,12 +257,11 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      SelectableText(
                         m.name ??
                             AppLocalizations.of(context).movieNumbered(m.id),
                         style: context.text.headlineSmall,
                         maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: Insets.sm),
                       Wrap(

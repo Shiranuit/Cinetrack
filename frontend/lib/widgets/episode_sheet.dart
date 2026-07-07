@@ -83,7 +83,7 @@ class EpisodeSheet extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
+                        child: SelectableText(
                           'S${episode.seasonNumber ?? 0} · E${episode.number ?? 0}',
                           style: context.text.labelLarge?.copyWith(color: context.scheme.primary),
                         ),
@@ -92,16 +92,16 @@ class EpisodeSheet extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: Insets.xs),
-                  Text(episode.name ?? '', style: context.text.titleLarge),
+                  SelectableText(episode.name ?? '', style: context.text.titleLarge),
                   if (episode.aired != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text(episode.aired!,
+                      child: SelectableText(episode.aired!,
                           style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
                     ),
                   if (episode.overview?.isNotEmpty ?? false) ...[
                     const SizedBox(height: Insets.md),
-                    Text(episode.overview!, style: context.text.bodyMedium?.copyWith(height: 1.5)),
+                    SelectableText(episode.overview!, style: context.text.bodyMedium?.copyWith(height: 1.5)),
                   ],
                   const SizedBox(height: Insets.md),
                 ],

@@ -289,7 +289,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
               Insets.lg,
               0,
             ),
-            child: Text(
+            child: SelectableText(
               _series!.overview!,
               style: context.text.bodyMedium?.copyWith(height: 1.5),
             ),
@@ -498,14 +498,13 @@ class _Hero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      SelectableText(
                         series.name ??
                             AppLocalizations.of(
                               context,
                             ).showFallback(series.id),
                         style: context.text.headlineSmall,
                         maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: Insets.sm),
                       Wrap(
@@ -914,7 +913,7 @@ class _DetailsSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              Expanded(child: Text(value, style: context.text.bodyMedium)),
+              Expanded(child: SelectableText(value, style: context.text.bodyMedium)),
             ],
           ),
         ),
@@ -985,7 +984,7 @@ class _DetailsSheet extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: SelectableText(
                       seriesName ?? t.showDetails,
                       style: context.text.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
