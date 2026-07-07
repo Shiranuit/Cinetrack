@@ -66,6 +66,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/series/{id}/details", get(handlers::series::series_details))
         .route("/api/series/{id}/episodes", get(handlers::series::list_episodes))
         .route("/api/series/{id}/seasons", get(handlers::series::list_seasons))
+        .route("/api/series/{id}/artworks", get(handlers::series::list_artworks))
         .route(
             "/api/series/{id}/seasons/{season}/watch",
             post(handlers::shows::watch_season).delete(handlers::shows::unwatch_season),
@@ -81,6 +82,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/movies/{id}/favorite", post(handlers::movie::favorite_movie).delete(handlers::movie::unfavorite_movie))
         .route("/api/movies/{id}/watchlist", post(handlers::movie::watchlist_movie).delete(handlers::movie::unwatchlist_movie))
         .route("/api/movies/{id}/rating", put(handlers::movie::rate_movie))
+        .route("/api/movies/{id}/artworks", get(handlers::movie::list_artworks))
         .route("/api/episodes/{id}", get(handlers::episode::get_episode))
         .route("/api/seasons/{id}", get(handlers::season::get_season))
         .route("/api/artwork/{id}", get(handlers::artwork::get_artwork))

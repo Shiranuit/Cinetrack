@@ -59,6 +59,17 @@ pub async fn list_seasons(
     Ok(Json(catalog::season::list_for_series(&state, id).await?))
 }
 
+/// All artworks (posters, backgrounds, banners, ...) for a show, best-scored first.
+pub async fn list_artworks(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<Vec<catalog::models::ArtworkRow>>> {
+    // Ensure the show is cached (in read-through modes this also populates its
+    // artworks via the upsert); then read the normalized rows.
+    catalog::series::get(&state, id, None).await?;
+    Ok(Json(catalog::artwork::list_for_entity(&state, "series", id).await?))
+}
+
 #[derive(serde::Deserialize)]
 pub struct EpisodesQuery {
     pub season_type: Option<String>,

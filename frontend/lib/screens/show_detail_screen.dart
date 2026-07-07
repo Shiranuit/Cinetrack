@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +8,7 @@ import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/settings.dart';
 import '../util/locale_labels.dart';
+import '../widgets/artwork_gallery.dart';
 import '../widgets/badges.dart';
 import '../widgets/episode_sheet.dart';
 import '../widgets/net_image.dart';
@@ -33,7 +32,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   UserShow? _rel;
   List<Episode> _episodes = [];
   Map<int, int> _counts = {};
-  SeriesDetails? _details; // best-effort; fills in the meta strip + details sheet
+  SeriesDetails?
+  _details; // best-effort; fills in the meta strip + details sheet
 
   String get _langs => context.read<SettingsController>().langsParam;
 
@@ -50,9 +50,12 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     });
     // Rich metadata is non-critical: fetch it alongside, and let the meta strip
     // fill in when it arrives (a failure never blocks the page).
-    _api.seriesDetails(widget.seriesId).then((d) {
-      if (mounted) setState(() => _details = d);
-    }).catchError((_) {});
+    _api
+        .seriesDetails(widget.seriesId)
+        .then((d) {
+          if (mounted) setState(() => _details = d);
+        })
+        .catchError((_) {});
     try {
       final r = await Future.wait([
         _api.series(widget.seriesId, lang: _langs.split(',').first),
@@ -102,19 +105,21 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
 
   Future<void> _rate(int? rating) async {
     // Optimistic: reflect immediately, then persist.
-    setState(() => _rel = _rel == null
-        ? null
-        : UserShow(
-            seriesId: _rel!.seriesId,
-            name: _rel!.name,
-            imageUrl: _rel!.imageUrl,
-            isFollowed: _rel!.isFollowed,
-            isFavorited: _rel!.isFavorited,
-            status: _rel!.status,
-            archived: _rel!.archived,
-            nbEpisodesSeen: _rel!.nbEpisodesSeen,
-            rating: rating,
-          ));
+    setState(
+      () => _rel = _rel == null
+          ? null
+          : UserShow(
+              seriesId: _rel!.seriesId,
+              name: _rel!.name,
+              imageUrl: _rel!.imageUrl,
+              isFollowed: _rel!.isFollowed,
+              isFavorited: _rel!.isFavorited,
+              status: _rel!.status,
+              archived: _rel!.archived,
+              nbEpisodesSeen: _rel!.nbEpisodesSeen,
+              rating: rating,
+            ),
+    );
     await _api.rateShow(widget.seriesId, rating);
     await _refreshRel();
   }
@@ -144,7 +149,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       await _api.watch(episodeId);
       _refreshRel();
     } catch (e) {
-      if (mounted) setState(() => _counts[episodeId] = (_counts[episodeId] ?? 1) - 1);
+      if (mounted)
+        setState(() => _counts[episodeId] = (_counts[episodeId] ?? 1) - 1);
     }
   }
 
@@ -204,26 +210,31 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       body: _loading
           ? const LoadingView()
           : _error != null
-              ? ErrorView(message: _error!, onRetry: _load)
-              : Stack(children: [RefreshIndicator(onRefresh: _load, child: _content()), _backButton()]),
+          ? ErrorView(message: _error!, onRetry: _load)
+          : Stack(
+              children: [
+                RefreshIndicator(onRefresh: _load, child: _content()),
+                _backButton(),
+              ],
+            ),
     );
   }
 
   Widget _backButton() => SafeArea(
-        child: Align(
-          alignment: Alignment.topRight,
-          child: Padding(
-            padding: const EdgeInsets.all(Insets.sm),
-            child: CircleAvatar(
-              backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
-              child: IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
+    child: Align(
+      alignment: Alignment.topRight,
+      child: Padding(
+        padding: const EdgeInsets.all(Insets.sm),
+        child: CircleAvatar(
+          backgroundColor: context.colors.scrim.withValues(alpha: 0.55),
+          child: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _content() {
     final bySeason = <int, List<Episode>>{};
@@ -238,44 +249,115 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         if (b == 0) return -1;
         return a.compareTo(b);
       });
-    bool fullyWatched(int s) => bySeason[s]!.every((e) => (_counts[e.id] ?? 0) > 0);
+    bool fullyWatched(int s) =>
+        bySeason[s]!.every((e) => (_counts[e.id] ?? 0) > 0);
     // Auto-expand only the FIRST not-fully-watched season (in display order).
-    final int? expandSeason = seasons.cast<int?>().firstWhere((s) => !fullyWatched(s!), orElse: () => null);
+    final int? expandSeason = seasons.cast<int?>().firstWhere(
+      (s) => !fullyWatched(s!),
+      orElse: () => null,
+    );
 
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _Hero(series: _series!, seenDistinct: _seenDistinct, totalEpisodes: _episodes.length),
-        if (_details != null) _MetaStrip(details: _details!, onMore: () => _openDetailsSheet(_details!)),
-        Padding(padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0), child: _actionBar()),
+        _Hero(
+          series: _series!,
+          seenDistinct: _seenDistinct,
+          totalEpisodes: _episodes.length,
+          onTapArtwork: () => openArtworkGallery(context, _api.seriesArtworks(widget.seriesId)),
+        ),
+        if (_details != null)
+          _MetaStrip(
+            details: _details!,
+            onMore: () => _openDetailsSheet(_details!),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.lg,
+            Insets.lg,
+            Insets.lg,
+            0,
+          ),
+          child: _actionBar(),
+        ),
         _ratingRow(),
         if (_series!.overview?.isNotEmpty ?? false)
           Padding(
-            padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0),
-            child: Text(_series!.overview!, style: context.text.bodyMedium?.copyWith(height: 1.5)),
+            padding: const EdgeInsets.fromLTRB(
+              Insets.lg,
+              Insets.lg,
+              Insets.lg,
+              0,
+            ),
+            child: Text(
+              _series!.overview!,
+              style: context.text.bodyMedium?.copyWith(height: 1.5),
+            ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xl, Insets.lg, Insets.sm),
+          padding: const EdgeInsets.fromLTRB(
+            Insets.lg,
+            Insets.xl,
+            Insets.lg,
+            Insets.sm,
+          ),
           child: Row(
             children: [
-              Expanded(child: Text(AppLocalizations.of(context).episodes, style: context.text.titleLarge)),
+              Expanded(
+                child: Text(
+                  AppLocalizations.of(context).episodes,
+                  style: context.text.titleLarge,
+                ),
+              ),
               // Whole-series watch actions, mirroring the per-season menu.
-              Builder(builder: (context) {
-                final allSeen = _episodes.isNotEmpty && _seenDistinct >= _episodes.length;
-                return PopupMenuButton<String>(
-                  tooltip: AppLocalizations.of(context).seriesActions,
-                  icon: Icon(
-                    allSeen ? Icons.check_circle_rounded : Icons.done_all_rounded,
-                    color: allSeen ? context.colors.seen : context.scheme.onSurfaceVariant,
-                  ),
-                  onSelected: _seriesAction,
-                  itemBuilder: (context) => [
-                    PopupMenuItem(value: 'watch', child: ListTile(leading: const Icon(Icons.done_all_rounded), title: Text(AppLocalizations.of(context).markAllWatched), dense: true)),
-                    PopupMenuItem(value: 'rewatch', child: ListTile(leading: const Icon(Icons.replay_rounded), title: Text(AppLocalizations.of(context).rewatchSeries), dense: true)),
-                    PopupMenuItem(value: 'unwatch', child: ListTile(leading: const Icon(Icons.remove_done_rounded), title: Text(AppLocalizations.of(context).unmarkAll), dense: true)),
-                  ],
-                );
-              }),
+              Builder(
+                builder: (context) {
+                  final allSeen =
+                      _episodes.isNotEmpty && _seenDistinct >= _episodes.length;
+                  return PopupMenuButton<String>(
+                    tooltip: AppLocalizations.of(context).seriesActions,
+                    icon: Icon(
+                      allSeen
+                          ? Icons.check_circle_rounded
+                          : Icons.done_all_rounded,
+                      color: allSeen
+                          ? context.colors.seen
+                          : context.scheme.onSurfaceVariant,
+                    ),
+                    onSelected: _seriesAction,
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'watch',
+                        child: ListTile(
+                          leading: const Icon(Icons.done_all_rounded),
+                          title: Text(
+                            AppLocalizations.of(context).markAllWatched,
+                          ),
+                          dense: true,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'rewatch',
+                        child: ListTile(
+                          leading: const Icon(Icons.replay_rounded),
+                          title: Text(
+                            AppLocalizations.of(context).rewatchSeries,
+                          ),
+                          dense: true,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'unwatch',
+                        child: ListTile(
+                          leading: const Icon(Icons.remove_done_rounded),
+                          title: Text(AppLocalizations.of(context).unmarkAll),
+                          dense: true,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -302,16 +384,26 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         Expanded(
           child: rel.isFollowed
               ? FilledButton.tonalIcon(
-                  onPressed: _toggleFollow, icon: const Icon(Icons.check_rounded, size: 20), label: Text(AppLocalizations.of(context).showFollowing))
+                  onPressed: _toggleFollow,
+                  icon: const Icon(Icons.check_rounded, size: 20),
+                  label: Text(AppLocalizations.of(context).showFollowing),
+                )
               : FilledButton.icon(
-                  onPressed: _toggleFollow, icon: const Icon(Icons.add_rounded, size: 20), label: Text(AppLocalizations.of(context).follow)),
+                  onPressed: _toggleFollow,
+                  icon: const Icon(Icons.add_rounded, size: 20),
+                  label: Text(AppLocalizations.of(context).follow),
+                ),
         ),
         const SizedBox(width: Insets.sm),
         IconButton.filledTonal(
           onPressed: _toggleFavorite,
           isSelected: rel.isFavorited,
-          icon: Icon(rel.isFavorited ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              color: rel.isFavorited ? context.colors.favorite : null),
+          icon: Icon(
+            rel.isFavorited
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: rel.isFavorited ? context.colors.favorite : null,
+          ),
           style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
         ),
         const SizedBox(width: Insets.sm),
@@ -319,13 +411,26 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           tooltip: AppLocalizations.of(context).status,
           onSelected: (v) => _setStatus(v == 'clear' ? null : v),
           itemBuilder: (context) => [
-            PopupMenuItem(value: 'for_later', child: Text(AppLocalizations.of(context).forLater)),
-            PopupMenuItem(value: 'stopped', child: Text(AppLocalizations.of(context).stopWatching)),
-            PopupMenuItem(value: 'clear', child: Text(AppLocalizations.of(context).clearStatus)),
+            PopupMenuItem(
+              value: 'for_later',
+              child: Text(AppLocalizations.of(context).forLater),
+            ),
+            PopupMenuItem(
+              value: 'stopped',
+              child: Text(AppLocalizations.of(context).stopWatching),
+            ),
+            PopupMenuItem(
+              value: 'clear',
+              child: Text(AppLocalizations.of(context).clearStatus),
+            ),
           ],
           child: IconButton.filledTonal(
             onPressed: null,
-            icon: Icon(rel.status == null ? Icons.more_horiz_rounded : Icons.bookmark_rounded),
+            icon: Icon(
+              rel.status == null
+                  ? Icons.more_horiz_rounded
+                  : Icons.bookmark_rounded,
+            ),
             style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
           ),
         ),
@@ -335,10 +440,16 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.series, required this.seenDistinct, required this.totalEpisodes});
+  const _Hero({
+    required this.series,
+    required this.seenDistinct,
+    required this.totalEpisodes,
+    required this.onTapArtwork,
+  });
   final Series series;
   final int seenDistinct;
   final int totalEpisodes;
+  final VoidCallback onTapArtwork;
 
   @override
   Widget build(BuildContext context) {
@@ -348,16 +459,18 @@ class _Hero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-            child: NetImage(url: series.imageUrl),
-          ),
+          // Tap the backdrop (or the poster below) to browse the show's artworks.
+          GestureDetector(onTap: onTapArtwork, child: NetImage(url: series.imageUrl)),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [bg.withValues(alpha: 0.2), bg.withValues(alpha: 0.55), bg],
+                colors: [
+                  bg.withValues(alpha: 0.2),
+                  bg.withValues(alpha: 0.55),
+                  bg,
+                ],
                 stops: const [0, 0.55, 1],
               ),
             ),
@@ -369,23 +482,52 @@ class _Hero extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                SizedBox(width: 120, child: Poster(url: series.imageUrl, heroTag: 'series-${series.id}')),
+                SizedBox(
+                  width: 120,
+                  child: GestureDetector(
+                    onTap: onTapArtwork,
+                    child: Poster(
+                      url: series.imageUrl,
+                      heroTag: 'series-${series.id}',
+                    ),
+                  ),
+                ),
                 const SizedBox(width: Insets.lg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(series.name ?? AppLocalizations.of(context).showFallback(series.id),
-                          style: context.text.headlineSmall, maxLines: 3, overflow: TextOverflow.ellipsis),
+                      Text(
+                        series.name ??
+                            AppLocalizations.of(
+                              context,
+                            ).showFallback(series.id),
+                        style: context.text.headlineSmall,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: Insets.sm),
-                      Wrap(spacing: Insets.sm, runSpacing: Insets.xs, children: [
-                        if (series.status != null) Pill(label: series.status!),
-                        if (series.year != null) Pill(label: '${series.year}', color: context.scheme.onSurfaceVariant),
-                      ]),
+                      Wrap(
+                        spacing: Insets.sm,
+                        runSpacing: Insets.xs,
+                        children: [
+                          if (series.status != null)
+                            Pill(label: series.status!),
+                          if (series.year != null)
+                            Pill(
+                              label: '${series.year}',
+                              color: context.scheme.onSurfaceVariant,
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: Insets.sm),
-                      Text('$seenDistinct / $totalEpisodes ${AppLocalizations.of(context).episodesSeen}',
-                          style: context.text.labelLarge?.copyWith(color: context.colors.seen)),
+                      Text(
+                        '$seenDistinct / $totalEpisodes ${AppLocalizations.of(context).episodesSeen}',
+                        style: context.text.labelLarge?.copyWith(
+                          color: context.colors.seen,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -428,7 +570,9 @@ class _SeasonSectionState extends State<_SeasonSection> {
 
   @override
   Widget build(BuildContext context) {
-    final seen = widget.episodes.where((e) => (widget.counts[e.id] ?? 0) > 0).length;
+    final seen = widget.episodes
+        .where((e) => (widget.counts[e.id] ?? 0) > 0)
+        .length;
     final total = widget.episodes.length;
     final allSeen = seen == total && total > 0;
     final label = widget.seasonNumber == 0
@@ -436,7 +580,12 @@ class _SeasonSectionState extends State<_SeasonSection> {
         : AppLocalizations.of(context).season(widget.seasonNumber);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xs, Insets.lg, Insets.xs),
+      padding: const EdgeInsets.fromLTRB(
+        Insets.lg,
+        Insets.xs,
+        Insets.lg,
+        Insets.xs,
+      ),
       child: Column(
         children: [
           // Tinted, clearly-clickable header.
@@ -447,7 +596,10 @@ class _SeasonSectionState extends State<_SeasonSection> {
               borderRadius: Radii.card,
               onTap: () => setState(() => _expanded = !_expanded),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Insets.lg, vertical: Insets.md),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Insets.lg,
+                  vertical: Insets.md,
+                ),
                 child: Row(
                   children: [
                     AnimatedRotation(
@@ -456,20 +608,56 @@ class _SeasonSectionState extends State<_SeasonSection> {
                       child: const Icon(Icons.chevron_right_rounded),
                     ),
                     const SizedBox(width: Insets.sm),
-                    Expanded(child: Text(label, style: context.text.titleMedium)),
-                    Text('$seen/$total',
-                        style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
+                    Expanded(
+                      child: Text(label, style: context.text.titleMedium),
+                    ),
+                    Text(
+                      '$seen/$total',
+                      style: context.text.labelMedium?.copyWith(
+                        color: context.scheme.onSurfaceVariant,
+                      ),
+                    ),
                     PopupMenuButton<String>(
                       tooltip: AppLocalizations.of(context).seasonActions,
                       icon: Icon(
-                        allSeen ? Icons.check_circle_rounded : Icons.done_all_rounded,
-                        color: allSeen ? context.colors.seen : context.scheme.onSurfaceVariant,
+                        allSeen
+                            ? Icons.check_circle_rounded
+                            : Icons.done_all_rounded,
+                        color: allSeen
+                            ? context.colors.seen
+                            : context.scheme.onSurfaceVariant,
                       ),
-                      onSelected: (a) => widget.onSeasonAction(widget.seasonNumber, a),
+                      onSelected: (a) =>
+                          widget.onSeasonAction(widget.seasonNumber, a),
                       itemBuilder: (context) => [
-                        PopupMenuItem(value: 'watch', child: ListTile(leading: const Icon(Icons.done_all_rounded), title: Text(AppLocalizations.of(context).markAllWatched), dense: true)),
-                        PopupMenuItem(value: 'rewatch', child: ListTile(leading: const Icon(Icons.replay_rounded), title: Text(AppLocalizations.of(context).rewatchSeason), dense: true)),
-                        PopupMenuItem(value: 'unwatch', child: ListTile(leading: const Icon(Icons.remove_done_rounded), title: Text(AppLocalizations.of(context).unmarkAll), dense: true)),
+                        PopupMenuItem(
+                          value: 'watch',
+                          child: ListTile(
+                            leading: const Icon(Icons.done_all_rounded),
+                            title: Text(
+                              AppLocalizations.of(context).markAllWatched,
+                            ),
+                            dense: true,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'rewatch',
+                          child: ListTile(
+                            leading: const Icon(Icons.replay_rounded),
+                            title: Text(
+                              AppLocalizations.of(context).rewatchSeason,
+                            ),
+                            dense: true,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'unwatch',
+                          child: ListTile(
+                            leading: const Icon(Icons.remove_done_rounded),
+                            title: Text(AppLocalizations.of(context).unmarkAll),
+                            dense: true,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -500,7 +688,13 @@ class _SeasonSectionState extends State<_SeasonSection> {
 }
 
 class _EpisodeCard extends StatelessWidget {
-  const _EpisodeCard({required this.episode, required this.count, required this.onWatch, required this.onUnwatch, this.showImageUrl});
+  const _EpisodeCard({
+    required this.episode,
+    required this.count,
+    required this.onWatch,
+    required this.onUnwatch,
+    this.showImageUrl,
+  });
   final Episode episode;
   final int count;
   final VoidCallback onWatch;
@@ -523,7 +717,11 @@ class _EpisodeCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(Radii.sm),
-                  child: SizedBox(width: 104, height: 58, child: NetImage(url: episode.imageUrl)),
+                  child: SizedBox(
+                    width: 104,
+                    height: 58,
+                    child: NetImage(url: episode.imageUrl),
+                  ),
                 ),
                 const SizedBox(width: Insets.md),
                 Expanded(
@@ -531,20 +729,33 @@ class _EpisodeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('E${episode.number ?? 0} · ${episode.name ?? ''}',
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        'E${episode.number ?? 0} · ${episode.name ?? ''}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       if (episode.aired != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: Text(episode.aired!,
-                              style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant)),
+                          child: Text(
+                            episode.aired!,
+                            style: context.text.labelSmall?.copyWith(
+                              color: context.scheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                     ],
                   ),
                 ),
                 const SizedBox(width: Insets.sm),
-                WatchControl(count: count, onWatch: onWatch, onUnwatch: onUnwatch),
+                WatchControl(
+                  count: count,
+                  onWatch: onWatch,
+                  onUnwatch: onUnwatch,
+                ),
               ],
             ),
           ),
@@ -558,7 +769,13 @@ class _EpisodeCard extends StatelessWidget {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => EpisodeSheet(episode: episode, count: count, showImageUrl: showImageUrl, onWatch: onWatch, onUnwatch: onUnwatch),
+      builder: (_) => EpisodeSheet(
+        episode: episode,
+        count: count,
+        showImageUrl: showImageUrl,
+        onWatch: onWatch,
+        onUnwatch: onUnwatch,
+      ),
     );
   }
 }
@@ -584,7 +801,8 @@ class _MetaStripState extends State<_MetaStrip> {
     final facts = <String>[
       if ((details.seasonCount ?? 0) > 0) t.seasonsCount(details.seasonCount!),
       if ((details.runtime ?? 0) > 0) t.runtimeMinutes(details.runtime!),
-      if (details.originalLanguage != null) langName(context, details.originalLanguage!),
+      if (details.originalLanguage != null)
+        langName(context, details.originalLanguage!),
     ];
     final shown = _allGenres ? details.genres : details.genres.take(4).toList();
     return Padding(
@@ -602,7 +820,10 @@ class _MetaStripState extends State<_MetaStrip> {
                 if (!_allGenres && details.genres.length > 4)
                   GestureDetector(
                     onTap: () => setState(() => _allGenres = true),
-                    child: Pill(label: '+${details.genres.length - 4}', color: context.scheme.primary),
+                    child: Pill(
+                      label: '+${details.genres.length - 4}',
+                      color: context.scheme.primary,
+                    ),
                   ),
               ],
             ),
@@ -612,19 +833,31 @@ class _MetaStripState extends State<_MetaStrip> {
               child: Row(
                 children: [
                   if (details.communityRating != null) ...[
-                    RatingThumbBadge(level: details.communityRating!.round().clamp(1, 5), size: 17),
+                    RatingThumbBadge(
+                      level: details.communityRating!.round().clamp(1, 5),
+                      size: 17,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${details.communityRating!.toStringAsFixed(1)} / 5',
-                        style: context.text.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(
+                      '${details.communityRating!.toStringAsFixed(1)} / 5',
+                      style: context.text.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     if ((details.ratingCount ?? 0) > 0)
-                      Text(' (${details.ratingCount})', style: context.text.labelMedium?.copyWith(color: muted)),
+                      Text(
+                        ' (${details.ratingCount})',
+                        style: context.text.labelMedium?.copyWith(color: muted),
+                      ),
                     const SizedBox(width: Insets.md),
                   ],
                   Expanded(
-                    child: Text(facts.join('  ·  '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.text.labelMedium?.copyWith(color: muted)),
+                    child: Text(
+                      facts.join('  ·  '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.labelMedium?.copyWith(color: muted),
+                    ),
                   ),
                 ],
               ),
@@ -638,10 +871,13 @@ class _MetaStripState extends State<_MetaStrip> {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text(t.moreDetails),
-                const Icon(Icons.chevron_right_rounded, size: 18),
-              ]),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(t.moreDetails),
+                  const Icon(Icons.chevron_right_rounded, size: 18),
+                ],
+              ),
             ),
           ),
         ],
@@ -663,37 +899,72 @@ class _DetailsSheet extends StatelessWidget {
     final rows = <Widget>[];
     void row(String label, String? value) {
       if (value == null || value.isEmpty) return;
-      rows.add(Padding(
-        padding: const EdgeInsets.only(bottom: Insets.md),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 120, child: Text(label, style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant))),
-          Expanded(child: Text(value, style: context.text.bodyMedium)),
-        ]),
-      ));
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: Insets.md),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Text(
+                  label,
+                  style: context.text.labelMedium?.copyWith(
+                    color: context.scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Expanded(child: Text(value, style: context.text.bodyMedium)),
+            ],
+          ),
+        ),
+      );
     }
+
     void chips(String label, List<String> items) {
       if (items.isEmpty) return;
-      rows.add(Padding(
-        padding: const EdgeInsets.only(bottom: Insets.md),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
-          const SizedBox(height: Insets.xs),
-          Wrap(spacing: Insets.xs, runSpacing: Insets.xs, children: [for (final i in items) Pill(label: i)]),
-        ]),
-      ));
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: Insets.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: context.text.labelMedium?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Insets.xs),
+              Wrap(
+                spacing: Insets.xs,
+                runSpacing: Insets.xs,
+                children: [for (final i in items) Pill(label: i)],
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (d.communityRating != null) {
-      row(t.communityRating, '${d.communityRating!.toStringAsFixed(1)} / 5${(d.ratingCount ?? 0) > 0 ? '  (${d.ratingCount})' : ''}');
+      row(
+        t.communityRating,
+        '${d.communityRating!.toStringAsFixed(1)} / 5${(d.ratingCount ?? 0) > 0 ? '  (${d.ratingCount})' : ''}',
+      );
     }
     chips(t.genres, d.genres);
     chips(t.themes, d.tags);
     chips(t.networks, d.networks);
     chips(t.studios, d.studios);
-    if (d.originalLanguage != null) row(t.language, langName(context, d.originalLanguage!));
-    if (d.originalCountry != null) row(t.country, countryName(context, d.originalCountry!));
-    if ((d.runtime ?? 0) > 0) row(t.episodeLength, t.runtimeMinutes(d.runtime!));
-    if ((d.episodeCount ?? 0) > 0) row(t.episodes, t.episodesCount(d.episodeCount!));
+    if (d.originalLanguage != null)
+      row(t.language, langName(context, d.originalLanguage!));
+    if (d.originalCountry != null)
+      row(t.country, countryName(context, d.originalCountry!));
+    if ((d.runtime ?? 0) > 0)
+      row(t.episodeLength, t.runtimeMinutes(d.runtime!));
+    if ((d.episodeCount ?? 0) > 0)
+      row(t.episodes, t.episodesCount(d.episodeCount!));
     final aired = _airedRange(d.firstAired, d.lastAired);
     if (aired != null) row(t.aired, aired);
     chips(t.alsoKnownAs, d.aliases);
@@ -701,26 +972,44 @@ class _DetailsSheet extends StatelessWidget {
     return SafeArea(
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.lg),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(seriesName ?? t.showDetails,
-                      style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: Insets.sm),
-            if (rows.isEmpty)
-              Text(t.nothingHereYet, style: context.text.bodyMedium?.copyWith(color: context.scheme.onSurfaceVariant))
-            else
-              ...rows,
-          ]),
+          padding: const EdgeInsets.fromLTRB(
+            Insets.lg,
+            0,
+            Insets.lg,
+            Insets.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      seriesName ?? t.showDetails,
+                      style: context.text.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Insets.sm),
+              if (rows.isEmpty)
+                Text(
+                  t.nothingHereYet,
+                  style: context.text.bodyMedium?.copyWith(
+                    color: context.scheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                ...rows,
+            ],
+          ),
         ),
       ),
     );
@@ -735,5 +1024,3 @@ String? _airedRange(String? first, String? last) {
   if (f != null && l != null && f != l) return '$f – $l';
   return f ?? l;
 }
-
-

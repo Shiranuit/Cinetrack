@@ -29,6 +29,15 @@ pub struct MoviesQuery {
     pub dir: Option<String>,
 }
 
+/// All artworks (posters, backgrounds, ...) for a movie, best-scored first.
+pub async fn list_artworks(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> AppResult<Json<Vec<catalog::models::ArtworkRow>>> {
+    catalog::movie::get(&state, id, None).await?;
+    Ok(Json(catalog::artwork::list_for_entity(&state, "movie", id).await?))
+}
+
 /// The user's tracked movies (library Movies section).
 pub async fn list_movies(
     AuthUser(uid): AuthUser,

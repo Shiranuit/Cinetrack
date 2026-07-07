@@ -257,6 +257,12 @@ class ApiClient extends ChangeNotifier {
   Future<List<Season>> seasons(int id) async =>
       _list(await _get('/api/series/$id/seasons'), Season.fromJson);
 
+  /// All artworks for a show / movie (best-scored first), for the artwork gallery.
+  Future<List<Artwork>> seriesArtworks(int id) async =>
+      _list(await _get('/api/series/$id/artworks'), Artwork.fromJson);
+  Future<List<Artwork>> movieArtworks(int id) async =>
+      _list(await _get('/api/movies/$id/artworks'), Artwork.fromJson);
+
   Future<List<Episode>> episodes(int id, {String? langs}) async =>
       _list(await _get('/api/series/$id/episodes', {'langs': ?langs}), Episode.fromJson);
 

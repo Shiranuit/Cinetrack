@@ -171,5 +171,11 @@ async fn upsert(state: &AppState, id: i64, data: &Value) -> AppResult<()> {
     // Refresh the normalized facet links (genres / tags / companies) for filtering.
     super::facets::upsert_series_facets(state, id, data).await?;
 
+    // Mirror the embedded artworks into catalog.artwork (best-effort: a bad artwork
+    // set must not fail the series refresh).
+    if let Err(e) = super::artwork::store_for(state, "series", id, data).await {
+        tracing::warn!("store artworks for series {id}: {e}");
+    }
+
     Ok(())
 }

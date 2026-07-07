@@ -98,5 +98,10 @@ async fn upsert(state: &AppState, id: i64, data: &Value) -> AppResult<()> {
     .execute(&state.db)
     .await?;
 
+    // Mirror the embedded artworks into catalog.artwork (best-effort).
+    if let Err(e) = super::artwork::store_for(state, "movie", id, data).await {
+        tracing::warn!("store artworks for movie {id}: {e}");
+    }
+
     Ok(())
 }

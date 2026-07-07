@@ -705,3 +705,23 @@ class SecurityEvent {
         detail: j['detail'] is Map<String, dynamic> ? j['detail'] as Map<String, dynamic> : null,
       );
 }
+
+/// A single artwork (poster, background, banner, ...) for a show or movie. Images
+/// are full-resolution TheTVDB CDN URLs.
+class Artwork {
+  final String imageUrl;
+  final String? thumbnailUrl;
+  final int? type;
+  final int? width;
+  final int? height;
+  final double? score;
+  const Artwork({required this.imageUrl, this.thumbnailUrl, this.type, this.width, this.height, this.score});
+  factory Artwork.fromJson(Map<String, dynamic> j) => Artwork(
+        imageUrl: (j['image_url'] as String?) ?? '',
+        thumbnailUrl: j['thumbnail_url'] as String?,
+        type: j['art_type'] as int?,
+        width: j['width'] as int?,
+        height: j['height'] as int?,
+        score: (j['score'] as num?)?.toDouble(),
+      );
+}
