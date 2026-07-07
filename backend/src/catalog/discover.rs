@@ -199,13 +199,31 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // a UNION of two indexed lookups stays fast, whereas an OR couldn't use them.
     if let Some(query) = f.query.as_deref() {
         let like = format!("%{query}%");
-        qb.push(" AND x.id IN (SELECT id FROM ");
-        qb.push(table);
-        qb.push(" WHERE search_text ILIKE ").push_bind(like.clone());
-        qb.push(" UNION SELECT entity_id FROM catalog.translation WHERE entity_type = ");
-        qb.push_bind(etype);
-        qb.push(" AND name ILIKE ").push_bind(like);
-        qb.push(")");
+        // Only match translated titles in the user's OWN languages (the original is
+        // already covered by search_text's base name), not all ~113 languages.
+        if f.library_user.is_some() {
+            // Library: `x` is already restricted to the user's (few hundred) shows by
+            // the JOIN above, so an OR EXISTS on their translations is cheap (single-
+            // digit ms) even for common substrings that match huge slices of the 5M-row
+            // translation table catalog-wide.
+            qb.push(" AND (x.search_text ILIKE ").push_bind(like.clone());
+            qb.push(" OR EXISTS (SELECT 1 FROM catalog.translation tr WHERE tr.entity_type = ");
+            qb.push_bind(etype);
+            qb.push(" AND tr.entity_id = x.id AND tr.language = ANY(").push_bind(langs.to_vec());
+            qb.push(") AND tr.name ILIKE ").push_bind(like);
+            qb.push("))");
+        } else {
+            // Discover (catalog-wide): a UNION of two pg_trgm GIN-indexed lookups
+            // (base name + aliases via search_text, and translated titles). ~70ms warm.
+            qb.push(" AND x.id IN (SELECT id FROM ");
+            qb.push(table);
+            qb.push(" WHERE search_text ILIKE ").push_bind(like.clone());
+            qb.push(" UNION SELECT entity_id FROM catalog.translation WHERE entity_type = ");
+            qb.push_bind(etype);
+            qb.push(" AND language = ANY(").push_bind(langs.to_vec());
+            qb.push(") AND name ILIKE ").push_bind(like);
+            qb.push(")");
+        }
     }
 
     let dir = if f.sort_desc { "DESC" } else { "ASC" };
