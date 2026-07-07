@@ -78,6 +78,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get save => '저장';
 
   @override
+  String get download => '다운로드';
+
+  @override
   String get cancel => '취소';
 
   @override

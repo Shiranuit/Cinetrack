@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../api/models.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
+import '../util/save_file.dart';
 import 'net_image.dart';
 
 /// Push a full-screen, swipeable, zoomable gallery of a show/movie's artworks.
@@ -32,6 +35,7 @@ class _ArtworkGalleryState extends State<ArtworkGallery> {
   Object? _error;
   late int _index = widget.initialIndex;
   bool _zoomed = false;
+  bool _downloading = false;
 
   @override
   void initState() {
@@ -47,6 +51,29 @@ class _ArtworkGalleryState extends State<ArtworkGallery> {
   void _onTransform() {
     final z = _transform.value.getMaxScaleOnAxis() > 1.05;
     if (z != _zoomed) setState(() => _zoomed = z);
+  }
+
+  Future<void> _download() async {
+    final arts = _arts;
+    if (arts == null || arts.isEmpty) return;
+    final url = arts[_index].imageUrl;
+    if (url.isEmpty || _downloading) return;
+    setState(() => _downloading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode != 200) throw 'HTTP ${resp.statusCode}';
+      await saveBytes(resp.bodyBytes, _filename(url));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  String _filename(String url) {
+    final base = url.split('?').first.split('/').last;
+    return base.isEmpty ? 'artwork.jpg' : base;
   }
 
   void _go(int delta) {
@@ -89,6 +116,30 @@ class _ArtworkGalleryState extends State<ArtworkGallery> {
               ),
             ),
           ),
+          // Download the current artwork (top-left, mirroring the close button).
+          if (_arts?.isNotEmpty ?? false)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(Insets.sm),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.black54,
+                    child: IconButton(
+                      tooltip: AppLocalizations.of(context).download,
+                      icon: _downloading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.download_rounded, color: Colors.white),
+                      onPressed: _downloading ? null : _download,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

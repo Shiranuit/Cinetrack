@@ -250,6 +250,12 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get save;
 
+  /// No description provided for @download.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get download;
+
   /// No description provided for @cancel.
   ///
   /// In en, this message translates to:

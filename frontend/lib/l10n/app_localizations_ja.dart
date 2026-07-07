@@ -78,6 +78,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get save => '保存';
 
   @override
+  String get download => 'ダウンロード';
+
+  @override
   String get cancel => 'キャンセル';
 
   @override

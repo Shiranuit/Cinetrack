@@ -79,6 +79,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get save => 'Enregistrer';
 
   @override
+  String get download => 'Télécharger';
+
+  @override
   String get cancel => 'Annuler';
 
   @override
