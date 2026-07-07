@@ -25,5 +25,8 @@ COPY --from=builder /app/target/release/migrate /usr/local/bin/migrate
 # One-off catalog backfill: mirror every language's episode name/overview so
 # Mirror mode serves translated episodes offline. Resumable; safe to re-run.
 COPY --from=builder /app/target/release/backfill_episode_translations /usr/local/bin/backfill_episode_translations
+# One-off catalog backfill: re-fetch the series/movie ?meta=translations bundle to
+# store real translated titles (not aliases) + cache raw_translations. Resumable.
+COPY --from=builder /app/target/release/backfill_series_movie_translations /usr/local/bin/backfill_series_movie_translations
 EXPOSE 8080
 CMD ["backend"]
