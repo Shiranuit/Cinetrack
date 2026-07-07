@@ -9,15 +9,15 @@ use crate::{
     error::AppResult,
     state::AppState,
     tracking::movies::{self, LibraryMovie, MovieRelation},
-    web::query::{LangQuery, LangsQuery},
+    web::query::{DetailLangQuery, LangsQuery},
 };
 
 pub async fn get_movie(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    Query(q): Query<LangQuery>,
+    Query(q): Query<DetailLangQuery>,
 ) -> AppResult<Json<MovieRow>> {
-    Ok(Json(catalog::movie::get(&state, id, q.resolve().as_deref()).await?))
+    Ok(Json(catalog::movie::get_localized(&state, id, &q.list()).await?))
 }
 
 #[derive(serde::Deserialize)]

@@ -230,11 +230,11 @@ class ApiClient extends ChangeNotifier {
           body: {'current_password': currentPassword, 'new_password': newPassword});
 
   // ---- catalog / browse ----
-  Future<Series> series(int id, {String lang = 'eng'}) async =>
-      Series.fromJson(await _get('/api/series/$id', {'lang': lang}));
+  Future<Series> series(int id, {String? langs}) async =>
+      Series.fromJson(await _get('/api/series/$id', {'langs': ?langs}));
 
-  Future<Series> movie(int id, {String lang = 'eng'}) async =>
-      Series.fromJson(await _get('/api/movies/$id', {'lang': lang}));
+  Future<Series> movie(int id, {String? langs}) async =>
+      Series.fromJson(await _get('/api/movies/$id', {'langs': ?langs}));
 
   // ---- movie tracking ----
   Future<List<LibraryMovie>> movies({String? langs, String? sort, String? dir}) async =>

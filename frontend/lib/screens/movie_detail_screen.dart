@@ -29,8 +29,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final lang = context.read<SettingsController>().languages.first;
-    _future = context.read<ApiClient>().movie(widget.movieId, lang: lang);
+    final langs = context.read<SettingsController>().langsParam;
+    _future = context.read<ApiClient>().movie(widget.movieId, langs: langs);
     context
         .read<ApiClient>()
         .movieRelation(widget.movieId)
@@ -155,10 +155,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             return ErrorView(
               message: '${snap.error}',
               onRetry: () {
-                final lang = context.read<SettingsController>().languages.first;
+                final langs = context.read<SettingsController>().langsParam;
                 final f = context.read<ApiClient>().movie(
                   widget.movieId,
-                  lang: lang,
+                  langs: langs,
                 );
                 setState(() {
                   _future = f;

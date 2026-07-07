@@ -317,6 +317,41 @@ pub async fn apply(
     Ok(applied.then(|| lang.to_string()))
 }
 
+/// Overlay the best available translation across an ordered language preference
+/// list: fills `name` from the highest-priority language that has one, and
+/// `overview` likewise (they may come from different languages), leaving the base
+/// (untranslated) value where the list has nothing. Returns the language that
+/// provided a value, or `None` if none did. An empty `langs` is a no-op (serves the
+/// base record). Mirrors the preference-list resolution used by the library query.
+pub async fn apply_langs(
+    state: &AppState,
+    entity_type: &str,
+    id: i64,
+    langs: &[String],
+    name: &mut Option<String>,
+    overview: &mut Option<String>,
+) -> AppResult<Option<String>> {
+    let (mut name_done, mut overview_done) = (false, false);
+    let mut applied: Option<String> = None;
+    for lang in langs {
+        if name_done && overview_done {
+            break;
+        }
+        let Some(t) = ensure(state, entity_type, id, lang).await? else { continue };
+        if !name_done && let Some(n) = t.name.filter(|s| !s.is_empty()) {
+            *name = Some(n);
+            name_done = true;
+            applied.get_or_insert_with(|| lang.clone());
+        }
+        if !overview_done && let Some(o) = t.overview.filter(|s| !s.is_empty()) {
+            *overview = Some(o);
+            overview_done = true;
+            applied.get_or_insert_with(|| lang.clone());
+        }
+    }
+    Ok(applied)
+}
+
 /// Bulk-upsert many translation rows of one type/language in a SINGLE statement
 /// (used when mirroring translations from the episodes-by-language endpoint). One
 /// round-trip per page instead of one per row keeps DB connection churn low.

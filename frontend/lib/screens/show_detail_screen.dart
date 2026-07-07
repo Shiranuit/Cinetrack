@@ -58,7 +58,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         .catchError((_) {});
     try {
       final r = await Future.wait([
-        _api.series(widget.seriesId, lang: _langs.split(',').first),
+        _api.series(widget.seriesId, langs: _langs),
         _api.showRelation(widget.seriesId, langs: _langs),
         _api.episodes(widget.seriesId, langs: _langs),
         _api.seenCounts(widget.seriesId),

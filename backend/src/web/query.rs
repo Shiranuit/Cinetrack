@@ -42,6 +42,29 @@ impl LangsQuery {
     }
 }
 
+/// Detail-page language selection: prefer the ordered `langs` list; fall back to
+/// the legacy single `lang` (older app builds), preserving `lang=original`/empty as
+/// "no translation". Returns the preference list to resolve name/overview against
+/// (empty means serve the untranslated base record).
+#[derive(Debug, Deserialize)]
+pub struct DetailLangQuery {
+    pub lang: Option<String>,
+    pub langs: Option<String>,
+}
+
+impl DetailLangQuery {
+    pub fn list(&self) -> Vec<String> {
+        if self.langs.is_some() {
+            return LangsQuery { langs: self.langs.clone() }.list();
+        }
+        match self.lang.as_deref() {
+            Some("") | Some("original") => vec![],
+            Some(l) => vec![l.to_string()],
+            None => vec!["eng".to_string()],
+        }
+    }
+}
+
 /// Parse a comma-separated list of integer ids from a query param, silently
 /// dropping blanks and non-numeric entries (e.g. `"1, 2 ,x,"` → `[1, 2]`).
 pub fn csv_ids(raw: Option<&str>) -> Vec<i64> {

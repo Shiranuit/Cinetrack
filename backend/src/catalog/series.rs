@@ -45,6 +45,18 @@ pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<Ser
     Ok(row)
 }
 
+/// Like [`get`], but resolves name/overview across an ordered language preference
+/// list (falling back through it, then to the untranslated base) instead of a single
+/// language. Used by the show-detail endpoint so a show without, say, a French
+/// translation shows its English title rather than the original-language one.
+pub async fn get_localized(state: &AppState, id: i64, langs: &[String]) -> AppResult<SeriesRow> {
+    let mut row = get(state, id, None).await?;
+    let applied =
+        translation::apply_langs(state, "series", id, langs, &mut row.name, &mut row.overview).await?;
+    row.language = applied.or_else(|| row.original_language.clone());
+    Ok(row)
+}
+
 /// Rich metadata for the show page's "more details" view: facets (genres, themes,
 /// networks, studios) plus scalars not on the base record's hot path.
 #[derive(serde::Serialize, sqlx::FromRow)]

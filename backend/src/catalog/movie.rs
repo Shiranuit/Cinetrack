@@ -41,6 +41,18 @@ pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<Mov
     Ok(row)
 }
 
+/// Like [`get`], but resolves name/overview across an ordered language preference
+/// list (falling back through it, then to the untranslated base). Used by the
+/// movie-detail endpoint so a movie without a translation in the user's primary
+/// language shows the next preferred language instead of the original.
+pub async fn get_localized(state: &AppState, id: i64, langs: &[String]) -> AppResult<MovieRow> {
+    let mut row = get(state, id, None).await?;
+    let applied =
+        translation::apply_langs(state, "movie", id, langs, &mut row.name, &mut row.overview).await?;
+    row.language = applied.or_else(|| row.original_language.clone());
+    Ok(row)
+}
+
 /// Force a re-fetch from TheTVDB and upsert (used by the /updates sync worker).
 pub async fn refresh(state: &AppState, id: i64) -> AppResult<()> {
     let data = state.tvdb.movie_extended(id).await?;

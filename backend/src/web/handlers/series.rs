@@ -8,16 +8,17 @@ use crate::{
     catalog::{self, models::{EpisodeRow, SeasonRow}, models::SeriesRow},
     error::AppResult,
     state::AppState,
-    web::query::{LangQuery, LangsQuery},
+    web::query::{DetailLangQuery, LangsQuery},
 };
 
-/// Read-through series. `?lang=eng` (default), `?lang=fra|jpn|...`, `?lang=original`.
+/// Read-through series. `?langs=fra,eng` (preference order; falls back through the
+/// list, then to the original), legacy `?lang=eng|original` still accepted.
 pub async fn get_series(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    Query(q): Query<LangQuery>,
+    Query(q): Query<DetailLangQuery>,
 ) -> AppResult<Json<SeriesRow>> {
-    Ok(Json(catalog::series::get(&state, id, q.resolve().as_deref()).await?))
+    Ok(Json(catalog::series::get_localized(&state, id, &q.list()).await?))
 }
 
 /// Languages TheTVDB has translations for (ensures the series is cached first).
