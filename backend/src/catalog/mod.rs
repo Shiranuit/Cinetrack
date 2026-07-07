@@ -5,6 +5,7 @@
 //! `/updates` sync worker. Language-specific `name`/`overview` are overlaid from
 //! `catalog.translation` (see `translation`).
 
+pub mod alias;
 pub mod artwork;
 pub mod discover;
 pub mod episode;

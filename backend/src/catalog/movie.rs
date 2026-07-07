@@ -115,5 +115,10 @@ async fn upsert(state: &AppState, id: i64, data: &Value) -> AppResult<()> {
         tracing::warn!("store artworks for movie {id}: {e}");
     }
 
+    // Keep the language-tagged aliases (for search) in step with the record.
+    if let Err(e) = super::alias::store_for(state, "movie", id, data).await {
+        tracing::warn!("store aliases for movie {id}: {e}");
+    }
+
     Ok(())
 }
