@@ -191,45 +191,53 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND x.original_country = ANY(").push_bind(f.original_countries.clone()).push(")");
     }
 
-    // Name search: substring match on the base name OR any TRANSLATED name, so a show
-    // is found by the localized title the user actually sees, not only its
+    // Name search: substring match on the base name OR any TRANSLATED name / alias, so
+    // a show is found by the localized title the user actually sees, not only its
     // original-language form (e.g. a show shown as "Hanamonogatari" whose base name is
-    // Japanese with no aliases). Both sides hit their pg_trgm GIN index (series/movie
-    // _name_trgm / translation_search_idx); a UNION of indexed lookups stays fast,
-    // whereas an OR couldn't use them.
+    // Japanese with no aliases). Translations/aliases are matched only in the languages
+    // that matter to this user: their OWN languages PLUS the show's own original
+    // language (so a Japanese show is still findable by its Japanese title even when the
+    // user only reads eng/fra), never all ~113. Both sides hit their pg_trgm GIN index
+    // (series/movie _name_trgm / translation_search_idx); a UNION of indexed lookups
+    // stays fast, whereas an OR couldn't use them.
     if let Some(query) = f.query.as_deref() {
         let like = format!("%{query}%");
-        // Match the base name (original language) OR a translated title OR an alias
-        // — the latter two only in the user's OWN languages, not all ~113.
         if f.library_user.is_some() {
             // Library: `x` is already restricted to the user's (few hundred) shows by
             // the JOIN above, so OR EXISTS on their translations/aliases is cheap
             // (single-digit ms) even for common substrings that would match huge slices
-            // of the catalog-wide translation/alias tables.
+            // of the catalog-wide translation/alias tables. `x.original_language` is on
+            // the base row already, so the original-language branch needs no extra join.
             qb.push(" AND (x.name ILIKE ").push_bind(like.clone());
             qb.push(" OR EXISTS (SELECT 1 FROM catalog.translation tr WHERE tr.entity_type = ");
             qb.push_bind(etype);
-            qb.push(" AND tr.entity_id = x.id AND tr.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") AND tr.name ILIKE ").push_bind(like.clone());
+            qb.push(" AND tr.entity_id = x.id AND (tr.language = ANY(").push_bind(langs.to_vec());
+            qb.push(") OR tr.language = x.original_language) AND tr.name ILIKE ").push_bind(like.clone());
             qb.push(") OR EXISTS (SELECT 1 FROM catalog.entity_alias ea WHERE ea.entity_type = ");
             qb.push_bind(etype);
-            qb.push(" AND ea.entity_id = x.id AND ea.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") AND ea.name ILIKE ").push_bind(like);
+            qb.push(" AND ea.entity_id = x.id AND (ea.language = ANY(").push_bind(langs.to_vec());
+            qb.push(") OR ea.language = x.original_language) AND ea.name ILIKE ").push_bind(like);
             qb.push("))");
         } else {
             // Discover (catalog-wide): a UNION of pg_trgm GIN-indexed lookups over the
-            // base name, translated titles, and aliases (the last two user-language-only).
+            // base name, translated titles, and aliases. The translation/alias branches
+            // join back to the base table for its `original_language`, so a match counts
+            // when the row's language is one of the user's OR the show's own original.
             qb.push(" AND x.id IN (SELECT id FROM ");
             qb.push(table);
             qb.push(" WHERE name ILIKE ").push_bind(like.clone());
-            qb.push(" UNION SELECT entity_id FROM catalog.translation WHERE entity_type = ");
+            qb.push(" UNION SELECT t.entity_id FROM catalog.translation t JOIN ");
+            qb.push(table);
+            qb.push(" s ON s.id = t.entity_id WHERE t.entity_type = ");
             qb.push_bind(etype);
-            qb.push(" AND language = ANY(").push_bind(langs.to_vec());
-            qb.push(") AND name ILIKE ").push_bind(like.clone());
-            qb.push(" UNION SELECT entity_id FROM catalog.entity_alias WHERE entity_type = ");
+            qb.push(" AND (t.language = ANY(").push_bind(langs.to_vec());
+            qb.push(") OR t.language = s.original_language) AND t.name ILIKE ").push_bind(like.clone());
+            qb.push(" UNION SELECT a.entity_id FROM catalog.entity_alias a JOIN ");
+            qb.push(table);
+            qb.push(" s2 ON s2.id = a.entity_id WHERE a.entity_type = ");
             qb.push_bind(etype);
-            qb.push(" AND language = ANY(").push_bind(langs.to_vec());
-            qb.push(") AND name ILIKE ").push_bind(like);
+            qb.push(" AND (a.language = ANY(").push_bind(langs.to_vec());
+            qb.push(") OR a.language = s2.original_language) AND a.name ILIKE ").push_bind(like);
             qb.push(")");
         }
     }
