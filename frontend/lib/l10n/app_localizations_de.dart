@@ -100,6 +100,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get following => 'Folgt';
 
   @override
+  String get followingUser => 'Abonniert';
+
+  @override
   String get statEpisodes => 'Folgen';
 
   @override

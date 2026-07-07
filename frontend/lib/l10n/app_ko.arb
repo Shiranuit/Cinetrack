@@ -30,6 +30,7 @@
   "requestToFollow": "팔로우 요청",
   "followers": "팔로워",
   "following": "팔로잉",
+  "followingUser": "팔로잉",
   "statEpisodes": "에피소드",
   "statWatched": "시청 시간",
   "statMovies": "영화",

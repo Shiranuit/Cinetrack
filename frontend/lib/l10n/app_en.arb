@@ -30,6 +30,7 @@
   "requestToFollow": "Request to follow",
   "followers": "Followers",
   "following": "Following",
+  "followingUser": "Following",
   "statEpisodes": "Episodes",
   "statWatched": "Time Spent",
   "statMovies": "Movies",

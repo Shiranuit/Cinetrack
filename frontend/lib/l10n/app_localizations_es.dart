@@ -100,6 +100,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get following => 'Siguiendo';
 
   @override
+  String get followingUser => 'Siguiendo';
+
+  @override
   String get statEpisodes => 'Episodios';
 
   @override

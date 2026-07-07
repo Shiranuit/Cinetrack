@@ -30,6 +30,7 @@
   "requestToFollow": "请求关注",
   "followers": "粉丝",
   "following": "关注中",
+  "followingUser": "已关注",
   "statEpisodes": "集数",
   "statWatched": "观看时长",
   "statMovies": "电影",

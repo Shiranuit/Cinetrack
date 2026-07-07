@@ -292,6 +292,12 @@ abstract class AppLocalizations {
   /// **'Following'**
   String get following;
 
+  /// No description provided for @followingUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get followingUser;
+
   /// No description provided for @statEpisodes.
   ///
   /// In en, this message translates to:

@@ -99,6 +99,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get following => '팔로잉';
 
   @override
+  String get followingUser => '팔로잉';
+
+  @override
   String get statEpisodes => '에피소드';
 
   @override

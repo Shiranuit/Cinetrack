@@ -100,6 +100,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get following => 'Abonnements';
 
   @override
+  String get followingUser => 'Abonné';
+
+  @override
   String get statEpisodes => 'Épisodes';
 
   @override

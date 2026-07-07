@@ -99,6 +99,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get following => '关注中';
 
   @override
+  String get followingUser => '已关注';
+
+  @override
   String get statEpisodes => '集数';
 
   @override

@@ -156,17 +156,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
       );
 
   // Compact style: the app theme makes buttons full-width (minimumSize height 52
-  // → infinite width), which a ListTile.trailing can't accommodate. Shrink them.
+  // → infinite width), which a ListTile.trailing can't accommodate. Shrink the
+  // width but keep a comfortable height (a 0-height min made them look too thin).
   static final _compact = ButtonStyle(
-    minimumSize: WidgetStateProperty.all(Size.zero),
-    padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 14, vertical: 8)),
+    minimumSize: WidgetStateProperty.all(const Size(0, 40)),
+    padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     visualDensity: VisualDensity.compact,
   );
 
   Widget _followButton(UserBrief u) {
     final t = AppLocalizations.of(context);
-    if (u.following) return OutlinedButton(style: _compact, onPressed: () => _toggleFollow(u), child: Text(t.following));
+    if (u.following) return OutlinedButton(style: _compact, onPressed: () => _toggleFollow(u), child: Text(t.followingUser));
     if (u.requested) return OutlinedButton(style: _compact, onPressed: () => _toggleFollow(u), child: Text(t.requested));
     return FilledButton(style: _compact, onPressed: () => _toggleFollow(u), child: Text(u.isPrivate ? t.requestToFollow : t.follow));
   }

@@ -99,6 +99,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get following => 'フォロー中';
 
   @override
+  String get followingUser => 'フォロー中';
+
+  @override
   String get statEpisodes => 'エピソード';
 
   @override
