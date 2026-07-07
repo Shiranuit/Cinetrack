@@ -192,10 +192,20 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     // Name search: substring match on the searchable doc (base name + all-language
-    // aliases), backed by the pg_trgm GIN index on search_text. Combines with every
-    // facet above, so you can search by name AND filter at once.
+    // aliases) OR any TRANSLATED name, so a show is found by the localized title the
+    // user actually sees, not only its original-language / alias forms (e.g. a show
+    // shown as "Hanamonogatari" whose base name is Japanese with no aliases). Both
+    // sides hit their pg_trgm GIN index (series_search_trgm / translation_name_trgm);
+    // a UNION of two indexed lookups stays fast, whereas an OR couldn't use them.
     if let Some(query) = f.query.as_deref() {
-        qb.push(" AND x.search_text ILIKE ").push_bind(format!("%{query}%"));
+        let like = format!("%{query}%");
+        qb.push(" AND x.id IN (SELECT id FROM ");
+        qb.push(table);
+        qb.push(" WHERE search_text ILIKE ").push_bind(like.clone());
+        qb.push(" UNION SELECT entity_id FROM catalog.translation WHERE entity_type = ");
+        qb.push_bind(etype);
+        qb.push(" AND name ILIKE ").push_bind(like);
+        qb.push(")");
     }
 
     let dir = if f.sort_desc { "DESC" } else { "ASC" };
