@@ -12,6 +12,7 @@ import '../state/settings.dart';
 import '../widgets/badges.dart';
 import '../widgets/net_image.dart';
 import '../widgets/poster.dart';
+import '../widgets/rating_thumbs.dart';
 import '../widgets/states.dart';
 
 /// Movie view with tracking (mark watched / rewatch / favorite).
@@ -92,6 +93,35 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     );
   }
 
+  Future<void> _rate(int? rating) async {
+    final api = context.read<ApiClient>();
+    final prev = _rel;
+    // Optimistic: show the new rating right away, roll back if the call fails.
+    if (prev != null) {
+      setState(() => _rel = MovieRelation(
+            movieId: prev.movieId,
+            isFavorited: prev.isFavorited,
+            watched: prev.watched,
+            watchedCount: prev.watchedCount,
+            watchlist: prev.watchlist,
+            rating: rating,
+          ));
+    }
+    try {
+      final r = await api.rateMovie(widget.movieId, rating);
+      if (mounted) setState(() => _rel = r);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _rel = prev);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Widget _ratingRow() => Padding(
+        padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.lg, Insets.lg, 0),
+        child: RatingThumbs(value: _rel?.rating, onRate: _rate),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -116,6 +146,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                 children: [
                   _hero(m),
                   _actionBar(),
+                  _ratingRow(),
                   if (m.overview?.isNotEmpty ?? false)
                     Padding(
                       padding: const EdgeInsets.all(Insets.lg),

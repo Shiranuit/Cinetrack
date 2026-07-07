@@ -250,6 +250,10 @@ class ApiClient extends ChangeNotifier {
   Future<MovieRelation> watchlistMovie(int id, bool value) async =>
       MovieRelation.fromJson(await _send(value ? 'POST' : 'DELETE', '/api/movies/$id/watchlist'));
 
+  /// Set (1..5) or clear (null) your rating for a movie.
+  Future<MovieRelation> rateMovie(int id, int? rating) async =>
+      MovieRelation.fromJson(await _send('PUT', '/api/movies/$id/rating', body: {'rating': rating}));
+
   Future<List<Season>> seasons(int id) async =>
       _list(await _get('/api/series/$id/seasons'), Season.fromJson);
 

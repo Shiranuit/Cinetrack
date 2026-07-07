@@ -4,11 +4,17 @@ import 'package:flutter/material.dart';
 /// `toQuery()` maps directly onto the backend `/api/discover` + `/api/library/filter`
 /// query params.
 class AdvancedFilters {
+  AdvancedFilters({this.defaultSort = 'popularity'}) : sort = defaultSort;
+
+  /// Initial sort key, also the one restored by [reset]. Discover uses
+  /// 'popularity'; the Library passes 'my_rating' (Your rating).
+  final String defaultSort;
+
   /// Free-text name search, combined with the facets below. In the Library it
   /// searches your tracked shows; in Discover it searches the whole catalog.
   String query = '';
   String type = 'series'; // series | movie | anime
-  String sort = 'popularity';
+  String sort;
   bool sortDesc = true; // sort direction; false = ascending
   bool includeLibrary = false; // Discover only: also show shows already in your library
   final Set<int> genresInc = {}, genresExc = {};
@@ -65,7 +71,7 @@ class AdvancedFilters {
     scoreMin = null;
     favoritesOnly = false;
     includeLibrary = false;
-    sort = 'popularity';
+    sort = defaultSort;
     sortDesc = true;
   }
 

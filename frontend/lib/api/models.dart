@@ -247,12 +247,14 @@ class MovieRelation {
   final bool watched;
   final int watchedCount;
   final bool watchlist; // "watch later"
+  final int? rating; // labeled 1..5, null = unrated
   const MovieRelation({
     required this.movieId,
     required this.isFavorited,
     required this.watched,
     required this.watchedCount,
     this.watchlist = false,
+    this.rating,
   });
   factory MovieRelation.fromJson(Map<String, dynamic> j) => MovieRelation(
         movieId: j['movie_id'] as int,
@@ -260,6 +262,7 @@ class MovieRelation {
         watched: j['watched'] as bool? ?? false,
         watchedCount: j['watched_count'] as int? ?? 0,
         watchlist: j['watchlist'] as bool? ?? false,
+        rating: j['rating'] as int?,
       );
 }
 
@@ -271,6 +274,7 @@ class LibraryMovie {
   final bool isFavorited;
   final int watchedCount;
   final bool watchlist;
+  final int? rating; // labeled 1..5, null = unrated
   final int? lastWatched;
   const LibraryMovie({
     required this.movieId,
@@ -280,6 +284,7 @@ class LibraryMovie {
     required this.isFavorited,
     required this.watchedCount,
     this.watchlist = false,
+    this.rating,
     this.lastWatched,
   });
   factory LibraryMovie.fromJson(Map<String, dynamic> j) => LibraryMovie(
@@ -290,6 +295,7 @@ class LibraryMovie {
         isFavorited: j['is_favorited'] as bool? ?? false,
         watchedCount: j['watched_count'] as int? ?? 0,
         watchlist: j['watchlist'] as bool? ?? false,
+        rating: j['rating'] as int?,
         lastWatched: j['last_watched'] as int?,
       );
 }

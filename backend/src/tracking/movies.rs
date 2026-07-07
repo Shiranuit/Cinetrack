@@ -11,7 +11,8 @@ pub struct MovieRelation {
     pub is_favorited: bool,
     pub watched: bool,
     pub watched_count: i32,
-    pub watchlist: bool, // "watch later"
+    pub watchlist: bool,       // "watch later"
+    pub rating: Option<i16>,   // labeled 1..5 (Hate/Dislike/OK/Like/Love), null = unrated
 }
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -23,20 +24,22 @@ pub struct LibraryMovie {
     pub is_favorited: bool,
     pub watched_count: i32,
     pub watchlist: bool,
+    pub rating: Option<i16>,
     pub last_watched: Option<i64>,
 }
 
 /// The user's relationship to a movie (defaults to "not tracked").
 pub async fn relation(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<MovieRelation> {
-    let row: Option<(bool, bool, i32, bool)> = sqlx::query_as(
-        "SELECT is_favorited, watched, watched_count, watchlist FROM app.user_movie WHERE user_id = $1 AND movie_id = $2",
+    let row: Option<(bool, bool, i32, bool, Option<i16>)> = sqlx::query_as(
+        "SELECT is_favorited, watched, watched_count, watchlist, rating \
+         FROM app.user_movie WHERE user_id = $1 AND movie_id = $2",
     )
     .bind(user_id)
     .bind(movie_id)
     .fetch_optional(&state.db)
     .await?;
-    let (is_favorited, watched, watched_count, watchlist) = row.unwrap_or((false, false, 0, false));
-    Ok(MovieRelation { movie_id, is_favorited, watched, watched_count, watchlist })
+    let (is_favorited, watched, watched_count, watchlist, rating) = row.unwrap_or((false, false, 0, false, None));
+    Ok(MovieRelation { movie_id, is_favorited, watched, watched_count, watchlist, rating })
 }
 
 /// Mark a movie watched (each call is one watch; increments the rewatch count).
@@ -99,6 +102,28 @@ pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value:
     relation(state, user_id, movie_id).await
 }
 
+/// Set (or clear with `None`) the user's labeled 1..5 rating for a movie. Rating a
+/// movie implicitly tracks it, mirroring `set_show_rating` for series.
+pub async fn set_rating(state: &AppState, user_id: Uuid, movie_id: i64, rating: Option<i16>) -> AppResult<MovieRelation> {
+    if let Some(r) = rating
+        && !(1..=5).contains(&r)
+    {
+        return Err(crate::error::AppError::BadRequest("rating must be between 1 and 5".into()));
+    }
+    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    sqlx::query(
+        "INSERT INTO app.user_movie (user_id, movie_id, rating, updated_at) \
+         VALUES ($1, $2, $3, now()) \
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET rating = $3, updated_at = now()",
+    )
+    .bind(user_id)
+    .bind(movie_id)
+    .bind(rating)
+    .execute(&state.db)
+    .await?;
+    relation(state, user_id, movie_id).await
+}
+
 /// Add/remove a movie from the "watch later" list (the movie equivalent of a
 /// series' `for_later` status).
 pub async fn set_watchlist(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
@@ -127,6 +152,7 @@ pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str,
         "year" => "m.year",
         "runtime" => "m.runtime",
         "updated" => "m.last_updated",
+        "my_rating" => "um.rating",
         _ => "um.last_watched",
     };
     let order = format!("{col} {dir} NULLS LAST, name NULLS LAST");
@@ -135,7 +161,7 @@ pub async fn list(state: &AppState, user_id: Uuid, langs: &[String], sort: &str,
                 COALESCE((SELECT tr.name FROM catalog.translation tr \
                           WHERE tr.entity_type = 'movie' AND tr.entity_id = um.movie_id AND tr.name IS NOT NULL \
                             AND tr.language = ANY($2) ORDER BY array_position($2, tr.language) LIMIT 1), m.name) AS name, \
-                m.image_url, m.year, um.is_favorited, um.watched_count, um.watchlist, \
+                m.image_url, m.year, um.is_favorited, um.watched_count, um.watchlist, um.rating, \
                 extract(epoch FROM um.last_watched)::bigint AS last_watched \
          FROM app.user_movie um \
          LEFT JOIN catalog.movie m ON m.id = um.movie_id \

@@ -97,3 +97,19 @@ pub async fn unwatchlist_movie(
 ) -> AppResult<Json<MovieRelation>> {
     Ok(Json(movies::set_watchlist(&state, uid, id, false).await?))
 }
+
+#[derive(serde::Deserialize)]
+pub struct RatingReq {
+    /// Labeled 1..5, or null to clear.
+    pub rating: Option<i16>,
+}
+
+/// Set/clear the user's rating for a movie.
+pub async fn rate_movie(
+    AuthUser(uid): AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Json(req): Json<RatingReq>,
+) -> AppResult<Json<MovieRelation>> {
+    Ok(Json(movies::set_rating(&state, uid, id, req.rating).await?))
+}

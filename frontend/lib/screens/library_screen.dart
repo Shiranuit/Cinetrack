@@ -45,7 +45,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   // Advanced library filter (over the user's own shows). The token resets the
   // infinite grid to page 1 when the filter changes.
-  final _f = AdvancedFilters();
+  final _f = AdvancedFilters(defaultSort: 'my_rating');
   FilterOptions _filterOptions = const FilterOptions();
   int _filterToken = 0;
 
