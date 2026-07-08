@@ -142,13 +142,20 @@ services:
       # the server). Kept modest by default because the bin uses its own DB pool.
       BACKFILL_CONCURRENCY: ${BACKFILL_CONCURRENCY:-8}
       RUST_LOG: ${RUST_LOG:-info}
-    # Migrations run automatically on boot (AppState::bootstrap).
+    # Migrations run automatically on boot (AppState::bootstrap), BEFORE the HTTP
+    # listener binds, so /health is unreachable until they finish. A release that
+    # introduces heavy one-time migrations (large backfills, index builds) can take
+    # several minutes on the production DB, so start_period must comfortably exceed
+    # that or the container is marked unhealthy mid-migration and the deploy aborts.
+    # A passing check during start_period flips the container healthy immediately, so
+    # a large value never slows a normal (no-pending-migration) restart; it only
+    # widens the grace window for the slow first boot of a release.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 600s
     mem_limit: 2g
     # No published ports: reached only via the `web` reverse proxy.
     networks: [internal]
