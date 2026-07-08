@@ -83,6 +83,20 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
 
   int get _seenDistinct => _counts.values.where((c) => c > 0).length;
 
+  /// How many COMPLETE passes through the whole series have been watched: the
+  /// minimum ×N watch count across every episode (0 if any episode is still
+  /// unwatched, i.e. not yet fully seen). A single rewatched episode never raises
+  /// it; only rewatching every episode does.
+  int get _seriesWatchFloor {
+    if (_episodes.isEmpty) return 0;
+    var floor = 1 << 30;
+    for (final e in _episodes) {
+      final c = _counts[e.id] ?? 0;
+      if (c < floor) floor = c;
+    }
+    return floor;
+  }
+
   Future<void> _refreshRel() async {
     final rel = await _api.showRelation(widget.seriesId, langs: _langs);
     if (mounted) setState(() => _rel = rel);
@@ -269,7 +283,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           series: _series!,
           seenDistinct: _seenDistinct,
           totalEpisodes: _episodes.length,
-          onTapArtwork: () => openArtworkGallery(context, _api.seriesArtworks(widget.seriesId)),
+          onTapArtwork: () =>
+              openArtworkGallery(context, _api.seriesArtworks(widget.seriesId)),
         ),
         if (_details != null)
           _MetaStrip(
@@ -314,64 +329,56 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
                   style: context.text.titleLarge,
                 ),
               ),
+              // When every episode has been watched at least once, show how many
+              // FULL passes through the series that is (the min ×N across episodes)
+              // instead of a plain "all watched" check; one rewatched episode does
+              // not bump it (min, not max).
+              if (_seriesWatchFloor >= 1) ...[
+                CountBadge(count: _seriesWatchFloor, size: 30),
+                const SizedBox(width: Insets.sm),
+              ],
               // Whole-series watch actions, mirroring the per-season menu.
-              Builder(
-                builder: (context) {
-                  final allSeen =
-                      _episodes.isNotEmpty && _seenDistinct >= _episodes.length;
-                  return PopupMenuButton<String>(
-                    tooltip: AppLocalizations.of(context).seriesActions,
-                    icon: Icon(
-                      allSeen
-                          ? Icons.check_circle_rounded
-                          : Icons.done_all_rounded,
-                      color: allSeen
-                          ? context.colors.seen
-                          : context.scheme.onSurfaceVariant,
+              PopupMenuButton<String>(
+                tooltip: AppLocalizations.of(context).seriesActions,
+                icon: Icon(
+                  Icons.done_all_rounded,
+                  color: context.scheme.onSurfaceVariant,
+                ),
+                onSelected: _seriesAction,
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'watch',
+                    child: ListTile(
+                      leading: const Icon(Icons.done_all_rounded),
+                      title: Text(AppLocalizations.of(context).markAllWatched),
+                      dense: true,
                     ),
-                    onSelected: _seriesAction,
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'watch',
-                        child: ListTile(
-                          leading: const Icon(Icons.done_all_rounded),
-                          title: Text(
-                            AppLocalizations.of(context).markAllWatched,
-                          ),
-                          dense: true,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'rewatch',
-                        child: ListTile(
-                          leading: const Icon(Icons.replay_rounded),
-                          title: Text(
-                            AppLocalizations.of(context).rewatchSeries,
-                          ),
-                          dense: true,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'decrement',
-                        child: ListTile(
-                          leading: const Icon(Icons.exposure_minus_1_rounded),
-                          title: Text(
-                            AppLocalizations.of(context).removeOneWatch,
-                          ),
-                          dense: true,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'unwatch',
-                        child: ListTile(
-                          leading: const Icon(Icons.remove_done_rounded),
-                          title: Text(AppLocalizations.of(context).unmarkAll),
-                          dense: true,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                  ),
+                  PopupMenuItem(
+                    value: 'rewatch',
+                    child: ListTile(
+                      leading: const Icon(Icons.replay_rounded),
+                      title: Text(AppLocalizations.of(context).rewatchSeries),
+                      dense: true,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'decrement',
+                    child: ListTile(
+                      leading: const Icon(Icons.exposure_minus_1_rounded),
+                      title: Text(AppLocalizations.of(context).removeOneWatch),
+                      dense: true,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'unwatch',
+                    child: ListTile(
+                      leading: const Icon(Icons.remove_done_rounded),
+                      title: Text(AppLocalizations.of(context).unmarkAll),
+                      dense: true,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -475,7 +482,10 @@ class _Hero extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           // Tap the backdrop (or the poster below) to browse the show's artworks.
-          GestureDetector(onTap: onTapArtwork, child: NetImage(url: series.imageUrl)),
+          GestureDetector(
+            onTap: onTapArtwork,
+            child: NetImage(url: series.imageUrl),
+          ),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -588,7 +598,14 @@ class _SeasonSectionState extends State<_SeasonSection> {
         .where((e) => (widget.counts[e.id] ?? 0) > 0)
         .length;
     final total = widget.episodes.length;
-    final allSeen = seen == total && total > 0;
+    // Complete passes through this season: the min ×N across its episodes (0 until
+    // every episode is watched). Shown as a ×N badge; a single rewatched episode
+    // does not raise it.
+    final watchFloor = total == 0
+        ? 0
+        : widget.episodes
+              .map((e) => widget.counts[e.id] ?? 0)
+              .reduce((a, b) => a < b ? a : b);
     final label = widget.seasonNumber == 0
         ? AppLocalizations.of(context).specials
         : AppLocalizations.of(context).season(widget.seasonNumber);
@@ -631,15 +648,16 @@ class _SeasonSectionState extends State<_SeasonSection> {
                         color: context.scheme.onSurfaceVariant,
                       ),
                     ),
+                    // Full-season watch count (replaces the plain "all watched" tick).
+                    if (watchFloor >= 1) ...[
+                      const SizedBox(width: Insets.sm),
+                      CountBadge(count: watchFloor, size: 30),
+                    ],
                     PopupMenuButton<String>(
                       tooltip: AppLocalizations.of(context).seasonActions,
                       icon: Icon(
-                        allSeen
-                            ? Icons.check_circle_rounded
-                            : Icons.done_all_rounded,
-                        color: allSeen
-                            ? context.colors.seen
-                            : context.scheme.onSurfaceVariant,
+                        Icons.done_all_rounded,
+                        color: context.scheme.onSurfaceVariant,
                       ),
                       onSelected: (a) =>
                           widget.onSeasonAction(widget.seasonNumber, a),
@@ -938,7 +956,9 @@ class _DetailsSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              Expanded(child: SelectableText(value, style: context.text.bodyMedium)),
+              Expanded(
+                child: SelectableText(value, style: context.text.bodyMedium),
+              ),
             ],
           ),
         ),
