@@ -97,7 +97,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get requested => 'Demandé';
 
   @override
-  String get requestToFollow => 'Demander d\'amis';
+  String get requestToFollow => 'Demander à suivre';
 
   @override
   String get followers => 'Abonnés';
