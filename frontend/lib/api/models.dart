@@ -306,7 +306,10 @@ class SearchResult {
   final String? name;
   final int? year;
   final String? imageUrl;
-  const SearchResult({this.tvdbId, this.kind, this.name, this.year, this.imageUrl});
+
+  /// Whether the viewer already tracks this title (Discover marks these).
+  final bool inLibrary;
+  const SearchResult({this.tvdbId, this.kind, this.name, this.year, this.imageUrl, this.inLibrary = false});
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
         tvdbId: j['tvdb_id'] as int?,
@@ -314,6 +317,7 @@ class SearchResult {
         name: j['name'] as String?,
         year: j['year'] as int?,
         imageUrl: j['image_url'] as String?,
+        inLibrary: j['in_library'] as bool? ?? false,
       );
 }
 

@@ -57,6 +57,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get filters => '필터';
 
   @override
+  String get inLibrary => 'In library';
+
+  @override
   String get loading => '불러오는 중…';
 
   @override

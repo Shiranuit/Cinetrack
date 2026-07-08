@@ -36,8 +36,8 @@ Future<void> main() async {
   final seen = await api.seenCounts(74796);
   print('seen episodes: ${seen.length} counts=$seen');
 
-  final results = await api.search('bleach', type: 'series');
-  print('search "bleach": ${results.length} (first: ${results.first.name})');
+  final results = await api.discover(q: 'bleach', type: 'series');
+  print('discover "bleach": ${results.length} (first: ${results.first.name})');
 
   print('\nALL OK');
 }

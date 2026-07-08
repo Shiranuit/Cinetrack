@@ -91,6 +91,22 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     qb.push(") ORDER BY array_position(");
     qb.push_bind(langs.to_vec());
     qb.push(", tr.language) LIMIT 1), x.name) AS name, x.year, x.image_url, x.overview");
+    // Does the viewer already track this title? Lets Discover mark library shows.
+    match f.viewer {
+        Some(viewer) if is_movie => {
+            qb.push(", EXISTS (SELECT 1 FROM app.user_movie um WHERE um.movie_id = x.id AND um.user_id = ");
+            qb.push_bind(viewer);
+            qb.push(") AS in_library");
+        }
+        Some(viewer) => {
+            qb.push(", EXISTS (SELECT 1 FROM app.user_show us WHERE us.series_id = x.id AND us.user_id = ");
+            qb.push_bind(viewer);
+            qb.push(" AND NOT us.unavailable) AS in_library");
+        }
+        None => {
+            qb.push(", false AS in_library");
+        }
+    }
     qb.push(format!(" FROM {table} x"));
 
     // Library scope: only shows this user tracks.
@@ -105,11 +121,20 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND us.is_favorited");
     }
 
-    // Discover: hide shows the user already tracks (discovery = new shows).
+    // Discover: hide shows the user already tracks (the "In my library" toggle off).
+    // Mirror the `in_library` flag exactly, so what gets hidden is precisely what
+    // would otherwise show the marker: movies use user_movie, series use user_show
+    // (excluding unavailable ones).
     if let Some(uid) = f.exclude_user {
-        qb.push(" AND NOT EXISTS (SELECT 1 FROM app.user_show ux WHERE ux.user_id = ");
-        qb.push_bind(uid);
-        qb.push(" AND ux.series_id = x.id)");
+        if is_movie {
+            qb.push(" AND NOT EXISTS (SELECT 1 FROM app.user_movie ux WHERE ux.user_id = ");
+            qb.push_bind(uid);
+            qb.push(" AND ux.movie_id = x.id)");
+        } else {
+            qb.push(" AND NOT EXISTS (SELECT 1 FROM app.user_show ux WHERE ux.user_id = ");
+            qb.push_bind(uid);
+            qb.push(" AND ux.series_id = x.id AND NOT ux.unavailable)");
+        }
     }
 
     // Facet filters apply to series/anime only (movies have no facet tables yet).
@@ -276,19 +301,20 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool)>()
         .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview)| SearchResult {
+        .map(|(id, name, year, image_url, overview, in_library)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
             year,
             image_url,
             overview,
+            in_library,
         })
         .collect())
 }
@@ -506,6 +532,7 @@ async fn popular_local(
             year,
             image_url,
             overview,
+            in_library: false,
         })
         .collect())
 }
@@ -554,6 +581,7 @@ async fn popular_remote(
             year,
             image_url: img,
             overview: r["overview"].as_str().map(str::to_string),
+            in_library: false,
         });
     }
     Ok(out)

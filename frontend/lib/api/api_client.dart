@@ -277,6 +277,7 @@ class ApiClient extends ChangeNotifier {
 
   // ---- discover / calendar / social ----
   Future<List<SearchResult>> discover({
+    String? q,
     String type = 'series',
     String sort = 'popularity',
     List<int> genres = const [],
@@ -289,6 +290,7 @@ class ApiClient extends ChangeNotifier {
   }) async =>
       _list(
         await _get('/api/discover', {
+          'q': ?q,
           'type': type,
           'sort': sort,
           'genres': ?(genres.isEmpty ? null : genres.join(',')),

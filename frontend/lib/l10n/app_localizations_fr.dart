@@ -58,6 +58,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get filters => 'Filtres';
 
   @override
+  String get inLibrary => 'Dans ma liste';
+
+  @override
   String get loading => 'Chargement…';
 
   @override

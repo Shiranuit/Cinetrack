@@ -57,6 +57,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filters => '筛选';
 
   @override
+  String get inLibrary => 'In library';
+
+  @override
   String get loading => '加载中…';
 
   @override

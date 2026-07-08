@@ -29,8 +29,8 @@ pub struct DiscoverQuery {
     pub sort: Option<String>,
     /// Sort direction: "desc" (default) or "asc".
     pub dir: Option<String>,
-    /// Discover only: when true, also include shows already in the user's library
-    /// (default false = show only shows they don't track).
+    /// Discover only: include shows already in the user's library (default true;
+    /// they come back flagged `in_library`). Set false to see only untracked shows.
     pub include_library: Option<bool>,
     pub genres: Option<String>,         // comma ids, must have ALL
     pub exclude_genres: Option<String>, // comma ids, must have NONE
@@ -104,9 +104,10 @@ pub async fn discover(
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    // Default: exclude the user's tracked shows (Discover = new shows). The
-    // "include_library" toggle lets them browse their library shows here too.
-    let exclude = if q.include_library.unwrap_or(false) { None } else { Some(uid) };
+    // Default: INCLUDE the user's tracked shows (they're marked `in_library` so the
+    // UI can flag them). Pass `include_library=false` to hide tracked shows and see
+    // only new ones.
+    let exclude = if q.include_library.unwrap_or(true) { None } else { Some(uid) };
     Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, exclude, Some(uid)), &langs).await?))
 }
 

@@ -208,6 +208,12 @@ abstract class AppLocalizations {
   /// **'Filters'**
   String get filters;
 
+  /// No description provided for @inLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'In library'**
+  String get inLibrary;
+
   /// No description provided for @loading.
   ///
   /// In en, this message translates to:

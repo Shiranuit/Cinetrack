@@ -9,6 +9,7 @@ class Brand {
   static const Color seen = Color(0xFF48DE9C); // watched / progress mint
   static const Color favorite = Color(0xFFFF5D73); // favorite rose
   static const Color warning = Color(0xFFFFC24B); // stale / attention
+  static const Color library = Color(0xFF1FA6E6); // in-library sky blue (distinct from amber selection)
 
   // Dark surfaces — near-black with a cool blue undertone, layered.
   static const Color darkBg = Color(0xFF090A0F);
@@ -31,6 +32,7 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color seen;
   final Color favorite;
   final Color warning;
+  final Color library;
   final Color posterBg;
   final Color scrim;
 
@@ -38,6 +40,7 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.seen,
     required this.favorite,
     required this.warning,
+    required this.library,
     required this.posterBg,
     required this.scrim,
   });
@@ -46,6 +49,7 @@ class AppColors extends ThemeExtension<AppColors> {
     seen: Brand.seen,
     favorite: Brand.favorite,
     warning: Brand.warning,
+    library: Brand.library,
     posterBg: Brand.darkPosterBg,
     scrim: Color(0xE6090A0F),
   );
@@ -54,16 +58,18 @@ class AppColors extends ThemeExtension<AppColors> {
     seen: Color(0xFF12A870),
     favorite: Color(0xFFE23D74),
     warning: Color(0xFFB8791A),
+    library: Color(0xFF0B7CBC), // deeper sky blue for contrast on light surfaces
     posterBg: Brand.lightPosterBg,
     scrim: Color(0x99000000),
   );
 
   @override
-  AppColors copyWith({Color? seen, Color? favorite, Color? warning, Color? posterBg, Color? scrim}) =>
+  AppColors copyWith({Color? seen, Color? favorite, Color? warning, Color? library, Color? posterBg, Color? scrim}) =>
       AppColors(
         seen: seen ?? this.seen,
         favorite: favorite ?? this.favorite,
         warning: warning ?? this.warning,
+        library: library ?? this.library,
         posterBg: posterBg ?? this.posterBg,
         scrim: scrim ?? this.scrim,
       );
@@ -75,6 +81,7 @@ class AppColors extends ThemeExtension<AppColors> {
       seen: Color.lerp(seen, other.seen, t)!,
       favorite: Color.lerp(favorite, other.favorite, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
+      library: Color.lerp(library, other.library, t)!,
       posterBg: Color.lerp(posterBg, other.posterBg, t)!,
       scrim: Color.lerp(scrim, other.scrim, t)!,
     );

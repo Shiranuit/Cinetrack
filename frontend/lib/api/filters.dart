@@ -16,7 +16,7 @@ class AdvancedFilters {
   String type = 'series'; // series | movie | anime
   String sort;
   bool sortDesc = true; // sort direction; false = ascending
-  bool includeLibrary = false; // Discover only: also show shows already in your library
+  bool includeLibrary = true; // Discover only: include shows already in your library (default on; off hides them)
   final Set<int> genresInc = {}, genresExc = {};
   final Set<int> tagsInc = {}, tagsExc = {};
   final Set<int> networks = {}, studios = {};
@@ -37,7 +37,7 @@ class AdvancedFilters {
 
   int get activeCount =>
       (favoritesOnly ? 1 : 0) +
-      (includeLibrary ? 1 : 0) +
+      (includeLibrary ? 0 : 1) + // on is the default; counts as active only when turned OFF
       genresInc.length +
       genresExc.length +
       tagsInc.length +
@@ -70,7 +70,7 @@ class AdvancedFilters {
     episodes = null;
     scoreMin = null;
     favoritesOnly = false;
-    includeLibrary = false;
+    includeLibrary = true;
     sort = defaultSort;
     sortDesc = true;
   }
@@ -84,7 +84,8 @@ class AdvancedFilters {
       'type': type,
       'sort': sort,
       'dir': sortDesc ? 'desc' : 'asc',
-      'include_library': includeLibrary ? 'true' : null,
+      // Backend includes library shows by default; only send the flag to HIDE them.
+      'include_library': includeLibrary ? null : 'false',
       'genres': _ids(genresInc),
       'exclude_genres': _ids(genresExc),
       'tags': _ids(tagsInc),

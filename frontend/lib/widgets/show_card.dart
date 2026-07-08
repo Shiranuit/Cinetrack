@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../state/selection.dart';
 import 'badges.dart';
 import 'poster.dart';
@@ -30,6 +31,7 @@ class ShowCard extends StatelessWidget {
     this.progress = 0,
     this.heroTag,
     this.selection,
+    this.inLibrary = false,
   });
 
   final String title;
@@ -45,12 +47,24 @@ class ShowCard extends StatelessWidget {
   /// a plain tile and ignores selection entirely.
   final SelItem? selection;
 
+  /// Whether this title is already in the viewer's library. When true (only set in
+  /// Discover) the card gets a sky-blue "In library" pill + border.
+  final bool inLibrary;
+
   @override
   Widget build(BuildContext context) {
     // `of` registers a dependency, so the card rebuilds when the selection changes.
     final controller = selection == null ? null : SelectionScope.of(context);
     final selecting = controller?.active ?? false;
     final selected = controller != null && selection != null && controller.contains(selection!.kind, selection!.id);
+
+    // In-library marker (Discover only): a sky-blue "In library" pill + border,
+    // deliberately different from the amber selection ring. The pill STAYS even while
+    // the card is selected (it renders under the amber selection fill, so a selected
+    // card still reads as "in library"); the blue border yields to the amber selection
+    // border when this card is selected.
+    final showPill = inLibrary;
+    final showLibBorder = inLibrary && !selected;
 
     void handleTap() {
       if (selecting && controller != null && selection != null) {
@@ -112,6 +126,17 @@ class ShowCard extends StatelessWidget {
                     child: Icon(Icons.favorite, size: 18, color: context.colors.favorite),
                   ),
                 ProgressStripe(value: progress),
+                if (showLibBorder)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: context.colors.library, width: 3),
+                      borderRadius: BorderRadius.circular(Radii.md),
+                    ),
+                  ),
+                // Pill BEFORE the selection fill below, so the amber selection tint
+                // layers over it and the pill stays visible on a selected card.
+                if (showPill)
+                  const Positioned(top: Insets.xs, left: Insets.xs, child: _LibraryPill()),
                 if (selected)
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -123,7 +148,10 @@ class ShowCard extends StatelessWidget {
                 if (selecting)
                   Positioned(
                     top: Insets.xs,
-                    left: Insets.xs,
+                    // Sit top-right when a pill occupies the top-left (Discover cards
+                    // carry no favorite heart there), so the dot never hides the pill.
+                    left: inLibrary ? null : Insets.xs,
+                    right: inLibrary ? Insets.xs : null,
                     child: _SelectDot(selected: selected),
                   ),
               ],
@@ -154,6 +182,37 @@ class ShowCard extends StatelessWidget {
           ),
         ],
         ),
+      ),
+    );
+  }
+}
+
+/// "In library" chip overlaid on a Discover poster (check icon + short label).
+class _LibraryPill extends StatelessWidget {
+  const _LibraryPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(Insets.xs, 2, Insets.sm, 2),
+      decoration: BoxDecoration(
+        color: context.colors.library,
+        borderRadius: BorderRadius.circular(Radii.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+          const SizedBox(width: 2),
+          Text(
+            AppLocalizations.of(context).inLibrary,
+            style: context.text.labelSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
+            ),
+          ),
+        ],
       ),
     );
   }

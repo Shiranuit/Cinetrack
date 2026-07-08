@@ -58,6 +58,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get filters => 'Filter';
 
   @override
+  String get inLibrary => 'In library';
+
+  @override
   String get loading => 'Lädt…';
 
   @override

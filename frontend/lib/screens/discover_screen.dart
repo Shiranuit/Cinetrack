@@ -208,6 +208,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               title: r.name ?? '—',
               imageUrl: r.imageUrl,
               subtitle: r.year?.toString(),
+              inLibrary: r.inLibrary,
               selection: r.tvdbId == null
                   ? null
                   : SelItem(r.kind == 'movie' ? SelKind.movie : SelKind.series, r.tvdbId!, r.name ?? ''),

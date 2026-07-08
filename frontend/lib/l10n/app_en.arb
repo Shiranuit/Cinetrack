@@ -16,6 +16,7 @@
   "typeMovies": "Movies",
   "typeAll": "All",
   "filters": "Filters",
+  "inLibrary": "In library",
   "loading": "Loading…",
   "retry": "Retry",
   "noResults": "No results",

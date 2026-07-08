@@ -57,6 +57,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get filters => 'フィルター';
 
   @override
+  String get inLibrary => 'In library';
+
+  @override
   String get loading => '読み込み中…';
 
   @override
