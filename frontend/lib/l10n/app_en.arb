@@ -89,6 +89,7 @@
   "unmarkAll": "Unmark all",
   "rewatchSeason": "Rewatch season (+1)",
   "rewatchSeries": "Rewatch series (+1)",
+  "removeOneWatch": "Remove one watch (-1)",
   "seriesActions": "Series actions",
   "seasonActions": "Season actions",
   "markWatched": "Mark watched",

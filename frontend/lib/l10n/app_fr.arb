@@ -82,6 +82,7 @@
   "unmarkAll": "Tout démarquer",
   "rewatchSeason": "Revoir la saison (+1)",
   "rewatchSeries": "Revoir la série (+1)",
+  "removeOneWatch": "Retirer un visionnage (-1)",
   "seriesActions": "Actions sur la série",
   "seasonActions": "Actions sur la saison",
   "markWatched": "Marquer comme vu",

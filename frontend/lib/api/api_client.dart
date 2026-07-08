@@ -387,6 +387,10 @@ class ApiClient extends ChangeNotifier {
   Future<void> unwatchSeason(int seriesId, int season) =>
       _send('DELETE', '/api/series/$seriesId/seasons/$season/watch');
 
+  /// Remove one watch from every watched episode of the season (decrement each ×N).
+  Future<void> decrementSeason(int seriesId, int season) =>
+      _send('DELETE', '/api/series/$seriesId/seasons/$season/watch?decrement=true');
+
   /// Mark every episode of every season watched.
   Future<void> watchSeries(int seriesId) => _send('POST', '/api/series/$seriesId/watch');
 
@@ -394,6 +398,9 @@ class ApiClient extends ChangeNotifier {
   Future<void> rewatchSeries(int seriesId) => _send('POST', '/api/series/$seriesId/watch?rewatch=true');
 
   Future<void> unwatchSeries(int seriesId) => _send('DELETE', '/api/series/$seriesId/watch');
+
+  /// Remove one watch from every watched episode of the whole series (decrement each ×N).
+  Future<void> decrementSeries(int seriesId) => _send('DELETE', '/api/series/$seriesId/watch?decrement=true');
 
   Future<void> setFollow(int seriesId, bool value) =>
       _send(value ? 'POST' : 'DELETE', '/api/shows/$seriesId/follow');

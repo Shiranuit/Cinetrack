@@ -257,6 +257,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rewatchSeries => '重看剧集 (+1)';
 
   @override
+  String get removeOneWatch => '移除一次观看';
+
+  @override
   String get seriesActions => '剧集操作';
 
   @override
@@ -267,9 +270,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get markedWatched => '已标记为已看';
-
-  @override
-  String get removeOneWatch => '移除一次观看';
 
   @override
   String get recentlyAired => '最近播出';

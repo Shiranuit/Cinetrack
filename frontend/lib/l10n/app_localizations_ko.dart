@@ -257,6 +257,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get rewatchSeries => '시리즈 다시 보기 (+1)';
 
   @override
+  String get removeOneWatch => '시청 1회 삭제';
+
+  @override
   String get seriesActions => '시리즈 작업';
 
   @override
@@ -267,9 +270,6 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get markedWatched => '시청함으로 표시됨';
-
-  @override
-  String get removeOneWatch => '시청 1회 삭제';
 
   @override
   String get recentlyAired => '최근 방영';

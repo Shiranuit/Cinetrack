@@ -259,6 +259,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get rewatchSeries => 'Serie erneut ansehen (+1)';
 
   @override
+  String get removeOneWatch => 'Eine Ansicht entfernen';
+
+  @override
   String get seriesActions => 'Serienaktionen';
 
   @override
@@ -269,9 +272,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get markedWatched => 'Als gesehen markiert';
-
-  @override
-  String get removeOneWatch => 'Eine Ansicht entfernen';
 
   @override
   String get recentlyAired => 'Kürzlich ausgestrahlt';

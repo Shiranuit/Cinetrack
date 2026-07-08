@@ -157,6 +157,13 @@ pub struct SeasonWatchQuery {
     pub rewatch: Option<bool>,
 }
 
+#[derive(Deserialize)]
+pub struct SeasonUnwatchQuery {
+    /// When true, remove only the most recent watch of each episode (decrement the
+    /// ×N count by one) instead of clearing every watch to zero.
+    pub decrement: Option<bool>,
+}
+
 /// Mark a whole season watched. `?rewatch=true` bumps every episode's ×N count.
 pub async fn watch_season(
     AuthUser(user_id): AuthUser,
@@ -172,12 +179,19 @@ pub async fn watch_season(
     Ok(Json(json!({ "series_id": series_id, "season": season, "nb_episodes_seen": nb })))
 }
 
+/// Un-watch a whole season. `?decrement=true` removes only one watch per episode
+/// (the inverse of `?rewatch=true`) instead of clearing every watch.
 pub async fn unwatch_season(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
     Path((series_id, season)): Path<(i64, i32)>,
+    Query(q): Query<SeasonUnwatchQuery>,
 ) -> AppResult<Json<Value>> {
-    let nb = tracking::unwatch_season(&state, user_id, series_id, season).await?;
+    let nb = if q.decrement.unwrap_or(false) {
+        tracking::decrement_watch_season(&state, user_id, series_id, season).await?
+    } else {
+        tracking::unwatch_season(&state, user_id, series_id, season).await?
+    };
     Ok(Json(json!({ "series_id": series_id, "season": season, "nb_episodes_seen": nb })))
 }
 
@@ -196,11 +210,18 @@ pub async fn watch_series(
     Ok(Json(json!({ "series_id": series_id, "nb_episodes_seen": nb })))
 }
 
+/// Un-watch the whole series. `?decrement=true` removes only one watch per episode
+/// (the inverse of `?rewatch=true`) instead of clearing every watch.
 pub async fn unwatch_series(
     AuthUser(user_id): AuthUser,
     State(state): State<AppState>,
     Path(series_id): Path<i64>,
+    Query(q): Query<SeasonUnwatchQuery>,
 ) -> AppResult<Json<Value>> {
-    let nb = tracking::unwatch_series(&state, user_id, series_id).await?;
+    let nb = if q.decrement.unwrap_or(false) {
+        tracking::decrement_watch_series(&state, user_id, series_id).await?
+    } else {
+        tracking::unwatch_series(&state, user_id, series_id).await?
+    };
     Ok(Json(json!({ "series_id": series_id, "nb_episodes_seen": nb })))
 }

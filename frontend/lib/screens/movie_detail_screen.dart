@@ -149,8 +149,9 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       body: FutureBuilder<Series>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting)
+          if (snap.connectionState == ConnectionState.waiting) {
             return const LoadingView();
+          }
           if (snap.hasError) {
             return ErrorView(
               message: '${snap.error}',

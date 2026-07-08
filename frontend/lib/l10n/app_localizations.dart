@@ -604,6 +604,12 @@ abstract class AppLocalizations {
   /// **'Rewatch series (+1)'**
   String get rewatchSeries;
 
+  /// No description provided for @removeOneWatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove one watch'**
+  String get removeOneWatch;
+
   /// No description provided for @seriesActions.
   ///
   /// In en, this message translates to:
@@ -627,12 +633,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Marked watched'**
   String get markedWatched;
-
-  /// No description provided for @removeOneWatch.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove one watch'**
-  String get removeOneWatch;
 
   /// No description provided for @recentlyAired.
   ///

@@ -257,6 +257,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get rewatchSeries => 'シリーズを再視聴 (+1)';
 
   @override
+  String get removeOneWatch => '視聴を1回削除';
+
+  @override
   String get seriesActions => 'シリーズの操作';
 
   @override
@@ -267,9 +270,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get markedWatched => '視聴済みにしました';
-
-  @override
-  String get removeOneWatch => '視聴を1回削除';
 
   @override
   String get recentlyAired => '最近放送';

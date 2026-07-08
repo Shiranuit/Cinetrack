@@ -552,6 +552,26 @@ pub async fn unwatch_season(state: &AppState, user_id: Uuid, series_id: i64, sea
     recompute_progress(state, user_id, series_id).await
 }
 
+/// Decrement a whole season's watch counts by one: removes the single most recent
+/// watch event of EACH episode that has any (the inverse of [`rewatch_season`], so
+/// a ×N goes to ×(N-1) and a ×1 becomes unseen). Episodes with no watch are left
+/// untouched.
+pub async fn decrement_watch_season(state: &AppState, user_id: Uuid, series_id: i64, season: i32) -> AppResult<i32> {
+    sqlx::query(
+        "DELETE FROM app.watch_event WHERE id IN ( \
+           SELECT DISTINCT ON (episode_id) id FROM app.watch_event \
+           WHERE user_id = $1 AND episode_id IN \
+             (SELECT id FROM catalog.episode WHERE series_id = $2 AND season_number = $3) \
+           ORDER BY episode_id, watched_at DESC)",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .bind(season)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
 /// Mark EVERY not-yet-watched episode of a series (all seasons, incl. specials)
 /// as watched.
 pub async fn watch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
@@ -596,6 +616,23 @@ pub async fn rewatch_series(state: &AppState, user_id: Uuid, series_id: i64) -> 
 pub async fn unwatch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
     sqlx::query(
         "DELETE FROM app.watch_event WHERE user_id = $1 AND series_id = $2 AND entity_type = 'episode'",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
+/// Decrement a whole series' watch counts by one: removes the single most recent
+/// watch event of EACH episode that has any (the inverse of [`rewatch_series`]).
+/// Episodes with no watch are left untouched.
+pub async fn decrement_watch_series(state: &AppState, user_id: Uuid, series_id: i64) -> AppResult<i32> {
+    sqlx::query(
+        "DELETE FROM app.watch_event WHERE id IN ( \
+           SELECT DISTINCT ON (episode_id) id FROM app.watch_event \
+           WHERE user_id = $1 AND series_id = $2 AND entity_type = 'episode' AND episode_id IS NOT NULL \
+           ORDER BY episode_id, watched_at DESC)",
     )
     .bind(user_id)
     .bind(series_id)

@@ -149,8 +149,9 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       await _api.watch(episodeId);
       _refreshRel();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() => _counts[episodeId] = (_counts[episodeId] ?? 1) - 1);
+      }
     }
   }
 
@@ -173,6 +174,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           await _api.watchSeason(widget.seriesId, season);
         case 'rewatch':
           await _api.rewatchSeason(widget.seriesId, season);
+        case 'decrement':
+          await _api.decrementSeason(widget.seriesId, season);
         case 'unwatch':
           await _api.unwatchSeason(widget.seriesId, season);
       }
@@ -193,6 +196,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
           await _api.watchSeries(widget.seriesId);
         case 'rewatch':
           await _api.rewatchSeries(widget.seriesId);
+        case 'decrement':
+          await _api.decrementSeries(widget.seriesId);
         case 'unwatch':
           await _api.unwatchSeries(widget.seriesId);
       }
@@ -342,6 +347,16 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
                           leading: const Icon(Icons.replay_rounded),
                           title: Text(
                             AppLocalizations.of(context).rewatchSeries,
+                          ),
+                          dense: true,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'decrement',
+                        child: ListTile(
+                          leading: const Icon(Icons.exposure_minus_1_rounded),
+                          title: Text(
+                            AppLocalizations.of(context).removeOneWatch,
                           ),
                           dense: true,
                         ),
@@ -645,6 +660,16 @@ class _SeasonSectionState extends State<_SeasonSection> {
                             leading: const Icon(Icons.replay_rounded),
                             title: Text(
                               AppLocalizations.of(context).rewatchSeason,
+                            ),
+                            dense: true,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'decrement',
+                          child: ListTile(
+                            leading: const Icon(Icons.exposure_minus_1_rounded),
+                            title: Text(
+                              AppLocalizations.of(context).removeOneWatch,
                             ),
                             dense: true,
                           ),
@@ -956,14 +981,18 @@ class _DetailsSheet extends StatelessWidget {
     chips(t.themes, d.tags);
     chips(t.networks, d.networks);
     chips(t.studios, d.studios);
-    if (d.originalLanguage != null)
+    if (d.originalLanguage != null) {
       row(t.language, langName(context, d.originalLanguage!));
-    if (d.originalCountry != null)
+    }
+    if (d.originalCountry != null) {
       row(t.country, countryName(context, d.originalCountry!));
-    if ((d.runtime ?? 0) > 0)
+    }
+    if ((d.runtime ?? 0) > 0) {
       row(t.episodeLength, t.runtimeMinutes(d.runtime!));
-    if ((d.episodeCount ?? 0) > 0)
+    }
+    if ((d.episodeCount ?? 0) > 0) {
       row(t.episodes, t.episodesCount(d.episodeCount!));
+    }
     final aired = _airedRange(d.firstAired, d.lastAired);
     if (aired != null) row(t.aired, aired);
     chips(t.alsoKnownAs, d.aliases);

@@ -258,6 +258,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rewatchSeries => 'Rewatch series (+1)';
 
   @override
+  String get removeOneWatch => 'Remove one watch';
+
+  @override
   String get seriesActions => 'Series actions';
 
   @override
@@ -268,9 +271,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get markedWatched => 'Marked watched';
-
-  @override
-  String get removeOneWatch => 'Remove one watch';
 
   @override
   String get recentlyAired => 'Recently aired';
