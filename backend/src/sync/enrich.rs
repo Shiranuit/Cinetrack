@@ -16,6 +16,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::{
@@ -69,13 +70,21 @@ pub async fn run(state: &AppState, concurrency: usize) -> AppResult<EnrichSummar
     // barrier stalls), so we sustain ~THETVDB_MAX_RPS rather than being pinned to
     // batch_size / slowest-item.
     let counters = Arc::new(Counters::default());
+    // Serialize the (sub-millisecond) claim across workers. Every worker's claim is a
+    // `DELETE ... FOR UPDATE SKIP LOCKED` on the same tiny, hot queue table; running
+    // dozens of them at once just makes them fight over the same heap/index pages and
+    // the lock manager (each claim ballooned to ~600ms at concurrency 64). Taking
+    // turns for the quick claim removes that contention, and the slow part
+    // (enrich_one's network fetch) still runs fully in parallel.
+    let claim_lock = Arc::new(Mutex::new(()));
     let mut set = JoinSet::new();
     for _ in 0..concurrency.max(1) {
         let st = state.clone();
         let c = counters.clone();
+        let cl = claim_lock.clone();
         // Low priority so these background fetches yield to interactive ones.
         // (Each spawned task must set its own scope — task-locals don't cross spawn.)
-        set.spawn(with_priority(Priority::Low, async move { worker(st, c).await }));
+        set.spawn(with_priority(Priority::Low, async move { worker(st, c, cl).await }));
     }
     while let Some(joined) = set.join_next().await {
         joined.expect("enrich worker panicked")?;
@@ -100,9 +109,14 @@ pub async fn run(state: &AppState, concurrency: usize) -> AppResult<EnrichSummar
 /// empty. A worker exits only on an empty claim; while any worker is still
 /// looping it picks up items requeued by failures, so nothing is lost (and the
 /// heartbeat/`/updates` re-sweeps anything a late requeue leaves behind).
-async fn worker(state: AppState, counters: Arc<Counters>) -> AppResult<()> {
+async fn worker(state: AppState, counters: Arc<Counters>, claim_lock: Arc<Mutex<()>>) -> AppResult<()> {
     loop {
-        let items = queue::claim(&state, CLAIM_BATCH).await?;
+        // Hold the claim lock only for the brief dequeue, then release it before the
+        // slow per-item processing below so other workers can claim concurrently.
+        let items = {
+            let _guard = claim_lock.lock().await;
+            queue::claim(&state, CLAIM_BATCH).await?
+        };
         if items.is_empty() {
             break;
         }
