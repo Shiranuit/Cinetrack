@@ -6,6 +6,8 @@ import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../state/library_membership.dart';
+import '../state/selection.dart';
 import '../state/settings.dart';
 import '../widgets/artwork_gallery.dart';
 import '../widgets/badges.dart';
@@ -42,9 +44,19 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
   Future<void> _do(Future<MovieRelation> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);
+    final membership = context.read<LibraryMembership>();
     try {
       final r = await action();
       if (mounted) setState(() => _rel = r);
+      // If the movie now has any tracking it's in the library; reflect it in the
+      // overlay so its Discover card shows the marker without a reload.
+      if (r.watched ||
+          r.watchedCount > 0 ||
+          r.isFavorited ||
+          r.watchlist ||
+          r.rating != null) {
+        membership.add(SelKind.movie, widget.movieId);
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
     }
@@ -114,6 +126,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
   Future<void> _rate(int? rating) async {
     final api = context.read<ApiClient>();
+    final membership = context.read<LibraryMembership>();
     final prev = _rel;
     // Optimistic: show the new rating right away, roll back if the call fails.
     if (prev != null) {
@@ -131,6 +144,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     try {
       final r = await api.rateMovie(widget.movieId, rating);
       if (mounted) setState(() => _rel = r);
+      if (rating != null) membership.add(SelKind.movie, widget.movieId);
     } catch (e) {
       if (!mounted) return;
       setState(() => _rel = prev);
@@ -215,8 +229,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     );
   }
 
-  void _openArtworks() =>
-      openArtworkGallery(context, context.read<ApiClient>().movieArtworks(widget.movieId));
+  void _openArtworks() => openArtworkGallery(
+    context,
+    context.read<ApiClient>().movieArtworks(widget.movieId),
+  );
 
   Widget _hero(Series m) {
     final bg = Theme.of(context).scaffoldBackgroundColor;
@@ -226,7 +242,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
         fit: StackFit.expand,
         children: [
           // Tap the backdrop (or the poster below) to browse the movie's artworks.
-          GestureDetector(onTap: _openArtworks, child: NetImage(url: m.imageUrl)),
+          GestureDetector(
+            onTap: _openArtworks,
+            child: NetImage(url: m.imageUrl),
+          ),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -250,7 +269,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               children: [
                 SizedBox(
                   width: 120,
-                  child: GestureDetector(onTap: _openArtworks, child: Poster(url: m.imageUrl)),
+                  child: GestureDetector(
+                    onTap: _openArtworks,
+                    child: Poster(url: m.imageUrl),
+                  ),
                 ),
                 const SizedBox(width: Insets.lg),
                 Expanded(

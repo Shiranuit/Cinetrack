@@ -8,6 +8,7 @@ import '../api/filters.dart';
 import '../api/models.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../state/library_membership.dart';
 import '../state/selection.dart';
 import '../state/settings.dart';
 import '../widgets/bulk_action_bar.dart';
@@ -91,7 +92,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final api = context.read<ApiClient>();
     final langs = context.read<SettingsController>().langsParam;
     final lists = await Future.wait(
-        kinds.map((k) => api.filteredSearch(_f, type: k, langs: langs, offset: offset, limit: limit)));
+      kinds.map(
+        (k) => api.filteredSearch(
+          _f,
+          type: k,
+          langs: langs,
+          offset: offset,
+          limit: limit,
+        ),
+      ),
+    );
     return [for (final l in lists) ...l];
   }
 
@@ -110,128 +120,162 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    // Watch the session-local library overlay so cards flip to "In library" the
+    // instant a show is followed/watched, without reloading the grid (and losing
+    // scroll).
+    final membership = context.watch<LibraryMembership>();
     String typeLabel(String key) => switch (key) {
-          'series' => t.typeSeries,
-          'anime' => t.typeAnime,
-          'movie' => t.typeMovies,
-          _ => key,
-        };
+      'series' => t.typeSeries,
+      'anime' => t.typeAnime,
+      'movie' => t.typeMovies,
+      _ => key,
+    };
     return SelectionScope(
       controller: _selection,
       child: Column(
-      children: [
-        // Row 1: search bar + filter icon (same layout as the Library).
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (_) {
-                    setState(() {}); // refresh the clear button
-                    _onSearchChanged();
-                  },
-                  decoration: InputDecoration(
-                    hintText: t.searchAllShows,
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _searchCtrl.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close_rounded),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              _debounce?.cancel();
-                              if (_f.query.isNotEmpty) {
-                                _f.query = '';
-                                _reload();
-                              } else {
-                                setState(() {});
-                              }
-                            },
-                          ),
+        children: [
+          // Row 1: search bar + filter icon (same layout as the Library).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Insets.lg,
+              Insets.sm,
+              Insets.lg,
+              0,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) {
+                      setState(() {}); // refresh the clear button
+                      _onSearchChanged();
+                    },
+                    decoration: InputDecoration(
+                      hintText: t.searchAllShows,
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchCtrl.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                _debounce?.cancel();
+                                if (_f.query.isNotEmpty) {
+                                  _f.query = '';
+                                  _reload();
+                                } else {
+                                  setState(() {});
+                                }
+                              },
+                            ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: Insets.sm),
-              Badge(
-                isLabelVisible: _f.activeCount > 0,
-                label: Text('${_f.activeCount}'),
-                child: IconButton.filledTonal(
-                  tooltip: t.filters,
-                  icon: const Icon(Icons.tune_rounded),
-                  onPressed: _openFilters,
+                const SizedBox(width: Insets.sm),
+                Badge(
+                  isLabelVisible: _f.activeCount > 0,
+                  label: Text('${_f.activeCount}'),
+                  child: IconButton.filledTonal(
+                    tooltip: t.filters,
+                    icon: const Icon(Icons.tune_rounded),
+                    onPressed: _openFilters,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        // Row 2: type toggles (no layout toggle here — that's Library-only).
-        // Stretched to full width so it lines up with the Library's filter bar.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
-          child: Row(
-            children: [
-              Expanded(
-                child: SegmentedButton<String>(
-                  multiSelectionEnabled: true,
-                  emptySelectionAllowed: true,
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                  segments: [
-                    for (final e in _types.entries)
-                      ButtonSegment(
-                        value: e.key,
-                        label: Text(typeLabel(e.key), maxLines: 1, softWrap: false, overflow: TextOverflow.fade),
+          // Row 2: type toggles (no layout toggle here — that's Library-only).
+          // Stretched to full width so it lines up with the Library's filter bar.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Insets.lg,
+              Insets.sm,
+              Insets.lg,
+              Insets.sm,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SegmentedButton<String>(
+                    multiSelectionEnabled: true,
+                    emptySelectionAllowed: true,
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: [
+                      for (final e in _types.entries)
+                        ButtonSegment(
+                          value: e.key,
+                          label: Text(
+                            typeLabel(e.key),
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.fade,
+                          ),
+                        ),
+                    ],
+                    selected: _kinds,
+                    onSelectionChanged: (s) {
+                      setState(() => _kinds = s);
+                      _reload();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: InfiniteGrid(
+              resetKey: _reloadToken,
+              fetchPage: _pageFetch,
+              empty: MessageView(
+                icon: Icons.auto_awesome_rounded,
+                message: t.discoverEmpty,
+              ),
+              itemBuilder: (context, r) => ShowCard(
+                title: r.name ?? '—',
+                imageUrl: r.imageUrl,
+                subtitle: r.year?.toString(),
+                inLibrary: r.tvdbId == null
+                    ? r.inLibrary
+                    : membership.resolve(
+                        r.kind == 'movie' ? SelKind.movie : SelKind.series,
+                        r.tvdbId!,
+                        r.inLibrary,
                       ),
-                  ],
-                  selected: _kinds,
-                  onSelectionChanged: (s) {
-                    setState(() => _kinds = s);
-                    _reload();
-                  },
-                ),
+                selection: r.tvdbId == null
+                    ? null
+                    : SelItem(
+                        r.kind == 'movie' ? SelKind.movie : SelKind.series,
+                        r.tvdbId!,
+                        r.name ?? '',
+                      ),
+                onTap: r.tvdbId == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => r.kind == 'movie'
+                              ? MovieDetailScreen(movieId: r.tvdbId!)
+                              : ShowDetailScreen(seriesId: r.tvdbId!),
+                        ),
+                      ),
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: InfiniteGrid(
-            resetKey: _reloadToken,
-            fetchPage: _pageFetch,
-            empty: MessageView(
-              icon: Icons.auto_awesome_rounded,
-              message: t.discoverEmpty,
-            ),
-            itemBuilder: (context, r) => ShowCard(
-              title: r.name ?? '—',
-              imageUrl: r.imageUrl,
-              subtitle: r.year?.toString(),
-              inLibrary: r.inLibrary,
-              selection: r.tvdbId == null
-                  ? null
-                  : SelItem(r.kind == 'movie' ? SelKind.movie : SelKind.series, r.tvdbId!, r.name ?? ''),
-              onTap: r.tvdbId == null
-                  ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => r.kind == 'movie'
-                          ? MovieDetailScreen(movieId: r.tvdbId!)
-                          : ShowDetailScreen(seriesId: r.tvdbId!))),
             ),
           ),
-        ),
-        ListenableBuilder(
-          listenable: _selection,
-          builder: (_, _) => _selection.active
-              // No onChanged: a bulk action must NOT reset the grid (resetKey), or
-              // it reloads from page 1 and jumps to the top, losing scroll. The bar
-              // clears the selection itself; acted items refresh on the next
-              // pull-to-refresh. (Follow/watch-later just track the show.)
-              ? BulkActionBar(controller: _selection)
-              : const SizedBox.shrink(),
-        ),
-      ],
+          ListenableBuilder(
+            listenable: _selection,
+            builder: (_, _) => _selection.active
+                // No onChanged: a bulk action must NOT reset the grid (resetKey), or
+                // it reloads from page 1 and jumps to the top, losing scroll. The bar
+                // clears the selection itself; acted items refresh on the next
+                // pull-to-refresh. (Follow/watch-later just track the show.)
+                ? BulkActionBar(controller: _selection)
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }

@@ -16,6 +16,7 @@ import 'screens/login_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'screens/update_required_screen.dart';
 import 'state/auth.dart';
+import 'state/library_membership.dart';
 import 'state/settings.dart';
 import 'util/native_drag.dart';
 import 'widgets/android_install_banner.dart';
@@ -59,6 +60,10 @@ void main() {
         ChangeNotifierProvider<ApiClient>.value(value: api),
         ChangeNotifierProvider<AuthController>.value(value: auth),
         ChangeNotifierProvider<SettingsController>.value(value: settings),
+        // Session-local overlay so Discover reflects follows/watches instantly.
+        ChangeNotifierProvider<LibraryMembership>(
+          create: (_) => LibraryMembership(),
+        ),
       ],
       child: const CinetrackApp(),
     ),
@@ -158,7 +163,9 @@ class _RootViewState extends State<RootView> {
     return Consumer<AuthController>(
       builder: (context, auth, _) {
         if (auth.loading) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         // A forced update blocks everything (deep links included) until the user updates.
         if (auth.updateRequired) return const UpdateRequiredScreen();
@@ -168,7 +175,9 @@ class _RootViewState extends State<RootView> {
             onDone: () => setState(() => _resetToken = null),
           );
         }
-        return auth.isAuthed ? const AppShell() : LoginScreen(initialInvite: _inviteCode);
+        return auth.isAuthed
+            ? const AppShell()
+            : LoginScreen(initialInvite: _inviteCode);
       },
     );
   }

@@ -6,6 +6,8 @@ import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../state/library_membership.dart';
+import '../state/selection.dart';
 import '../state/settings.dart';
 import '../util/locale_labels.dart';
 import '../widgets/artwork_gallery.dart';
@@ -102,18 +104,29 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     if (mounted) setState(() => _rel = rel);
   }
 
+  // Every tracking action below upserts the show's library row, so each records it
+  // in [LibraryMembership] (captured before the await) so Discover reflects it
+  // without a reload. The membership overlay is add-only (the backend never drops
+  // the row on unfollow/unwatch), matching how in_library actually behaves.
+
   Future<void> _toggleFollow() async {
+    final membership = context.read<LibraryMembership>();
     await _api.setFollow(widget.seriesId, !(_rel?.isFollowed ?? false));
+    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
   }
 
   Future<void> _toggleFavorite() async {
+    final membership = context.read<LibraryMembership>();
     await _api.setFavorite(widget.seriesId, !(_rel?.isFavorited ?? false));
+    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
   }
 
   Future<void> _setStatus(String? status) async {
+    final membership = context.read<LibraryMembership>();
     await _api.setStatus(widget.seriesId, status);
+    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
   }
 
@@ -158,9 +171,11 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   }
 
   Future<void> _watch(int episodeId) async {
+    final membership = context.read<LibraryMembership>();
     setState(() => _counts[episodeId] = (_counts[episodeId] ?? 0) + 1);
     try {
       await _api.watch(episodeId);
+      membership.add(SelKind.series, widget.seriesId);
       _refreshRel();
     } catch (e) {
       if (mounted) {
@@ -182,6 +197,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   }
 
   Future<void> _seasonAction(int season, String action) async {
+    final membership = context.read<LibraryMembership>();
     try {
       switch (action) {
         case 'watch':
@@ -193,6 +209,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         case 'unwatch':
           await _api.unwatchSeason(widget.seriesId, season);
       }
+      membership.add(SelKind.series, widget.seriesId);
       final counts = await _api.seenCounts(widget.seriesId);
       if (mounted) setState(() => _counts = counts);
       _refreshRel();
@@ -204,6 +221,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
   /// Whole-series equivalent of [_seasonAction]: mark all watched / rewatch /
   /// unmark all, across every season.
   Future<void> _seriesAction(String action) async {
+    final membership = context.read<LibraryMembership>();
     try {
       switch (action) {
         case 'watch':
@@ -215,6 +233,7 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
         case 'unwatch':
           await _api.unwatchSeries(widget.seriesId);
       }
+      membership.add(SelKind.series, widget.seriesId);
       final counts = await _api.seenCounts(widget.seriesId);
       if (mounted) setState(() => _counts = counts);
       _refreshRel();
