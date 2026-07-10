@@ -12,6 +12,7 @@ import '../state/settings.dart';
 import '../util/locale_labels.dart';
 import '../widgets/artwork_gallery.dart';
 import '../widgets/badges.dart';
+import '../widgets/confirm_actions.dart';
 import '../widgets/episode_sheet.dart';
 import '../widgets/net_image.dart';
 import '../widgets/poster.dart';
@@ -172,6 +173,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
 
   Future<void> _watch(int episodeId) async {
     final membership = context.read<LibraryMembership>();
+    // A fresh watch (0 -> 1), as opposed to a rewatch, is what can leave a gap.
+    final wasSeen = (_counts[episodeId] ?? 0) > 0;
     setState(() => _counts[episodeId] = (_counts[episodeId] ?? 0) + 1);
     try {
       await _api.watch(episodeId);
@@ -181,6 +184,54 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       if (mounted) {
         setState(() => _counts[episodeId] = (_counts[episodeId] ?? 1) - 1);
       }
+      return;
+    }
+    if (!wasSeen && mounted) await _offerFillGap(episodeId);
+  }
+
+  /// After marking an episode watched for the first time, if earlier episodes of
+  /// the same season are still unseen, offer to mark those too (fill the gap).
+  Future<void> _offerFillGap(int episodeId) async {
+    Episode? ep;
+    for (final e in _episodes) {
+      if (e.id == episodeId) {
+        ep = e;
+        break;
+      }
+    }
+    final season = ep?.seasonNumber;
+    final number = ep?.number;
+    // Specials (season 0) and episodes without a number have no "previous" to fill.
+    if (season == null || season <= 0 || number == null) return;
+    final hasGap = _episodes.any((e) =>
+        e.seasonNumber == season && (e.number ?? 0) < number && (_counts[e.id] ?? 0) == 0);
+    if (!hasGap) return;
+
+    final t = AppLocalizations.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.markEarlierTitle),
+        content: Text(t.markEarlierBody),
+        // Shared side-by-side actions: "Mark them" (action) left, "Just this one"
+        // (dismiss) right — matching the app's other confirm dialogs.
+        actions: confirmActions(
+          ctx,
+          confirmLabel: t.markEarlierConfirm,
+          onConfirm: () => Navigator.pop(ctx, true),
+          cancelLabel: t.markEarlierDismiss,
+          onCancel: () => Navigator.pop(ctx, false),
+        ),
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    try {
+      await _api.watchSeasonUpTo(widget.seriesId, season, number);
+      final counts = await _api.seenCounts(widget.seriesId);
+      if (mounted) setState(() => _counts = counts);
+      _refreshRel();
+    } catch (_) {
+      // The single-episode watch already succeeded; ignore a fill failure.
     }
   }
 

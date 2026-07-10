@@ -281,6 +281,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get showOlder => '이전 항목 보기';
 
   @override
+  String get markEarlierTitle => '이전 에피소드도 표시할까요?';
+
+  @override
+  String get markEarlierBody => '이 시즌에 아직 시청 표시하지 않은 이전 에피소드가 있습니다. 함께 표시할까요?';
+
+  @override
+  String get markEarlierConfirm => '함께 표시';
+
+  @override
+  String get markEarlierDismiss => '이것만';
+
+  @override
   String get upcoming => '예정';
 
   @override

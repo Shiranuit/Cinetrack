@@ -652,6 +652,30 @@ abstract class AppLocalizations {
   /// **'Show older'**
   String get showOlder;
 
+  /// No description provided for @markEarlierTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark earlier episodes?'**
+  String get markEarlierTitle;
+
+  /// No description provided for @markEarlierBody.
+  ///
+  /// In en, this message translates to:
+  /// **'There are earlier episodes in this season you haven\'t marked as watched. Mark them too?'**
+  String get markEarlierBody;
+
+  /// No description provided for @markEarlierConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark them'**
+  String get markEarlierConfirm;
+
+  /// No description provided for @markEarlierDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Just this one'**
+  String get markEarlierDismiss;
+
   /// No description provided for @upcoming.
   ///
   /// In en, this message translates to:

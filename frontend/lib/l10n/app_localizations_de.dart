@@ -283,6 +283,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get showOlder => 'Ältere anzeigen';
 
   @override
+  String get markEarlierTitle => 'Frühere Folgen markieren?';
+
+  @override
+  String get markEarlierBody =>
+      'In dieser Staffel gibt es frühere Folgen, die du nicht als gesehen markiert hast. Auch markieren?';
+
+  @override
+  String get markEarlierConfirm => 'Markieren';
+
+  @override
+  String get markEarlierDismiss => 'Nur diese';
+
+  @override
   String get upcoming => 'Demnächst';
 
   @override

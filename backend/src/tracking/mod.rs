@@ -519,6 +519,36 @@ pub async fn watch_season(state: &AppState, user_id: Uuid, series_id: i64, seaso
     recompute_progress(state, user_id, series_id).await
 }
 
+/// Mark the UNSEEN episodes of a season up to (and including) `up_to` episode
+/// number watched. Used to fill a gap when a user marks a later episode while
+/// earlier ones are still unseen. Like [`watch_season`], it only touches episodes
+/// with no existing watch, so already-seen episodes keep their count.
+pub async fn watch_season_up_to(
+    state: &AppState,
+    user_id: Uuid,
+    series_id: i64,
+    season: i32,
+    up_to: i32,
+) -> AppResult<i32> {
+    sqlx::query(
+        "INSERT INTO app.watch_event \
+           (user_id, entity_type, series_id, episode_id, season_number, episode_number, runtime, \
+            is_rewatch, source_uuid, watched_at) \
+         SELECT $1, 'episode', $2, e.id, e.season_number, e.number, e.runtime, false, \
+                gen_random_uuid()::text, now() \
+         FROM catalog.episode e \
+         WHERE e.series_id = $2 AND e.season_number = $3 AND e.number <= $4 AND NOT e.deleted \
+           AND NOT EXISTS (SELECT 1 FROM app.watch_event we WHERE we.user_id = $1 AND we.episode_id = e.id)",
+    )
+    .bind(user_id)
+    .bind(series_id)
+    .bind(season)
+    .bind(up_to)
+    .execute(&state.db)
+    .await?;
+    recompute_progress(state, user_id, series_id).await
+}
+
 /// Rewatch a whole season: adds one watch event for EVERY episode (increments
 /// each episode's ×N count by one, regardless of prior state).
 pub async fn rewatch_season(state: &AppState, user_id: Uuid, series_id: i64, season: i32) -> AppResult<i32> {

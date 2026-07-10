@@ -387,6 +387,11 @@ class ApiClient extends ChangeNotifier {
   Future<void> watchSeason(int seriesId, int season) =>
       _send('POST', '/api/series/$seriesId/seasons/$season/watch');
 
+  /// Mark the unseen episodes of the season up to (and including) [upToNumber]
+  /// watched — fills a gap left before a just-watched later episode.
+  Future<void> watchSeasonUpTo(int seriesId, int season, int upToNumber) =>
+      _send('POST', '/api/series/$seriesId/seasons/$season/watch?up_to=$upToNumber');
+
   /// Add a watch to every episode of the season (increment each ×N).
   Future<void> rewatchSeason(int seriesId, int season) =>
       _send('POST', '/api/series/$seriesId/seasons/$season/watch?rewatch=true');

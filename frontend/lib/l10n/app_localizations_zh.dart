@@ -281,6 +281,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get showOlder => '显示更早';
 
   @override
+  String get markEarlierTitle => '标记之前的剧集？';
+
+  @override
+  String get markEarlierBody => '本季还有之前未标记为已看的剧集。要一并标记吗？';
+
+  @override
+  String get markEarlierConfirm => '一并标记';
+
+  @override
+  String get markEarlierDismiss => '仅此集';
+
+  @override
   String get upcoming => '即将播出';
 
   @override

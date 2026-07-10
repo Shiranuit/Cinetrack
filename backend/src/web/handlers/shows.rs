@@ -155,6 +155,9 @@ pub async fn library(
 pub struct SeasonWatchQuery {
     /// When true, add a watch to EVERY episode (rewatch) instead of only unseen ones.
     pub rewatch: Option<bool>,
+    /// When set, only mark the UNSEEN episodes up to (and including) this episode
+    /// number — used to fill a gap left before a just-watched later episode.
+    pub up_to: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +176,8 @@ pub async fn watch_season(
 ) -> AppResult<Json<Value>> {
     let nb = if q.rewatch.unwrap_or(false) {
         tracking::rewatch_season(&state, user_id, series_id, season).await?
+    } else if let Some(up_to) = q.up_to {
+        tracking::watch_season_up_to(&state, user_id, series_id, season, up_to).await?
     } else {
         tracking::watch_season(&state, user_id, series_id, season).await?
     };
