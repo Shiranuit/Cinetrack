@@ -61,8 +61,9 @@ class _BulkActionBarState extends State<BulkActionBar> {
 
   Future<void> _act(
     bool Function(SelItem) applies,
-    Future<void> Function(ApiClient, SelItem) op,
-  ) async {
+    Future<void> Function(ApiClient, SelItem) op, {
+    bool removes = false,
+  }) async {
     if (_busy) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -71,11 +72,14 @@ class _BulkActionBarState extends State<BulkActionBar> {
     setState(() => _busy = true);
     try {
       final n = await _run(items, op);
-      // Every bulk action here creates the tracking row (follow / watch / status /
-      // favorite), so mark the acted items in library right away — Discover cards
-      // pick up the pill + border without a reload.
+      // Reflect the change in the session overlay so Discover cards update without a
+      // reload: most actions add the acted items to the library; unfollow removes.
       for (final it in items) {
-        membership.add(it.kind, it.id);
+        if (removes) {
+          membership.remove(it.kind, it.id);
+        } else {
+          membership.add(it.kind, it.id);
+        }
       }
       widget.controller.clear();
       messenger.showSnackBar(SnackBar(content: Text(t.bulkUpdated(n))));
@@ -153,6 +157,7 @@ class _BulkActionBarState extends State<BulkActionBar> {
                             () => _act(
                               _isSeries,
                               (api, it) => api.setFollow(it.id, false),
+                              removes: true,
                             ),
                           )
                         else

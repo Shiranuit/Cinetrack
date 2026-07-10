@@ -105,30 +105,43 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     if (mounted) setState(() => _rel = rel);
   }
 
-  // Every tracking action below upserts the show's library row, so each records it
-  // in [LibraryMembership] (captured before the await) so Discover reflects it
-  // without a reload. The membership overlay is add-only (the backend never drops
-  // the row on unfollow/unwatch), matching how in_library actually behaves.
+  // Every tracking action below can change the show's library membership (following
+  // adds it; unfollowing a show with nothing else set removes it), so each syncs
+  // [LibraryMembership] from the refreshed relation afterwards, so Discover reflects
+  // the add OR remove without a reload.
 
   Future<void> _toggleFollow() async {
     final membership = context.read<LibraryMembership>();
     await _api.setFollow(widget.seriesId, !(_rel?.isFollowed ?? false));
-    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
+    _applyMembership(membership);
   }
 
   Future<void> _toggleFavorite() async {
     final membership = context.read<LibraryMembership>();
     await _api.setFavorite(widget.seriesId, !(_rel?.isFavorited ?? false));
-    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
+    _applyMembership(membership);
   }
 
   Future<void> _setStatus(String? status) async {
     final membership = context.read<LibraryMembership>();
     await _api.setStatus(widget.seriesId, status);
-    membership.add(SelKind.series, widget.seriesId);
     await _refreshRel();
+    _applyMembership(membership);
+  }
+
+  /// Sync the session membership overlay from the freshly-loaded relation, so
+  /// Discover reflects an add or a remove. Membership matches the Library's rule:
+  /// followed, favorited, archived, or has a status.
+  void _applyMembership(LibraryMembership membership) {
+    final r = _rel;
+    final inLibrary = r != null && (r.isFollowed || r.isFavorited || r.archived || r.status != null);
+    if (inLibrary) {
+      membership.add(SelKind.series, widget.seriesId);
+    } else {
+      membership.remove(SelKind.series, widget.seriesId);
+    }
   }
 
   Future<void> _rate(int? rating) async {
@@ -178,8 +191,8 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
     setState(() => _counts[episodeId] = (_counts[episodeId] ?? 0) + 1);
     try {
       await _api.watch(episodeId);
-      membership.add(SelKind.series, widget.seriesId);
-      _refreshRel();
+      await _refreshRel();
+      _applyMembership(membership);
     } catch (e) {
       if (mounted) {
         setState(() => _counts[episodeId] = (_counts[episodeId] ?? 1) - 1);

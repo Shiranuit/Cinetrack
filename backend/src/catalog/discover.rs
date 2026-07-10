@@ -77,6 +77,23 @@ pub struct Filters {
     pub favorites_only: bool,
 }
 
+/// "In the library" predicate for a `user_show` alias. A show counts as tracked
+/// when it is followed, favorited, archived, or has a status, and is not a dead-id
+/// placeholder. MUST match the `lib` CTE in `tracking::library`, so Discover's "in
+/// library" marker is exactly what the Library actually holds — an unfollowed row
+/// (kept around, all flags cleared) is NOT in the library.
+fn show_membership_sql(alias: &str) -> String {
+    format!(
+        "NOT {alias}.unavailable AND ({alias}.is_followed OR {alias}.is_favorited OR {alias}.archived OR {alias}.status IS NOT NULL)"
+    )
+}
+
+/// Movie equivalent: tracked when watched, favorited, or watchlisted (matches
+/// `tracking::movies::list`).
+fn movie_membership_sql(alias: &str) -> String {
+    format!("({alias}.watched OR {alias}.is_favorited OR {alias}.watchlist)")
+}
+
 pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppResult<Vec<SearchResult>> {
     let is_movie = f.kind == "movie";
     let is_anime = f.kind == "anime";
@@ -96,12 +113,12 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         Some(viewer) if is_movie => {
             qb.push(", EXISTS (SELECT 1 FROM app.user_movie um WHERE um.movie_id = x.id AND um.user_id = ");
             qb.push_bind(viewer);
-            qb.push(") AS in_library");
+            qb.push(format!(" AND {}) AS in_library", movie_membership_sql("um")));
         }
         Some(viewer) => {
             qb.push(", EXISTS (SELECT 1 FROM app.user_show us WHERE us.series_id = x.id AND us.user_id = ");
             qb.push_bind(viewer);
-            qb.push(" AND NOT us.unavailable) AS in_library");
+            qb.push(format!(" AND {}) AS in_library", show_membership_sql("us")));
         }
         None => {
             qb.push(", false AS in_library");
@@ -154,11 +171,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         if is_movie {
             qb.push(" AND NOT EXISTS (SELECT 1 FROM app.user_movie ux WHERE ux.user_id = ");
             qb.push_bind(uid);
-            qb.push(" AND ux.movie_id = x.id)");
+            qb.push(format!(" AND ux.movie_id = x.id AND {})", movie_membership_sql("ux")));
         } else {
             qb.push(" AND NOT EXISTS (SELECT 1 FROM app.user_show ux WHERE ux.user_id = ");
             qb.push_bind(uid);
-            qb.push(" AND ux.series_id = x.id AND NOT ux.unavailable)");
+            qb.push(format!(" AND ux.series_id = x.id AND {})", show_membership_sql("ux")));
         }
     }
 
