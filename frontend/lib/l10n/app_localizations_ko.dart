@@ -36,6 +36,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get searchYourShows => '내 작품 검색';
 
   @override
+  String get searchThisLibrary => '이 라이브러리 검색';
+
+  @override
   String get searchAllShows => '모든 작품 검색';
 
   @override

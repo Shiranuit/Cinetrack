@@ -182,7 +182,7 @@ async fn calendar_enriches_upcoming_episode() {
     common::insert_episode_in_days(&state.db, 2002, 200, 4, 13, 12, "The One After").await;
     common::insert_episode_in_days(&state.db, 2003, 200, 4, 14, 200, "Far Future").await;
 
-    let cal = tracking::calendar(&state, common::uid(1), &langs()).await.unwrap();
+    let cal = tracking::calendar(&state, common::uid(1), &langs(), None).await.unwrap();
     assert_eq!(cal.upcoming.len(), 2, "both in-window episodes, not the 200-day-out one");
     let it = &cal.upcoming[0]; // soonest first
     assert_eq!(it.series_id, 200);
@@ -317,4 +317,53 @@ async fn delete_account_removes_everything() {
     // Catalog (shared cache) is untouched by an account deletion.
     let series: i64 = sqlx::query_scalar("SELECT count(*) FROM catalog.series WHERE id=300").fetch_one(&state.db).await.unwrap();
     assert_eq!(series, 1);
+}
+
+/// Another user's library/shows are only reachable when the profile is public,
+/// the viewer is an ACCEPTED follower, or it's your own — a pending request is not
+/// enough. Guards the privacy gate that every `/api/users/:id/...` content
+/// endpoint (library, shows, movies, stats, filter) relies on.
+#[tokio::test]
+async fn other_user_library_privacy_gate() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+
+    let viewer = common::uid(1);
+    let owner = common::uid(2);
+    common::insert_user(&state.db, 1, "viewer@test.local").await;
+    common::insert_user(&state.db, 2, "owner@test.local").await;
+    // Owner is private and tracks one show.
+    sqlx::query("UPDATE app.users SET is_private = true WHERE id = $1").bind(owner).execute(&state.db).await.unwrap();
+    common::insert_series(&state.db, 100, "OwnersShow", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 2, 100, true, false).await;
+
+    let langs = langs();
+    let lib_total = |lib: &tracking::Library| {
+        lib.watching.len() + lib.not_started.len() + lib.up_to_date.len() + lib.stale.len() + lib.for_later.len() + lib.stopped.len()
+    };
+
+    // Private + no relationship: invisible, and the content endpoints return empty.
+    assert!(!tracking::profile_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(lib_total(&tracking::user_library(&state, viewer, owner, &langs).await.unwrap()), 0, "private library must be hidden");
+    assert!(tracking::user_shows(&state, viewer, owner, &langs).await.unwrap().is_empty());
+
+    // A PENDING follow request does NOT grant access.
+    sqlx::query("INSERT INTO app.user_follow (follower_id, followee_id, status) VALUES ($1,$2,'pending')")
+        .bind(viewer).bind(owner).execute(&state.db).await.unwrap();
+    assert!(!tracking::profile_visible(&state, viewer, owner).await.unwrap(), "a pending request must not grant access");
+
+    // Accepted follow grants access.
+    sqlx::query("UPDATE app.user_follow SET status='accepted' WHERE follower_id=$1 AND followee_id=$2")
+        .bind(viewer).bind(owner).execute(&state.db).await.unwrap();
+    assert!(tracking::profile_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(lib_total(&tracking::user_library(&state, viewer, owner, &langs).await.unwrap()), 1, "accepted follower sees the owner's show");
+
+    // Public profile is visible to anyone, even with no follow at all.
+    sqlx::query("DELETE FROM app.user_follow WHERE follower_id=$1 AND followee_id=$2").bind(viewer).bind(owner).execute(&state.db).await.unwrap();
+    sqlx::query("UPDATE app.users SET is_private = false WHERE id = $1").bind(owner).execute(&state.db).await.unwrap();
+    assert!(tracking::profile_visible(&state, viewer, owner).await.unwrap(), "a public profile is visible to anyone");
+
+    // Your own profile is always visible.
+    assert!(tracking::profile_visible(&state, owner, owner).await.unwrap());
 }

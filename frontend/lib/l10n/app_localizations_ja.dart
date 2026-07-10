@@ -36,6 +36,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get searchYourShows => '自分の作品を検索';
 
   @override
+  String get searchThisLibrary => 'このライブラリを検索';
+
+  @override
   String get searchAllShows => 'すべての作品を検索';
 
   @override

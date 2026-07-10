@@ -36,6 +36,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchYourShows => '搜索你的作品';
 
   @override
+  String get searchThisLibrary => '搜索此库';
+
+  @override
   String get searchAllShows => '搜索所有剧集和电影';
 
   @override

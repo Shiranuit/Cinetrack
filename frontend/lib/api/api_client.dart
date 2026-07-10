@@ -361,8 +361,9 @@ class ApiClient extends ChangeNotifier {
       _list(await _get('/api/users/$id/shows', {'langs': ?langs}), UserShow.fromJson);
   Future<Library> userLibrary(String id, {String? langs}) async =>
       Library.fromJson(await _get('/api/users/$id/library', {'langs': ?langs}));
-  Future<List<SearchResult>> userFilteredShows(String id, AdvancedFilters f, {String? langs}) async =>
-      _list(await _get('/api/users/$id/filter', {...f.toQuery(), 'limit': '200', 'langs': ?langs}), SearchResult.fromJson);
+  Future<List<SearchResult>> userFilteredShows(String id, AdvancedFilters f, {String? langs, String? type}) async =>
+      _list(await _get('/api/users/$id/filter', {...f.toQuery(), 'type': ?type, 'limit': '200', 'langs': ?langs}),
+          SearchResult.fromJson);
   Future<List<LibraryMovie>> userMovies(String id, {String? langs}) async =>
       _list(await _get('/api/users/$id/movies', {'langs': ?langs}), LibraryMovie.fromJson);
   Future<List<UserBrief>> followRequests() async =>

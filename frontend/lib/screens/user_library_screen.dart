@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,17 +19,18 @@ import '../widgets/states.dart';
 import 'movie_detail_screen.dart';
 import 'show_detail_screen.dart';
 
-enum _Tab { series, movies, all }
+enum _Kind { series, anime, movies }
 
-/// A friend's library — categorized rails (Watching / Up to date / …) with
-/// progress, plus a Series/Movies/All selector and advanced Filter/Sort to
-/// search inside their shows. Read-only; privacy-gated on the backend.
+/// A friend's library — mirrors your own Library: a search bar that searches
+/// inside THEIR shows (composed with the advanced Filter/Sort), a multi-select
+/// Series/Anime/Movies toggle, and the tracked rails with their ratings/favorites.
+/// Read-only; privacy-gated on the backend.
 class UserLibraryScreen extends StatefulWidget {
   const UserLibraryScreen({super.key, required this.userId, required this.title, this.startOnMovies = false});
   final String userId;
   final String title;
 
-  /// Open directly on the Movies tab (e.g. from a profile's "Movies → See all").
+  /// Open showing only Movies (e.g. from a profile's "Movies → See all").
   final bool startOnMovies;
   @override
   State<UserLibraryScreen> createState() => _UserLibraryScreenState();
@@ -38,10 +41,16 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
   // backend resolves "my_rating" to the browsed user when viewing their library).
   final _f = AdvancedFilters(defaultSort: 'my_rating')..type = 'series';
   FilterOptions _options = const FilterOptions();
-  late _Tab _tab = widget.startOnMovies ? _Tab.movies : _Tab.series;
+  // Type toggles, multi-select and combinable (all on by default).
+  late Set<_Kind> _kinds = widget.startOnMovies ? {_Kind.movies} : {_Kind.series, _Kind.anime, _Kind.movies};
+
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  int _filterToken = 0; // bumped to re-key the filtered grid
 
   late Future<Library> _libFuture;
   late Future<List<LibraryMovie>> _moviesFuture;
+  // Non-null only while a search/filter is active (the flat filtered view).
   Future<List<SearchResult>>? _filteredFuture;
 
   String get _langs => context.read<SettingsController>().langsParam;
@@ -53,9 +62,71 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
     final api = context.read<ApiClient>();
     _libFuture = api.userLibrary(widget.userId, langs: _langs);
     _moviesFuture = api.userMovies(widget.userId, langs: _langs);
+    _searchCtrl.addListener(_onSearchChanged);
     api.filterOptions().then((o) {
       if (mounted) setState(() => _options = o);
     }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Backend kinds for the current toggles. "series" already includes anime, so
+  /// "anime" is only queried separately when "series" is off.
+  List<String> _backendKinds() {
+    final k = <String>[];
+    if (_kinds.contains(_Kind.series)) {
+      k.add('series');
+    } else if (_kinds.contains(_Kind.anime)) {
+      k.add('anime');
+    }
+    if (_kinds.contains(_Kind.movies)) k.add('movie');
+    return k;
+  }
+
+  void _recomputeFiltered() {
+    _filteredFuture = _filtering ? _fetchFiltered() : null;
+  }
+
+  /// Fan out the current search/filter over the selected kinds (series and/or
+  /// movies) inside THIS user's library, and merge.
+  Future<List<SearchResult>> _fetchFiltered() async {
+    final kinds = _backendKinds();
+    if (kinds.isEmpty) return [];
+    final api = context.read<ApiClient>();
+    final lists =
+        await Future.wait(kinds.map((k) => api.userFilteredShows(widget.userId, _f, type: k, langs: _langs)));
+    return [for (final l in lists) ...l];
+  }
+
+  // Search inside their library by name; writes the query into `_f` (so it
+  // composes with the filter) and re-runs the flat filtered view.
+  void _onSearchChanged() {
+    final q = _searchCtrl.text.trim();
+    setState(() {}); // refresh the clear button
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || q == _f.query) return;
+      setState(() {
+        _f.query = q;
+        _filterToken++;
+        _recomputeFiltered();
+      });
+    });
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    _debounce?.cancel();
+    setState(() {
+      _f.query = '';
+      _filterToken++;
+      _recomputeFiltered();
+    });
   }
 
   Future<void> _openFilters() async {
@@ -66,77 +137,126 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
       builder: (_) => FilterSheet(filters: _f, options: _options, showFavorites: true, othersLibrary: true),
     );
     setState(() {
-      _filteredFuture = _filtering
-          ? context.read<ApiClient>().userFilteredShows(widget.userId, _f, langs: _langs)
-          : null;
+      _filterToken++;
+      _recomputeFiltered();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SegmentedButton<_Tab>(
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                    segments: [
-                      ButtonSegment(
-                          value: _Tab.series,
-                          label: Text(t.typeSeries, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
-                      ButtonSegment(
-                          value: _Tab.movies,
-                          label: Text(t.typeMovies, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
-                      ButtonSegment(
-                          value: _Tab.all,
-                          label: Text(t.typeAll, maxLines: 1, softWrap: false, overflow: TextOverflow.fade)),
-                    ],
-                    selected: {_tab},
-                    onSelectionChanged: (s) => setState(() => _tab = s.first),
-                  ),
-                ),
-                const SizedBox(width: Insets.sm),
-                Badge(
-                  isLabelVisible: _f.activeCount > 0,
-                  label: Text('${_f.activeCount}'),
-                  child: IconButton(
-                    tooltip: t.filterAndSort,
-                    icon: const Icon(Icons.tune_rounded),
-                    onPressed: _openFilters,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(child: _body()),
+          _searchBar(),
+          _filterBar(),
+          Expanded(child: _filtering ? _filteredGrid() : _categorized()),
         ],
       ),
     );
   }
 
-  Widget _body() {
-    if (_tab == _Tab.movies) return _moviesGrid();
-    if (_filtering) return _filteredGrid();
-    if (_tab == _Tab.all) return _all();
-    return _categorized();
+  // Row 1: search bar + Filter/Sort icon (same layout as your own Library).
+  Widget _searchBar() {
+    final t = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: t.searchThisLibrary,
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchCtrl.text.isEmpty
+                    ? null
+                    : IconButton(icon: const Icon(Icons.close_rounded), onPressed: _clearSearch),
+              ),
+            ),
+          ),
+          const SizedBox(width: Insets.sm),
+          Badge(
+            isLabelVisible: _f.activeCount > 0,
+            label: Text('${_f.activeCount}'),
+            child: IconButton.filledTonal(
+              tooltip: t.filterAndSort,
+              icon: const Icon(Icons.tune_rounded),
+              onPressed: _openFilters,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  /// The series categories as horizontal rails (Watching / Up to date / …).
-  List<Widget> _seriesRails(Library lib, AppLocalizations t) {
+  // Row 2: multi-select Series/Anime/Movies toggle.
+  Widget _filterBar() {
+    final t = AppLocalizations.of(context);
+    Widget lbl(String s) => Text(s, maxLines: 1, softWrap: false, overflow: TextOverflow.fade);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
+      child: SegmentedButton<_Kind>(
+        multiSelectionEnabled: true,
+        emptySelectionAllowed: true,
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        segments: [
+          ButtonSegment(value: _Kind.series, label: lbl(t.typeSeries)),
+          ButtonSegment(value: _Kind.anime, label: lbl(t.typeAnime)),
+          ButtonSegment(value: _Kind.movies, label: lbl(t.typeMovies)),
+        ],
+        selected: _kinds,
+        onSelectionChanged: (s) => setState(() {
+          _kinds = s;
+          _filterToken++;
+          _recomputeFiltered();
+        }),
+      ),
+    );
+  }
+
+  /// The categorized view: series category rails (filtered to the selected kinds)
+  /// plus a Movies rail, in one scroll — mirrors your own Library.
+  Widget _categorized() {
+    final t = AppLocalizations.of(context);
+    final wantSeries = _kinds.contains(_Kind.series);
+    final wantAnime = _kinds.contains(_Kind.anime);
+    final wantMovies = _kinds.contains(_Kind.movies);
+    if (_kinds.isEmpty) {
+      return MessageView(icon: Icons.filter_list_rounded, message: t.libSelectKinds);
+    }
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([_libFuture, _moviesFuture]),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
+        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () => setState(() {}));
+        final lib = snap.data![0] as Library;
+        final movies = snap.data![1] as List<LibraryMovie>;
+        // Keep a show if it's anime and Anime is on, or non-anime and Series is on.
+        List<LibraryShow> pick(List<LibraryShow> l) =>
+            l.where((s) => (wantAnime && s.isAnime) || (wantSeries && !s.isAnime)).toList();
+        final children = <Widget>[
+          ..._seriesRails(lib, t, pick),
+          if (wantMovies && movies.isNotEmpty) _moviesRailFor(movies, t),
+        ];
+        if (children.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
+        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: children);
+      },
+    );
+  }
+
+  /// The series categories as horizontal rails (Watching / Up to date / …),
+  /// filtered to the selected kinds via [pick].
+  List<Widget> _seriesRails(Library lib, AppLocalizations t, List<LibraryShow> Function(List<LibraryShow>) pick) {
     final cats = <(String, IconData, Color, List<LibraryShow>)>[
-      (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, lib.watching),
-      (t.catStale, Icons.history_rounded, context.colors.warning, lib.stale),
-      (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, lib.notStarted),
-      (t.watchLater, Icons.schedule_rounded, context.scheme.tertiary, lib.forLater),
-      (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, lib.upToDate),
-      (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, lib.stopped),
+      (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, pick(lib.watching)),
+      (t.catStale, Icons.history_rounded, context.colors.warning, pick(lib.stale)),
+      (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, pick(lib.notStarted)),
+      (t.watchLater, Icons.schedule_rounded, context.scheme.tertiary, pick(lib.forLater)),
+      (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, pick(lib.upToDate)),
+      (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, pick(lib.stopped)),
     ].where((e) => e.$4.isNotEmpty).toList();
     return [
       for (final (title, icon, accent, shows) in cats)
@@ -160,7 +280,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
     ];
   }
 
-  /// A single rail of tracked movies (used inside the combined "All" tab).
+  /// A single rail of tracked movies (shown inside the categorized view).
   Widget _moviesRailFor(List<LibraryMovie> movies, AppLocalizations t) => PosterRail(
         title: t.typeMovies,
         icon: Icons.theaters_rounded,
@@ -179,51 +299,17 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         },
       );
 
-  Widget _categorized() {
-    return FutureBuilder<Library>(
-      future: _libFuture,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
-        final t = AppLocalizations.of(context);
-        final rails = _seriesRails(snap.data!, t);
-        if (rails.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
-        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: rails);
-      },
-    );
-  }
-
-  /// The "All" tab: series category rails plus a Movies rail, in one scroll —
-  /// mirrors the main Library, which shows series and movies together.
-  Widget _all() {
-    return FutureBuilder<List<dynamic>>(
-      future: Future.wait([_libFuture, _moviesFuture]),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
-        final t = AppLocalizations.of(context);
-        final lib = snap.data![0] as Library;
-        final movies = snap.data![1] as List<LibraryMovie>;
-        final children = <Widget>[
-          ..._seriesRails(lib, t),
-          if (movies.isNotEmpty) _moviesRailFor(movies, t),
-        ];
-        if (children.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libEmpty);
-        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: children);
-      },
-    );
-  }
-
+  /// The flat filtered/searched view (shown while a search or filter is active).
   Widget _filteredGrid() {
     return FutureBuilder<List<SearchResult>>(
       future: _filteredFuture,
+      key: ValueKey(_filterToken),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: _openFilters);
+        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () => setState(_recomputeFiltered));
         final items = snap.data ?? [];
         if (items.isEmpty) {
-          return MessageView(
-              icon: Icons.filter_alt_off_rounded, message: AppLocalizations.of(context).filterNoMatch);
+          return MessageView(icon: Icons.search_off_rounded, message: AppLocalizations.of(context).filterNoMatch);
         }
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
@@ -237,39 +323,12 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
               subtitle: r.year?.toString(),
               rating: r.rating,
               favorite: r.isFavorited,
-              onTap: r.tvdbId == null ? null : () => _openShow(r.tvdbId!),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _moviesGrid() {
-    return FutureBuilder<List<LibraryMovie>>(
-      future: _moviesFuture,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) return const LoadingView();
-        if (snap.hasError) return ErrorView(message: '${snap.error}', onRetry: () {});
-        final movies = snap.data ?? [];
-        final t = AppLocalizations.of(context);
-        if (movies.isEmpty) {
-          return MessageView(
-              icon: Icons.theaters_rounded, message: t.noTrackedMovies);
-        }
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.xxl),
-          gridDelegate: posterGridDelegate(context),
-          itemCount: movies.length,
-          itemBuilder: (context, i) {
-            final m = movies[i];
-            return ShowCard(
-              title: m.name ?? t.movieFallback(m.movieId),
-              imageUrl: m.imageUrl,
-              subtitle: m.year?.toString(),
-              favorite: m.isFavorited,
-              rating: m.rating,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
+              onTap: r.tvdbId == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => r.kind == 'movie'
+                          ? MovieDetailScreen(movieId: r.tvdbId!)
+                          : ShowDetailScreen(seriesId: r.tvdbId!))),
             );
           },
         );

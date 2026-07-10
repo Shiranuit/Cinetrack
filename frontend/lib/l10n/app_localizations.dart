@@ -166,6 +166,12 @@ abstract class AppLocalizations {
   /// **'Search your shows'**
   String get searchYourShows;
 
+  /// No description provided for @searchThisLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this library'**
+  String get searchThisLibrary;
+
   /// No description provided for @searchAllShows.
   ///
   /// In en, this message translates to:
