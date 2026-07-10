@@ -895,6 +895,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get sortMyRating => '내 평가';
 
   @override
+  String get sortOwnerRating => '이 사용자의 평점';
+
+  @override
   String get sortAscending => '오름차순';
 
   @override

@@ -470,6 +470,7 @@
   "@updateOpenToInstall": {},
   "sortMyRating": "Your rating",
   "@sortMyRating": {},
+  "sortOwnerRating": "Their rating",
   "sortAscending": "Ascending",
   "@sortAscending": {},
   "sortDescending": "Descending",

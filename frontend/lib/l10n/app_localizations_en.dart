@@ -910,6 +910,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortMyRating => 'Your rating';
 
   @override
+  String get sortOwnerRating => 'Their rating';
+
+  @override
   String get sortAscending => 'Ascending';
 
   @override

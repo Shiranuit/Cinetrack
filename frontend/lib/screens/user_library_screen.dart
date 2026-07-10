@@ -34,7 +34,9 @@ class UserLibraryScreen extends StatefulWidget {
 }
 
 class _UserLibraryScreenState extends State<UserLibraryScreen> {
-  final _f = AdvancedFilters()..type = 'series';
+  // Default to the OWNER's rating so their library reads as their ranking (the
+  // backend resolves "my_rating" to the browsed user when viewing their library).
+  final _f = AdvancedFilters(defaultSort: 'my_rating')..type = 'series';
   FilterOptions _options = const FilterOptions();
   late _Tab _tab = widget.startOnMovies ? _Tab.movies : _Tab.series;
 
@@ -61,7 +63,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => FilterSheet(filters: _f, options: _options, showFavorites: true),
+      builder: (_) => FilterSheet(filters: _f, options: _options, showFavorites: true, othersLibrary: true),
     );
     setState(() {
       _filteredFuture = _filtering
@@ -149,6 +151,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
               title: s.name ?? t.seriesFallback(s.seriesId),
               imageUrl: s.imageUrl,
               favorite: s.isFavorited,
+              rating: s.rating,
               progress: s.progress,
               onTap: () => _openShow(s.seriesId),
             );
@@ -170,6 +173,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
             imageUrl: m.imageUrl,
             subtitle: m.year?.toString(),
             favorite: m.isFavorited,
+            rating: m.rating,
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
           );
         },
@@ -231,6 +235,8 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
               title: r.name ?? '—',
               imageUrl: r.imageUrl,
               subtitle: r.year?.toString(),
+              rating: r.rating,
+              favorite: r.isFavorited,
               onTap: r.tvdbId == null ? null : () => _openShow(r.tvdbId!),
             );
           },
@@ -262,6 +268,7 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
               imageUrl: m.imageUrl,
               subtitle: m.year?.toString(),
               favorite: m.isFavorited,
+              rating: m.rating,
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
             );
           },

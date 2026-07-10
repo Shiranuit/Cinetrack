@@ -10,11 +10,12 @@ import '../util/locale_labels.dart';
 /// Sort option ids in display order. Labels resolve via [sortLabel] so they localize.
 const kSortKeys = ['popularity', 'rating', 'year', 'updated', 'seasons', 'episodes', 'runtime', 'name'];
 
-/// Localized label for a sort id.
-String sortLabel(AppLocalizations t, String key) => switch (key) {
+/// Localized label for a sort id. In another user's library, `my_rating` is the
+/// OWNER's rating, so it's labelled as such rather than "Your rating".
+String sortLabel(AppLocalizations t, String key, {bool othersLibrary = false}) => switch (key) {
       'popularity' => t.sortPopular,
       'rating' => t.sortTopRated,
-      'my_rating' => t.sortMyRating,
+      'my_rating' => othersLibrary ? t.sortOwnerRating : t.sortMyRating,
       'year' => t.sortReleaseDate,
       'updated' => t.sortLastUpdated,
       'seasons' => t.seasons,
@@ -38,11 +39,21 @@ String statusLabel(AppLocalizations t, String s) => switch (s) {
 /// Advanced-filter bottom sheet, shared by Discover and the Library filter.
 /// Mutates [filters] in place; the caller reloads results on dismiss.
 class FilterSheet extends StatefulWidget {
-  const FilterSheet({super.key, required this.filters, required this.options, this.showFavorites = false});
+  const FilterSheet({
+    super.key,
+    required this.filters,
+    required this.options,
+    this.showFavorites = false,
+    this.othersLibrary = false,
+  });
   final AdvancedFilters filters;
   final FilterOptions options;
   /// Whether to offer the "Favorites only" toggle (library filter only).
   final bool showFavorites;
+
+  /// Viewing another user's library: `my_rating` means the OWNER's rating, so its
+  /// sort chip is labelled accordingly.
+  final bool othersLibrary;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -128,7 +139,7 @@ class _FilterSheetState extends State<FilterSheet> {
               for (final k in kSortKeys) ...[k, if (k == 'rating' && widget.showFavorites) 'my_rating'],
             ])
               ChoiceChip(
-                label: Text(sortLabel(t, key)),
+                label: Text(sortLabel(t, key, othersLibrary: widget.othersLibrary)),
                 selected: f.sort == key,
                 // Default each sort to its natural direction (names A->Z, everything
                 // else high/new first); the toggle above can flip it.

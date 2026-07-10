@@ -107,22 +107,25 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             qb.push(", false AS in_library");
         }
     }
-    // The viewer's own rating + favourite flag, so the Library's filtered/search
-    // view can show them on cards. Discover leaves these unused (they don't make
-    // sense there), but computing them is cheap (PK-indexed lookups).
-    match f.viewer {
-        Some(viewer) if is_movie => {
+    // The rating + favourite flag OF THE LIBRARY OWNER (the whose-library-is-this
+    // user when browsing a library, else the viewer), so the Library's
+    // filtered/search view shows the owner's notes — a friend's library sorts and
+    // badges by THEIR ratings, not yours. Discover leaves these unused. Cheap
+    // (PK-indexed lookups).
+    let rating_owner = f.library_user.or(f.viewer);
+    match rating_owner {
+        Some(owner) if is_movie => {
             qb.push(", (SELECT ur.rating FROM app.user_movie ur WHERE ur.movie_id = x.id AND ur.user_id = ");
-            qb.push_bind(viewer);
+            qb.push_bind(owner);
             qb.push(") AS rating, COALESCE((SELECT ur2.is_favorited FROM app.user_movie ur2 WHERE ur2.movie_id = x.id AND ur2.user_id = ");
-            qb.push_bind(viewer);
+            qb.push_bind(owner);
             qb.push("), false) AS is_favorited");
         }
-        Some(viewer) => {
+        Some(owner) => {
             qb.push(", (SELECT ur.rating FROM app.user_show ur WHERE ur.series_id = x.id AND ur.user_id = ");
-            qb.push_bind(viewer);
+            qb.push_bind(owner);
             qb.push(") AS rating, COALESCE((SELECT ur2.is_favorited FROM app.user_show ur2 WHERE ur2.series_id = x.id AND ur2.user_id = ");
-            qb.push_bind(viewer);
+            qb.push_bind(owner);
             qb.push("), false) AS is_favorited");
         }
         None => {
@@ -290,12 +293,13 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let dir = if f.sort_desc { "DESC" } else { "ASC" };
-    // "my_rating" orders by the viewer's OWN note (a bound uuid, so it can't be a
-    // plain &str). Series-only, since movies have no per-user rating.
-    if f.sort == "my_rating" && !is_movie && f.viewer.is_some() {
+    // "my_rating" orders by the library OWNER's note (the browsed user when viewing
+    // their library, else the viewer) — a bound uuid, so it can't be a plain &str.
+    // Series-only, since movies have no per-user rating.
+    if f.sort == "my_rating" && !is_movie && rating_owner.is_some() {
         qb.push(" ORDER BY (SELECT us2.rating FROM app.user_show us2 \
                    WHERE us2.series_id = x.id AND us2.user_id = ");
-        qb.push_bind(f.viewer.unwrap());
+        qb.push_bind(rating_owner.unwrap());
         qb.push(format!(") {dir} NULLS LAST, x.name"));
     } else {
         // Column to sort by; the direction is applied uniformly below.

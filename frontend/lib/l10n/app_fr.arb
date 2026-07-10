@@ -325,6 +325,7 @@
   "@updateOpenToInstall": {},
   "sortMyRating": "Votre note",
   "@sortMyRating": {},
+  "sortOwnerRating": "Sa note",
   "sortAscending": "Croissant",
   "@sortAscending": {},
   "sortDescending": "Décroissant",

@@ -322,6 +322,7 @@
   "updateOpenToInstall": "アップデートをダウンロード中です。ファイルを開いてインストールしてください。",
   "@updateOpenToInstall": {},
   "sortMyRating": "あなたの評価",
+  "sortOwnerRating": "本人の評価",
   "@sortMyRating": {},
   "sortAscending": "昇順",
   "@sortAscending": {},

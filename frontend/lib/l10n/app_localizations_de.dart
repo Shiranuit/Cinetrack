@@ -910,6 +910,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sortMyRating => 'Deine Bewertung';
 
   @override
+  String get sortOwnerRating => 'Bewertung des Nutzers';
+
+  @override
   String get sortAscending => 'Aufsteigend';
 
   @override

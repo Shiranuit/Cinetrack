@@ -895,6 +895,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sortMyRating => 'あなたの評価';
 
   @override
+  String get sortOwnerRating => '本人の評価';
+
+  @override
   String get sortAscending => '昇順';
 
   @override

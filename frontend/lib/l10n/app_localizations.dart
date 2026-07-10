@@ -1762,6 +1762,12 @@ abstract class AppLocalizations {
   /// **'Your rating'**
   String get sortMyRating;
 
+  /// No description provided for @sortOwnerRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Their rating'**
+  String get sortOwnerRating;
+
   /// No description provided for @sortAscending.
   ///
   /// In en, this message translates to:

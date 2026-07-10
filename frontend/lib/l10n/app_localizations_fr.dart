@@ -911,6 +911,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sortMyRating => 'Votre note';
 
   @override
+  String get sortOwnerRating => 'Sa note';
+
+  @override
   String get sortAscending => 'Croissant';
 
   @override

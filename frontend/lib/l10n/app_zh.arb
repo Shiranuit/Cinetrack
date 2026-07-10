@@ -322,6 +322,7 @@
   "updateOpenToInstall": "正在下载更新。打开文件进行安装。",
   "@updateOpenToInstall": {},
   "sortMyRating": "你的评分",
+  "sortOwnerRating": "该用户的评分",
   "@sortMyRating": {},
   "sortAscending": "升序",
   "@sortAscending": {},

@@ -974,7 +974,9 @@ pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[Str
     if !profile_visible(state, me, target).await? {
         return Ok(Library::default());
     }
-    library(state, target, langs, "popularity", true).await
+    // Sort each category by the OWNER's own rating (highest first), matching how
+    // the main library defaults — so a friend's shows read as their ranking.
+    library(state, target, langs, "my_rating", true).await
 }
 
 /// Recent watch activity from the people the user follows.
