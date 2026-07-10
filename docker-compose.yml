@@ -8,9 +8,11 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
-    # Match production's max_connections so local testing reflects the same
-    # connection ceiling (server pool + one-off backfill pool share it).
-    command: ["postgres", "-c", "max_connections=200"]
+    # Match production's config so local timings reflect prod. `jit=off`: our
+    # OLTP-style per-user queries can trip Postgres's cost-based JIT (a planner
+    # over-estimate on catalog.episode joins pushes the plan past jit_above_cost),
+    # adding ~800ms of LLVM compile for no benefit. Production sets this too.
+    command: ["postgres", "-c", "max_connections=200", "-c", "jit=off"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -35,6 +37,8 @@ services:
     image: postgres:17-alpine
     profiles: ["test"]
     restart: unless-stopped
+    # Match the dev/prod config (see the postgres service) so tests run like prod.
+    command: ["postgres", "-c", "jit=off"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
