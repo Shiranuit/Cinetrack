@@ -143,7 +143,7 @@
   "updateRequired": "アップデートが必要です",
   "updateRequiredBody": "このバージョンはサポートされていません。Cinetrack を使い続けるには更新してください。",
   "updateFailed": "アップデートに失敗しました。もう一度お試しください。",
-  "catWatching": "視聴中",
+  "catWatching": "視聴予定",
   "catStale": "しばらく視聴していません",
   "catNotStarted": "未開始",
   "catUpToDate": "最新まで視聴済み",

@@ -143,7 +143,7 @@
   "updateRequired": "需要更新",
   "updateRequiredBody": "此版本已不再受支持。请更新以继续使用 Cinetrack。",
   "updateFailed": "更新失败。请重试。",
-  "catWatching": "观看中",
+  "catWatching": "待观看",
   "catStale": "有段时间没看了",
   "catNotStarted": "未开始",
   "catUpToDate": "已看完最新",

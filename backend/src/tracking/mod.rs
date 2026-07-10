@@ -148,6 +148,7 @@ pub struct LibraryShow {
     pub archived: bool,
     pub is_favorited: bool,
     pub last_watched: Option<i64>, // unix epoch of most recent watch
+    pub last_aired: Option<i64>,   // unix epoch of the latest-aired non-special episode
     pub caught_up: bool,           // seen the latest-aired non-special episode
     pub total_episodes: i64,       // aired, non-special (season > 0)
     pub seen_episodes: i64,        // distinct watched, non-special
@@ -238,6 +239,7 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
                          ORDER BY array_position($2, tr.language) LIMIT 1), lib.base_name) AS name, \
                lib.image_url, lib.nb_episodes_seen, lib.status, lib.archived, lib.is_favorited, \
                extract(epoch FROM lw.last_watched)::bigint AS last_watched, \
+               extract(epoch FROM ep.max_aired)::bigint AS last_aired, \
                (caught.series_id IS NOT NULL) AS caught_up, \
                COALESCE(ep.total_episodes, 0)::bigint AS total_episodes, \
                COALESCE(seen.seen_episodes, 0)::bigint AS seen_episodes, \
@@ -279,10 +281,18 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
         } else if r.caught_up {
             // Seen the latest-aired episode → caught up, regardless of how long ago.
             lib.up_to_date.push(r);
-        } else if r.last_watched.is_none_or(|t| t < stale_cutoff) {
-            lib.stale.push(r);
         } else {
-            lib.watching.push(r);
+            // Behind on a started show. "Stale" only if you haven't watched recently
+            // AND no new episode aired recently — otherwise it's actively "watching".
+            // This keeps a caught-up show in Watching when a fresh episode drops,
+            // even if your last watch was long ago.
+            let watched_recently = r.last_watched.is_some_and(|t| t >= stale_cutoff);
+            let aired_recently = r.last_aired.is_some_and(|t| t >= stale_cutoff);
+            if watched_recently || aired_recently {
+                lib.watching.push(r);
+            } else {
+                lib.stale.push(r);
+            }
         }
     }
     Ok(lib)

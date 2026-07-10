@@ -451,7 +451,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get updateFailed => 'Échec de la mise à jour. Veuillez réessayer.';
 
   @override
-  String get catWatching => 'En cours';
+  String get catWatching => 'À regarder';
 
   @override
   String get catStale => 'Pas regardé depuis un moment';

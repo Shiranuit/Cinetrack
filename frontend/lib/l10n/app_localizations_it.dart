@@ -450,7 +450,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get updateFailed => 'Aggiornamento non riuscito. Riprova.';
 
   @override
-  String get catWatching => 'In visione';
+  String get catWatching => 'Da vedere';
 
   @override
   String get catStale => 'Non guardati da un po\'';

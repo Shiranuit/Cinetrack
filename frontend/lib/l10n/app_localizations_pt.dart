@@ -450,7 +450,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get updateFailed => 'Falha na atualização. Tente novamente.';
 
   @override
-  String get catWatching => 'Assistindo';
+  String get catWatching => 'Para assistir';
 
   @override
   String get catStale => 'Sem assistir há um tempo';

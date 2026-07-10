@@ -450,7 +450,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get updateFailed => 'La actualización falló. Inténtalo de nuevo.';
 
   @override
-  String get catWatching => 'Viendo';
+  String get catWatching => 'Por ver';
 
   @override
   String get catStale => 'Sin ver desde hace tiempo';

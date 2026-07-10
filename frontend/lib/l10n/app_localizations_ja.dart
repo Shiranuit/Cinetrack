@@ -444,7 +444,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get updateFailed => 'アップデートに失敗しました。もう一度お試しください。';
 
   @override
-  String get catWatching => '視聴中';
+  String get catWatching => '視聴予定';
 
   @override
   String get catStale => 'しばらく視聴していません';

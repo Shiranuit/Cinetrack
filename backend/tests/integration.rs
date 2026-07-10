@@ -367,3 +367,39 @@ async fn other_user_library_privacy_gate() {
     // Your own profile is always visible.
     assert!(tracking::profile_visible(&state, owner, owner).await.unwrap());
 }
+
+/// A caught-up show moves to WATCHING (not STALE) when a fresh episode airs, even
+/// if the viewer's last watch was long ago — recency of new content counts, not
+/// just when they last watched. A backlog with only old episodes stays STALE.
+#[tokio::test]
+async fn new_episode_keeps_show_in_watching_not_stale() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "recency@test.local").await;
+
+    // Ep 1 aired 60 days ago and was watched then; a NEW ep 2 aired 3 days ago, unwatched.
+    common::insert_series(&state.db, 10, "Recency", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 10, true, false).await;
+    common::set_user_show(&state.db, 1, 10, "nb_episodes_seen", "1").await;
+    common::insert_episode_in_days(&state.db, 101, 10, 1, 1, -60, "Ep1").await;
+    common::insert_episode_in_days(&state.db, 102, 10, 1, 2, -3, "Ep2").await;
+    common::watch_ago(&state.db, 1, 10, 101, "w-ep1", 60).await;
+
+    let lib = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
+    assert_eq!(lib.watching.iter().filter(|s| s.series_id == 10).count(), 1, "fresh episode -> Watching");
+    assert!(lib.stale.iter().all(|s| s.series_id != 10), "not Stale when a new episode aired recently");
+
+    // Control: behind, but the newest episode is also old (aired 80 days ago) -> Stale.
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "recency@test.local").await;
+    common::insert_series(&state.db, 20, "Backlog", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 20, true, false).await;
+    common::set_user_show(&state.db, 1, 20, "nb_episodes_seen", "1").await;
+    common::insert_episode_in_days(&state.db, 201, 20, 1, 1, -90, "Ep1").await;
+    common::insert_episode_in_days(&state.db, 202, 20, 1, 2, -80, "Ep2").await;
+    common::watch_ago(&state.db, 1, 20, 201, "w-ep1", 60).await;
+
+    let lib2 = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
+    assert_eq!(lib2.stale.iter().filter(|s| s.series_id == 20).count(), 1, "old backlog -> Stale");
+}

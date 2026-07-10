@@ -979,7 +979,7 @@ abstract class AppLocalizations {
   /// No description provided for @catWatching.
   ///
   /// In en, this message translates to:
-  /// **'Watching'**
+  /// **'To watch'**
   String get catWatching;
 
   /// No description provided for @catStale.

@@ -143,7 +143,7 @@
   "updateRequired": "Update erforderlich",
   "updateRequiredBody": "Diese Version wird nicht mehr unterstützt. Bitte aktualisiere, um Cinetrack weiter zu nutzen.",
   "updateFailed": "Update fehlgeschlagen. Bitte versuche es erneut.",
-  "catWatching": "Wird angesehen",
+  "catWatching": "Anzusehen",
   "catStale": "Länger nicht gesehen",
   "catNotStarted": "Noch nicht begonnen",
   "catUpToDate": "Aktuell",

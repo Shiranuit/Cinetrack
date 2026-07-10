@@ -444,7 +444,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get updateFailed => '업데이트에 실패했습니다. 다시 시도해 주세요.';
 
   @override
-  String get catWatching => '시청 중';
+  String get catWatching => '볼 작품';
 
   @override
   String get catStale => '한동안 보지 않음';

@@ -443,7 +443,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateFailed => '更新失败。请重试。';
 
   @override
-  String get catWatching => '观看中';
+  String get catWatching => '待观看';
 
   @override
   String get catStale => '有段时间没看了';
