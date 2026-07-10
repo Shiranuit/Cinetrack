@@ -286,13 +286,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get markEarlierBody =>
-      'Esta temporada tem episódios anteriores que você não marcou como vistos. Marcá-los também?';
+      'Deseja marcar os episódios anteriores como vistos?';
 
   @override
-  String get markEarlierConfirm => 'Marcar';
+  String get markEarlierConfirm => 'Sim';
 
   @override
-  String get markEarlierDismiss => 'Apenas este';
+  String get markEarlierDismiss => 'Não';
 
   @override
   String get upcoming => 'Em breve';

@@ -281,16 +281,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get showOlder => '以前のものを表示';
 
   @override
-  String get markEarlierTitle => '前のエピソードも既視にしますか？';
+  String get markEarlierTitle => '前のエピソードを視聴済みにしますか？';
 
   @override
-  String get markEarlierBody => 'このシーズンには、まだ既視にしていない前のエピソードがあります。まとめて既視にしますか？';
+  String get markEarlierBody => '前のエピソードをまとめて視聴済みにしますか？';
 
   @override
-  String get markEarlierConfirm => 'まとめて既視にする';
+  String get markEarlierConfirm => 'はい';
 
   @override
-  String get markEarlierDismiss => 'これだけ';
+  String get markEarlierDismiss => 'いいえ';
 
   @override
   String get upcoming => '近日放送';

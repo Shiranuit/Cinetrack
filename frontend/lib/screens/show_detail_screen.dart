@@ -213,14 +213,16 @@ class _ShowDetailScreenState extends State<ShowDetailScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(t.markEarlierTitle),
         content: Text(t.markEarlierBody),
-        // Shared side-by-side actions: "Mark them" (action) left, "Just this one"
-        // (dismiss) right — matching the app's other confirm dialogs.
+        // Side-by-side Yes/No. "Yes" (mark previous) is the common choice, so it's
+        // the prominent (filled, right) button and "No" the outlined secondary
+        // (left). confirmActions renders confirmLabel outlined-left and cancelLabel
+        // filled-right, so the affirmative maps to cancelLabel.
         actions: confirmActions(
           ctx,
-          confirmLabel: t.markEarlierConfirm,
-          onConfirm: () => Navigator.pop(ctx, true),
-          cancelLabel: t.markEarlierDismiss,
-          onCancel: () => Navigator.pop(ctx, false),
+          confirmLabel: t.markEarlierDismiss,
+          onConfirm: () => Navigator.pop(ctx, false),
+          cancelLabel: t.markEarlierConfirm,
+          onCancel: () => Navigator.pop(ctx, true),
         ),
       ),
     );
