@@ -111,6 +111,28 @@ cd frontend && flutter run -d chrome
 Full walkthrough (prerequisites, running the backend on the host, the Flutter app, building
 APK/web): **[docs/installation.md](docs/installation.md)**.
 
+### Running the tests
+
+Backend tests run against an **isolated** Postgres: the `postgres-test` service, a separate
+`tvshow_test` database on port `5433` stored in tmpfs (RAM), so it is wiped between runs and
+never touches your dev data. It is opt-in via the `test` compose profile and requires
+`TEST_DATABASE_URL` in `.env.local` (pointing at `localhost:5433/tvshow_test`).
+
+```bash
+# 1. Start the throwaway test database (the `test` profile does NOT start with a plain `up`).
+docker compose --profile test up -d postgres-test
+
+# 2. Run the whole backend suite. It reads TEST_DATABASE_URL from .env.local and runs the
+#    migrations automatically on the first connection; skips the DB tests if it is unset.
+cargo test --manifest-path backend/Cargo.toml
+
+# 3. Frontend static analysis.
+cd frontend && flutter analyze
+
+# 4. Tear the test database down when done (its tmpfs data is discarded).
+docker compose stop postgres-test
+```
+
 ---
 
 ## Documentation

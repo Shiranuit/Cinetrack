@@ -13,6 +13,7 @@ import '../state/settings.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/poster_grid.dart';
 import '../widgets/rating_thumbs.dart';
+import '../widgets/reveal.dart';
 import '../widgets/section.dart';
 import '../widgets/show_card.dart';
 import '../widgets/states.dart';
@@ -191,34 +192,49 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
     );
   }
 
-  // Row 2: multi-select Series/Anime/Movies toggle.
+  // Row 2: the multi-select Series/Anime/Movies toggle (stretched to fill) plus the
+  // rails/grid layout switch, matching your own Library.
   Widget _filterBar() {
     final t = AppLocalizations.of(context);
+    final layout = context.watch<SettingsController>().libraryLayout;
     Widget lbl(String s) => Text(s, maxLines: 1, softWrap: false, overflow: TextOverflow.fade);
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, Insets.sm),
-      child: SegmentedButton<_Kind>(
-        multiSelectionEnabled: true,
-        emptySelectionAllowed: true,
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: [
-          ButtonSegment(value: _Kind.series, label: lbl(t.typeSeries)),
-          ButtonSegment(value: _Kind.anime, label: lbl(t.typeAnime)),
-          ButtonSegment(value: _Kind.movies, label: lbl(t.typeMovies)),
+      child: Row(
+        children: [
+          Expanded(
+            child: SegmentedButton<_Kind>(
+              multiSelectionEnabled: true,
+              emptySelectionAllowed: true,
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              segments: [
+                ButtonSegment(value: _Kind.series, label: lbl(t.typeSeries)),
+                ButtonSegment(value: _Kind.anime, label: lbl(t.typeAnime)),
+                ButtonSegment(value: _Kind.movies, label: lbl(t.typeMovies)),
+              ],
+              selected: _kinds,
+              onSelectionChanged: (s) => setState(() {
+                _kinds = s;
+                _filterToken++;
+                _recomputeFiltered();
+              }),
+            ),
+          ),
+          const SizedBox(width: Insets.sm),
+          IconButton(
+            tooltip: layout == LibraryLayout.rails ? t.gridView : t.carouselView,
+            icon: Icon(layout == LibraryLayout.rails ? Icons.grid_view_rounded : Icons.view_carousel_rounded),
+            onPressed: () => context.read<SettingsController>().toggleLibraryLayout(),
+          ),
         ],
-        selected: _kinds,
-        onSelectionChanged: (s) => setState(() {
-          _kinds = s;
-          _filterToken++;
-          _recomputeFiltered();
-        }),
       ),
     );
   }
 
-  /// The categorized view: series category rails (filtered to the selected kinds)
-  /// plus a Movies rail, in one scroll — mirrors your own Library.
+  /// The categorized view: series category sections (filtered to the selected
+  /// kinds) plus a Movies section, rendered as rails or grids per the layout
+  /// preference. Mirrors your own Library.
   Widget _categorized() {
     final t = AppLocalizations.of(context);
     final wantSeries = _kinds.contains(_Kind.series);
@@ -237,67 +253,94 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
         // Keep a show if it's anime and Anime is on, or non-anime and Series is on.
         List<LibraryShow> pick(List<LibraryShow> l) =>
             l.where((s) => (wantAnime && s.isAnime) || (wantSeries && !s.isAnime)).toList();
-        final children = <Widget>[
-          ..._seriesRails(lib, t, pick),
-          if (wantMovies && movies.isNotEmpty) _moviesRailFor(movies, t),
-        ];
-        if (children.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
-        return ListView(padding: const EdgeInsets.only(bottom: Insets.xxl), children: children);
+
+        final sections = <(String, IconData, Color, int, Widget Function(int))>[];
+        void addShows(String title, IconData icon, Color accent, List<LibraryShow> shows) {
+          if (shows.isNotEmpty) sections.add((title, icon, accent, shows.length, (j) => _showCard(shows[j])));
+        }
+        addShows(t.catWatching, Icons.play_circle_rounded, context.scheme.primary, pick(lib.watching));
+        addShows(t.catStale, Icons.history_rounded, context.colors.warning, pick(lib.stale));
+        addShows(t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, pick(lib.notStarted));
+        addShows(t.watchLater, Icons.schedule_rounded, context.scheme.tertiary, pick(lib.forLater));
+        addShows(t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, pick(lib.upToDate));
+        addShows(t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, pick(lib.stopped));
+        if (wantMovies && movies.isNotEmpty) {
+          sections.add(
+              (t.typeMovies, Icons.theaters_rounded, context.scheme.tertiary, movies.length, (j) => _movieCard(movies[j])));
+        }
+
+        if (sections.isEmpty) return MessageView(icon: Icons.video_library_rounded, message: t.libNoShows);
+
+        final grid = context.watch<SettingsController>().libraryLayout == LibraryLayout.grid;
+        var index = 0;
+        return CustomScrollView(
+          slivers: [
+            for (final (title, icon, accent, count, builder) in sections)
+              ..._section(title, icon, accent, count, grid, index++, builder),
+            const SliverToBoxAdapter(child: SizedBox(height: Insets.xxl)),
+          ],
+        );
       },
     );
   }
 
-  /// The series categories as horizontal rails (Watching / Up to date / …),
-  /// filtered to the selected kinds via [pick].
-  List<Widget> _seriesRails(Library lib, AppLocalizations t, List<LibraryShow> Function(List<LibraryShow>) pick) {
-    final cats = <(String, IconData, Color, List<LibraryShow>)>[
-      (t.catWatching, Icons.play_circle_rounded, context.scheme.primary, pick(lib.watching)),
-      (t.catStale, Icons.history_rounded, context.colors.warning, pick(lib.stale)),
-      (t.catNotStarted, Icons.playlist_add_rounded, context.scheme.secondary, pick(lib.notStarted)),
-      (t.watchLater, Icons.schedule_rounded, context.scheme.tertiary, pick(lib.forLater)),
-      (t.catUpToDate, Icons.check_circle_rounded, context.colors.seen, pick(lib.upToDate)),
-      (t.catStopped, Icons.pause_circle_rounded, context.scheme.onSurfaceVariant, pick(lib.stopped)),
-    ].where((e) => e.$4.isNotEmpty).toList();
+  Widget _showCard(LibraryShow s) {
+    final t = AppLocalizations.of(context);
+    return ShowCard(
+      title: s.name ?? t.seriesFallback(s.seriesId),
+      imageUrl: s.imageUrl,
+      favorite: s.isFavorited,
+      rating: s.rating,
+      progress: s.progress,
+      onTap: () => _openShow(s.seriesId),
+    );
+  }
+
+  Widget _movieCard(LibraryMovie m) {
+    final t = AppLocalizations.of(context);
+    return ShowCard(
+      title: m.name ?? t.movieFallback(m.movieId),
+      imageUrl: m.imageUrl,
+      subtitle: m.year?.toString(),
+      favorite: m.isFavorited,
+      rating: m.rating,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
+    );
+  }
+
+  /// One category as slivers: a horizontal rail, or a header + grid, per the
+  /// rails/grid layout preference (mirrors your own Library).
+  List<Widget> _section(
+      String title, IconData icon, Color accent, int count, bool grid, int index, Widget Function(int) itemBuilder) {
+    if (!grid) {
+      return [
+        SliverToBoxAdapter(
+          child: Reveal(
+            delay: Duration(milliseconds: index * 70),
+            child: PosterRail(
+              title: title, icon: icon, accent: accent, count: count, itemBuilder: (context, j) => itemBuilder(j)),
+          ),
+        ),
+      ];
+    }
     return [
-      for (final (title, icon, accent, shows) in cats)
-        PosterRail(
+      SliverToBoxAdapter(
+        child: SectionHeader(
           title: title,
           icon: icon,
           accent: accent,
-          count: shows.length,
-          itemBuilder: (context, i) {
-            final s = shows[i];
-            return ShowCard(
-              title: s.name ?? t.seriesFallback(s.seriesId),
-              imageUrl: s.imageUrl,
-              favorite: s.isFavorited,
-              rating: s.rating,
-              progress: s.progress,
-              onTap: () => _openShow(s.seriesId),
-            );
-          },
+          trailing: Text('$count', style: context.text.labelMedium?.copyWith(color: context.scheme.onSurfaceVariant)),
         ),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.lg),
+        sliver: SliverGrid(
+          gridDelegate: posterGridDelegate(context),
+          delegate: SliverChildBuilderDelegate((context, j) => itemBuilder(j), childCount: count),
+        ),
+      ),
     ];
   }
-
-  /// A single rail of tracked movies (shown inside the categorized view).
-  Widget _moviesRailFor(List<LibraryMovie> movies, AppLocalizations t) => PosterRail(
-        title: t.typeMovies,
-        icon: Icons.theaters_rounded,
-        accent: context.scheme.tertiary,
-        count: movies.length,
-        itemBuilder: (context, i) {
-          final m = movies[i];
-          return ShowCard(
-            title: m.name ?? t.movieFallback(m.movieId),
-            imageUrl: m.imageUrl,
-            subtitle: m.year?.toString(),
-            favorite: m.isFavorited,
-            rating: m.rating,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
-          );
-        },
-      );
 
   /// The flat filtered/searched view (shown while a search or filter is active).
   Widget _filteredGrid() {
