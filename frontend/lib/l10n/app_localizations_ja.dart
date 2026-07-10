@@ -275,6 +275,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recentlyAired => '最近放送';
 
   @override
+  String get showOlder => '以前のものを表示';
+
+  @override
   String get upcoming => '近日放送';
 
   @override

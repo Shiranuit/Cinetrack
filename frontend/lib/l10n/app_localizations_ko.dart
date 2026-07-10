@@ -275,6 +275,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get recentlyAired => '최근 방영';
 
   @override
+  String get showOlder => '이전 항목 보기';
+
+  @override
   String get upcoming => '예정';
 
   @override

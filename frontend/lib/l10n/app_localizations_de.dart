@@ -277,6 +277,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get recentlyAired => 'Kürzlich ausgestrahlt';
 
   @override
+  String get showOlder => 'Ältere anzeigen';
+
+  @override
   String get upcoming => 'Demnächst';
 
   @override

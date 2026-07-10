@@ -465,6 +465,7 @@ class CalendarItem {
   final int? seasonNumber;
   final int? episodeNumber;
   final String? episodeName;
+  final int watchedCount;
   const CalendarItem({
     required this.seriesId,
     this.episodeId,
@@ -475,6 +476,7 @@ class CalendarItem {
     this.seasonNumber,
     this.episodeNumber,
     this.episodeName,
+    this.watchedCount = 0,
   });
   factory CalendarItem.fromJson(Map<String, dynamic> j) => CalendarItem(
         seriesId: j['series_id'] as int,
@@ -486,6 +488,7 @@ class CalendarItem {
         seasonNumber: j['season_number'] as int?,
         episodeNumber: j['episode_number'] as int?,
         episodeName: j['episode_name'] as String?,
+        watchedCount: (j['watched_count'] as num?)?.toInt() ?? 0,
       );
 }
 

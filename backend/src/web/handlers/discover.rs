@@ -14,7 +14,7 @@ use crate::{
     error::AppResult,
     state::AppState,
     tracking,
-    web::query::{LangsQuery, csv_ids, csv_strings},
+    web::query::{CalendarQuery, LangsQuery, csv_ids, csv_strings},
 };
 
 #[derive(Deserialize)]
@@ -185,7 +185,7 @@ pub async fn genres(AuthUser(_): AuthUser, State(state): State<AppState>) -> App
 pub async fn calendar(
     AuthUser(me): AuthUser,
     State(state): State<AppState>,
-    Query(q): Query<LangsQuery>,
+    Query(q): Query<CalendarQuery>,
 ) -> AppResult<Json<tracking::Calendar>> {
-    Ok(Json(tracking::calendar(&state, me, &q.list()).await?))
+    Ok(Json(tracking::calendar(&state, me, &q.langs(), q.recent_days).await?))
 }

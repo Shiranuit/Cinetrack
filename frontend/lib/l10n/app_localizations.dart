@@ -640,6 +640,12 @@ abstract class AppLocalizations {
   /// **'Recently aired'**
   String get recentlyAired;
 
+  /// No description provided for @showOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Show older'**
+  String get showOlder;
+
   /// No description provided for @upcoming.
   ///
   /// In en, this message translates to:

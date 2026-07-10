@@ -335,8 +335,14 @@ class ApiClient extends ChangeNotifier {
   Future<void> rejectSuggestion(int id, {String type = 'series'}) =>
       _send('POST', '/api/import/suggestions/$id/reject?type=$type');
 
-  Future<(List<CalendarItem>, List<CalendarItem>)> calendar({String? langs}) async {
-    final j = await _get('/api/calendar', {'langs': ?langs});
+  Future<(List<CalendarItem>, List<CalendarItem>)> calendar({
+    String? langs,
+    int? recentDays,
+  }) async {
+    final j = await _get('/api/calendar', {
+      'langs': ?langs,
+      'recent_days': ?recentDays?.toString(),
+    });
     List<CalendarItem> parse(dynamic v) =>
         (v as List? ?? const []).map((e) => CalendarItem.fromJson(e as Map<String, dynamic>)).toList();
     return (parse(j['upcoming']), parse(j['recent']));

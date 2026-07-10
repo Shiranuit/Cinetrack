@@ -671,6 +671,9 @@ pub struct CalendarItem {
     pub season_number: Option<i32>,
     pub episode_number: Option<i32>,
     pub episode_name: Option<String>,
+    /// How many times the viewer has watched this episode (for the inline watch
+    /// control on already-aired rows).
+    pub watched_count: i64,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -681,19 +684,36 @@ pub struct Calendar {
 
 /// How far ahead / back the calendar looks.
 const CALENDAR_UPCOMING_DAYS: i32 = 90;
+/// Default depth of the "recently aired" section (one tap of "show older" extends
+/// it further into the past).
 const CALENDAR_RECENT_DAYS: i32 = 30;
+/// Hard cap on how far back the recent window can be paged — a few months, so the
+/// scan stays bounded rather than walking a show's whole aired history.
+const CALENDAR_RECENT_MAX_DAYS: i32 = 180;
 
-/// Upcoming (next 90 days) and recently-aired (last 30 days) episodes for followed
-/// series — EVERY scheduled episode in the window (from the mirrored episode list),
-/// not just the single `nextAired`. Names resolved to `langs`.
-pub async fn calendar(state: &AppState, me: Uuid, langs: &[String]) -> AppResult<Calendar> {
+/// Upcoming (next 90 days) and recently-aired episodes for followed series — EVERY
+/// scheduled episode in the window (from the mirrored episode list), not just the
+/// single `nextAired`. Names resolved to `langs`. `recent_days` controls how far
+/// back the recent section reaches (clamped to `[CALENDAR_RECENT_DAYS,
+/// CALENDAR_RECENT_MAX_DAYS]`), letting the client page into the past.
+pub async fn calendar(
+    state: &AppState,
+    me: Uuid,
+    langs: &[String],
+    recent_days: Option<i32>,
+) -> AppResult<Calendar> {
+    let recent_days = recent_days
+        .unwrap_or(CALENDAR_RECENT_DAYS)
+        .clamp(CALENDAR_RECENT_DAYS, CALENDAR_RECENT_MAX_DAYS);
     let name = translated_name_sql("us.series_id", "$2");
     // `cond` bounds e.aired; `dir` orders the window.
     let build = |cond: &str, dir: &str| {
         format!(
             "SELECT us.series_id, e.id AS episode_id, {name} AS name, s.image_url, \
                     e.aired::text AS date, NULLIF(s.raw->>'airsTime','') AS time, \
-                    e.season_number, e.number AS episode_number, e.name AS episode_name \
+                    e.season_number, e.number AS episode_number, e.name AS episode_name, \
+                    (SELECT count(*) FROM app.watch_event w \
+                        WHERE w.user_id = us.user_id AND w.episode_id = e.id) AS watched_count \
              FROM app.user_show us \
              JOIN catalog.series s ON s.id = us.series_id \
              JOIN catalog.episode e ON e.series_id = us.series_id AND NOT e.deleted AND e.season_number > 0 \
@@ -712,7 +732,7 @@ pub async fn calendar(state: &AppState, me: Uuid, langs: &[String]) -> AppResult
     .await?;
 
     let recent = sqlx::query_as::<_, CalendarItem>(&build(
-        &format!("BETWEEN current_date - interval '{CALENDAR_RECENT_DAYS} days' AND current_date - interval '1 day'"),
+        &format!("BETWEEN current_date - interval '{recent_days} days' AND current_date - interval '1 day'"),
         "DESC",
     ))
     .bind(me)

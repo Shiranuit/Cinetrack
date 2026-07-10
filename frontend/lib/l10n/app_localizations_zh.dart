@@ -275,6 +275,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recentlyAired => '最近播出';
 
   @override
+  String get showOlder => '显示更早';
+
+  @override
   String get upcoming => '即将播出';
 
   @override

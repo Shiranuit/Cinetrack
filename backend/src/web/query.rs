@@ -42,6 +42,22 @@ impl LangsQuery {
     }
 }
 
+/// Calendar window: the ordered `langs` list plus how many days back the
+/// "recently aired" section reaches. `recent_days` lets the client page further
+/// into the past ("show older"); it is clamped server-side (see [`tracking::calendar`]).
+#[derive(Debug, Deserialize)]
+pub struct CalendarQuery {
+    pub langs: Option<String>,
+    pub recent_days: Option<i32>,
+}
+
+impl CalendarQuery {
+    /// Ordered language codes; defaults to `["eng"]`.
+    pub fn langs(&self) -> Vec<String> {
+        LangsQuery { langs: self.langs.clone() }.list()
+    }
+}
+
 /// Detail-page language selection: prefer the ordered `langs` list; fall back to
 /// the legacy single `lang` (older app builds), preserving `lang=original`/empty as
 /// "no translation". Returns the preference list to resolve name/overview against
