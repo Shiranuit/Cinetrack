@@ -152,6 +152,7 @@ pub struct LibraryShow {
     pub total_episodes: i64,       // aired, non-special (season > 0)
     pub seen_episodes: i64,        // distinct watched, non-special
     pub is_anime: bool,            // original language is Japanese
+    pub rating: Option<i16>,       // the viewer's own labeled 1..5 rating (INT2 column)
 }
 
 #[derive(serde::Serialize, Default)]
@@ -240,7 +241,8 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
                (caught.series_id IS NOT NULL) AS caught_up, \
                COALESCE(ep.total_episodes, 0)::bigint AS total_episodes, \
                COALESCE(seen.seen_episodes, 0)::bigint AS seen_episodes, \
-               COALESCE(lib.original_language IN ('jpn','ja'), false) AS is_anime \
+               COALESCE(lib.original_language IN ('jpn','ja'), false) AS is_anime, \
+               lib.rating \
         FROM lib \
         LEFT JOIN ep ON ep.series_id = lib.series_id \
         LEFT JOIN lw ON lw.series_id = lib.series_id \

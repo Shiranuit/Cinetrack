@@ -107,6 +107,28 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             qb.push(", false AS in_library");
         }
     }
+    // The viewer's own rating + favourite flag, so the Library's filtered/search
+    // view can show them on cards. Discover leaves these unused (they don't make
+    // sense there), but computing them is cheap (PK-indexed lookups).
+    match f.viewer {
+        Some(viewer) if is_movie => {
+            qb.push(", (SELECT ur.rating FROM app.user_movie ur WHERE ur.movie_id = x.id AND ur.user_id = ");
+            qb.push_bind(viewer);
+            qb.push(") AS rating, COALESCE((SELECT ur2.is_favorited FROM app.user_movie ur2 WHERE ur2.movie_id = x.id AND ur2.user_id = ");
+            qb.push_bind(viewer);
+            qb.push("), false) AS is_favorited");
+        }
+        Some(viewer) => {
+            qb.push(", (SELECT ur.rating FROM app.user_show ur WHERE ur.series_id = x.id AND ur.user_id = ");
+            qb.push_bind(viewer);
+            qb.push(") AS rating, COALESCE((SELECT ur2.is_favorited FROM app.user_show ur2 WHERE ur2.series_id = x.id AND ur2.user_id = ");
+            qb.push_bind(viewer);
+            qb.push("), false) AS is_favorited");
+        }
+        None => {
+            qb.push(", NULL::smallint AS rating, false AS is_favorited");
+        }
+    }
     qb.push(format!(" FROM {table} x"));
 
     // Library scope: only shows this user tracks.
@@ -301,13 +323,13 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool)>()
         .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview, in_library)| SearchResult {
+        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
@@ -315,6 +337,8 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             image_url,
             overview,
             in_library,
+            rating,
+            is_favorited,
         })
         .collect())
 }
@@ -533,6 +557,8 @@ async fn popular_local(
             image_url,
             overview,
             in_library: false,
+            rating: None,
+            is_favorited: false,
         })
         .collect())
 }
@@ -582,6 +608,8 @@ async fn popular_remote(
             image_url: img,
             overview: r["overview"].as_str().map(str::to_string),
             in_library: false,
+            rating: None,
+            is_favorited: false,
         });
     }
     Ok(out)

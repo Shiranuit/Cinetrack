@@ -334,6 +334,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
               title: r.name ?? '—',
               imageUrl: r.imageUrl,
               subtitle: r.year?.toString(),
+              // Library search: surface the viewer's rating + favorite, matching
+              // the categorized library cards (Discover leaves these off).
+              rating: r.rating,
+              favorite: r.isFavorited,
               heroTag: '${r.kind}-${r.tvdbId}',
               selection: r.tvdbId == null
                   ? null
@@ -492,6 +496,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         imageUrl: s.imageUrl,
         favorite: s.isFavorited,
         progress: s.progress,
+        rating: s.rating,
         // Progress bar replaces the "N watched" caption.
         heroTag: 'series-${s.seriesId}',
         selection: SelItem(SelKind.series, s.seriesId, s.name ?? ''),
@@ -503,6 +508,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         imageUrl: m.imageUrl,
         subtitle: m.year?.toString(),
         favorite: m.isFavorited,
+        rating: m.rating,
         selection: SelItem(SelKind.movie, m.movieId, m.name ?? ''),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movieId: m.movieId))),
       );

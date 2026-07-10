@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../state/selection.dart';
 import 'badges.dart';
 import 'poster.dart';
+import 'rating_thumbs.dart';
 
 /// Height reserved for a card's caption (title + optional subtitle). Fixed so
 /// cards never overflow their rail/grid cell.
@@ -32,6 +33,7 @@ class ShowCard extends StatelessWidget {
     this.heroTag,
     this.selection,
     this.inLibrary = false,
+    this.rating,
   });
 
   final String title;
@@ -42,6 +44,10 @@ class ShowCard extends StatelessWidget {
   final bool favorite;
   final double progress;
   final Object? heroTag;
+
+  /// The viewer's own 1..5 rating, shown as a thumb badge on the poster's top-left
+  /// (Library). Null = unrated (no badge).
+  final int? rating;
 
   /// Identity for multi-select. Null (or no [SelectionScope] above) → the card is
   /// a plain tile and ignores selection entirely.
@@ -123,7 +129,15 @@ class ShowCard extends StatelessWidget {
                   Positioned(
                     top: Insets.xs,
                     right: Insets.xs,
-                    child: Icon(Icons.favorite, size: 18, color: context.colors.favorite),
+                    child: Icon(Icons.favorite, size: 22, color: context.colors.favorite),
+                  ),
+                // The viewer's own rating, top-left. Hidden while selecting (the
+                // select dot claims that corner) or when the "In library" pill does.
+                if (rating != null && !selecting && !showPill)
+                  Positioned(
+                    top: Insets.xs,
+                    left: Insets.xs,
+                    child: _RatingBadge(level: rating!),
                   ),
                 ProgressStripe(value: progress),
                 if (showLibBorder)
@@ -214,6 +228,25 @@ class _LibraryPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The viewer's rating on a poster: the thumb glyph on a dark scrim disc so it
+/// stays legible over any artwork.
+class _RatingBadge extends StatelessWidget {
+  const _RatingBadge({required this.level});
+  final int level; // 1..5
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: context.colors.scrim.withValues(alpha: 0.55),
+        shape: BoxShape.circle,
+      ),
+      child: RatingThumbBadge(level: level, size: 20),
     );
   }
 }

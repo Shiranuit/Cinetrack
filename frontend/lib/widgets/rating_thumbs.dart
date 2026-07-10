@@ -20,13 +20,18 @@ String ratingLevelLabel(BuildContext context, int level) {
   };
 }
 
-/// Valence colour for a level: down = red, middle = neutral, up = green. The
-/// single-vs-double glyph carries the intensity (1 vs 2, 4 vs 5).
+/// A distinct valence colour per level, so all five read apart at a glance: the
+/// two thumbs-down aren't both "red" and the two thumbs-up aren't both "green".
+/// This matters most for the small double-thumb glyphs (1 and 5), where the colour
+/// carries the meaning the glyph alone can't. A diverging scale
+/// red -> orange -> neutral -> lime -> green, with the strongest colours at the ends.
 Color _levelColor(BuildContext context, int level) => switch (level) {
-      1 || 2 => context.scheme.error,
-      3 => context.scheme.onSurfaceVariant,
-      _ => context.colors.seen,
-    };
+  1 => context.scheme.error, // Hate — red (strongest negative)
+  2 => const Color(0xFFF5843C), // Dislike — orange
+  3 => context.scheme.onSurfaceVariant, // OK — neutral
+  4 => const Color(0xFF9CCC3D), // Like — lime green
+  _ => context.colors.seen, // Love — mint green (strongest positive)
+};
 
 /// The glyph for a level. Levels 1 and 5 are a pair of thumbs (the extremes),
 /// arranged as a compact diagonal cluster so the pair keeps a roughly square
@@ -40,11 +45,24 @@ Widget ratingLevelGlyph(int level, double size, Color color, {Color? outline}) {
   Widget stroked(IconData i, double s) {
     if (outline == null) return plain(i, s);
     final ch = String.fromCharCode(i.codePoint);
-    final base = TextStyle(fontFamily: i.fontFamily, package: i.fontPackage, fontSize: s, height: 1.0);
+    final base = TextStyle(
+      fontFamily: i.fontFamily,
+      package: i.fontPackage,
+      fontSize: s,
+      height: 1.0,
+    );
     return Stack(
       alignment: Alignment.center,
       children: [
-        Text(ch, style: base.copyWith(foreground: Paint()..style = PaintingStyle.stroke..strokeWidth = 3..color = outline)),
+        Text(
+          ch,
+          style: base.copyWith(
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3
+              ..color = outline,
+          ),
+        ),
         Text(ch, style: base.copyWith(color: color)),
       ],
     );
@@ -57,8 +75,16 @@ Widget ratingLevelGlyph(int level, double size, Color color, {Color? outline}) {
   // the second thumb.
   Widget pair(IconData i, {required bool aOnTop}) {
     final s = size * 0.72;
-    final a = Positioned(left: size * 0.13, bottom: size * 0.17, child: stroked(i, s));
-    final b = Positioned(left: size * 0.28, bottom: size * 0.28, child: stroked(i, s));
+    final a = Positioned(
+      left: size * 0.13,
+      bottom: size * 0.17,
+      child: stroked(i, s),
+    );
+    final b = Positioned(
+      left: size * 0.30,
+      bottom: size * 0.34,
+      child: stroked(i, s),
+    );
     return SizedBox(
       width: size,
       height: size,
@@ -83,8 +109,12 @@ class RatingThumbBadge extends StatelessWidget {
   final int level; // 1..5
   final double size;
   @override
-  Widget build(BuildContext context) =>
-      ratingLevelGlyph(level, size, _levelColor(context, level), outline: context.scheme.surface);
+  Widget build(BuildContext context) => ratingLevelGlyph(
+    level,
+    size,
+    _levelColor(context, level),
+    outline: context.scheme.surface,
+  );
 }
 
 /// The 1..5 thumbs rating control: the five thumbs spread evenly across the full
@@ -92,7 +122,12 @@ class RatingThumbBadge extends StatelessWidget {
 /// currently selected thumb. Before you rate, a centred "Rate this show" prompt
 /// occupies that same line. Tapping a level sets it; tapping it again clears it.
 class RatingThumbs extends StatelessWidget {
-  const RatingThumbs({super.key, required this.value, required this.onRate, this.size = 30});
+  const RatingThumbs({
+    super.key,
+    required this.value,
+    required this.onRate,
+    this.size = 30,
+  });
   final int? value; // 1..5, null = unrated
   final void Function(int? rating) onRate;
   final double size;
@@ -106,56 +141,65 @@ class RatingThumbs extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
         child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            for (var i = 1; i <= 5; i++)
-              Expanded(
-                child: Center(
-                  child: _LevelButton(
-                    level: i,
-                    selected: value == i,
-                    size: size,
-                    onTap: () => onRate(i == value ? null : i),
+            Row(
+              children: [
+                for (var i = 1; i <= 5; i++)
+                  Expanded(
+                    child: Center(
+                      child: _LevelButton(
+                        level: i,
+                        selected: value == i,
+                        size: size,
+                        onTap: () => onRate(i == value ? null : i),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        // Reserved label line: the selected level's label under its own thumb, or a
-        // centred prompt when nothing is chosen yet. Fixed height so the layout
-        // never jumps between the two states.
-        SizedBox(
-          height: 22,
-          child: value == null
-              ? Center(
-                  child: Text(AppLocalizations.of(context).rateThisShow,
-                      style: context.text.titleSmall?.copyWith(color: context.scheme.onSurfaceVariant)),
-                )
-              : Row(
-                  children: [
-                    for (var i = 1; i <= 5; i++)
-                      Expanded(
-                        child: Center(
-                          child: value == i
-                              // Allow the (wider) label to spill past its 1/5 slot,
-                              // centred under the thumb, so it stays readable.
-                              ? OverflowBox(
-                                  maxWidth: double.infinity,
-                                  child: Text(ratingLevelLabel(context, i),
-                                      softWrap: false,
-                                      style: context.text.titleSmall
-                                          ?.copyWith(fontWeight: FontWeight.w700, color: _levelColor(context, i))),
-                                )
-                              : const SizedBox.shrink(),
+              ],
+            ),
+            const SizedBox(height: 4),
+            // Reserved label line: the selected level's label under its own thumb, or a
+            // centred prompt when nothing is chosen yet. Fixed height so the layout
+            // never jumps between the two states.
+            SizedBox(
+              height: 22,
+              child: value == null
+                  ? Center(
+                      child: Text(
+                        AppLocalizations.of(context).rateThisShow,
+                        style: context.text.titleSmall?.copyWith(
+                          color: context.scheme.onSurfaceVariant,
                         ),
                       ),
-                  ],
-                ),
-        ),
-      ],
+                    )
+                  : Row(
+                      children: [
+                        for (var i = 1; i <= 5; i++)
+                          Expanded(
+                            child: Center(
+                              child: value == i
+                                  // Allow the (wider) label to spill past its 1/5 slot,
+                                  // centred under the thumb, so it stays readable.
+                                  ? OverflowBox(
+                                      maxWidth: double.infinity,
+                                      child: Text(
+                                        ratingLevelLabel(context, i),
+                                        softWrap: false,
+                                        style: context.text.titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              color: _levelColor(context, i),
+                                            ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -163,7 +207,12 @@ class RatingThumbs extends StatelessWidget {
 }
 
 class _LevelButton extends StatelessWidget {
-  const _LevelButton({required this.level, required this.selected, required this.size, required this.onTap});
+  const _LevelButton({
+    required this.level,
+    required this.selected,
+    required this.size,
+    required this.onTap,
+  });
   final int level;
   final bool selected;
   final double size;
@@ -174,15 +223,21 @@ class _LevelButton extends StatelessWidget {
     final accent = _levelColor(context, level);
     // Every button gets a circle so the five read as distinct chips; the selected
     // one fills with its valence colour and takes a ring.
-    final bg = selected ? accent.withValues(alpha: 0.20) : context.scheme.onSurfaceVariant.withValues(alpha: 0.10);
+    final bg = selected
+        ? accent.withValues(alpha: 0.20)
+        : context.scheme.onSurfaceVariant.withValues(alpha: 0.10);
     // The opaque colour of the circle's interior (bg composited over the surface),
     // used as the outline so overlapping thumbs read as two separate shapes.
     final interior = Color.alphaBlend(bg, context.scheme.surface);
     // The fill MUST be fully opaque, otherwise the front thumb shows the one behind
     // it. Keep the muted look by compositing the tone over the circle interior
     // rather than using a translucent colour.
-    final glyphColor =
-        selected ? accent : Color.alphaBlend(context.scheme.onSurfaceVariant.withValues(alpha: 0.7), interior);
+    final glyphColor = selected
+        ? accent
+        : Color.alphaBlend(
+            context.scheme.onSurfaceVariant.withValues(alpha: 0.7),
+            interior,
+          );
     final diameter = size + 14;
     return Tooltip(
       message: ratingLevelLabel(context, level),

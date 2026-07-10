@@ -41,6 +41,13 @@ pub struct SearchResult {
     /// popular/remote paths.
     #[serde(default)]
     pub in_library: bool,
+    /// The viewer's own labeled 1..5 rating (INT2), surfaced so the Library's
+    /// filtered/search view can show it. Null when unrated / non-viewer path.
+    #[serde(default)]
+    pub rating: Option<i16>,
+    /// Whether the viewer has favorited this title (Library filtered/search view).
+    #[serde(default)]
+    pub is_favorited: bool,
 }
 
 /// Insert a minimal, deliberately-stale catalog stub for a series/movie we saw

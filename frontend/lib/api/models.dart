@@ -309,7 +309,21 @@ class SearchResult {
 
   /// Whether the viewer already tracks this title (Discover marks these).
   final bool inLibrary;
-  const SearchResult({this.tvdbId, this.kind, this.name, this.year, this.imageUrl, this.inLibrary = false});
+
+  /// The viewer's own 1..5 rating and favorite flag — populated for the Library's
+  /// filtered/search view (shown on cards there; unused in Discover).
+  final int? rating;
+  final bool isFavorited;
+  const SearchResult({
+    this.tvdbId,
+    this.kind,
+    this.name,
+    this.year,
+    this.imageUrl,
+    this.inLibrary = false,
+    this.rating,
+    this.isFavorited = false,
+  });
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
         tvdbId: j['tvdb_id'] as int?,
@@ -318,6 +332,8 @@ class SearchResult {
         year: j['year'] as int?,
         imageUrl: j['image_url'] as String?,
         inLibrary: j['in_library'] as bool? ?? false,
+        rating: (j['rating'] as num?)?.toInt(),
+        isFavorited: j['is_favorited'] as bool? ?? false,
       );
 }
 
@@ -333,6 +349,7 @@ class LibraryShow {
   final int totalEpisodes; // aired, non-special
   final int seenEpisodes; // distinct watched, non-special
   final bool isAnime; // original language is Japanese
+  final int? rating; // the viewer's own labeled 1..5 rating, null = unrated
   const LibraryShow({
     required this.seriesId,
     this.name,
@@ -345,6 +362,7 @@ class LibraryShow {
     this.totalEpisodes = 0,
     this.seenEpisodes = 0,
     this.isAnime = false,
+    this.rating,
   });
 
   /// Fraction of the (non-special) aired episodes seen, 0..1.
@@ -363,6 +381,7 @@ class LibraryShow {
             totalEpisodes: j['total_episodes'] as int? ?? 0,
             seenEpisodes: j['seen_episodes'] as int? ?? 0,
             isAnime: j['is_anime'] as bool? ?? false,
+            rating: j['rating'] as int?,
           ),
         _ => throw FormatException('LibraryShow: bad payload $j'),
       };
