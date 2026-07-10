@@ -208,7 +208,8 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
             SELECT e.series_id, count(*) AS total_episodes, max(e.aired) AS max_aired \
             FROM catalog.episode e \
             WHERE e.series_id IN (SELECT series_id FROM lib) \
-              AND NOT e.deleted AND e.season_number > 0 AND e.aired IS NOT NULL AND e.aired <= current_date \
+              AND NOT e.deleted AND e.season_number > 0 \
+              AND (e.aired IS NULL OR e.aired <= current_date) \
             GROUP BY e.series_id \
         ), \
         latest_eps AS ( \
@@ -271,6 +272,10 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
         // "Started" = any real watch activity, not the (sometimes-zero) import
         // aggregate: a show with watch history must never be "Haven't started".
         let started = r.last_watched.is_some() || r.seen_episodes > 0 || r.nb_episodes_seen > 0;
+        // Caught up = seen the latest-aired episode, OR (fallback for shows whose
+        // episodes have no mirrored air date, so there is no "latest aired") seen
+        // every counted episode.
+        let caught_up = r.caught_up || (r.total_episodes > 0 && r.seen_episodes >= r.total_episodes);
         if r.archived || r.status.as_deref() == Some("stopped") {
             lib.stopped.push(r);
         } else if r.status.as_deref() == Some("for_later") {
@@ -278,7 +283,7 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
             lib.for_later.push(r);
         } else if !started {
             lib.not_started.push(r);
-        } else if r.caught_up {
+        } else if caught_up {
             // Seen the latest-aired episode → caught up, regardless of how long ago.
             lib.up_to_date.push(r);
         } else {
