@@ -1,8 +1,14 @@
 //! One-time GDPR export importer: reads the TV Time `.zip` and loads the user's
 //! data into `app.*`. Idempotent (safe to re-run): the account is deduped by its
-//! original TV Time id, and every write is an upsert. Derived datasets (stats
-//! cache, addiction scores, count-by-timeframe) are intentionally skipped — we
-//! recompute those. See `docs/datamining.md`.
+//! original TV Time id, relationship rows (user_show/user_movie/ratings) are
+//! upserts, and episode watch events are grouped into a per-run `app.gdpr_import`
+//! batch — a re-import replaces the prior import's copies of only the episodes the new
+//! export actually contains, so history is de-duplicated even when TV Time changes the
+//! export's id scheme, yet a watch the new export won't re-create (a since-removed show,
+//! or one a heuristic backfill mistagged) is never deleted; manual watches (import_id
+//! IS NULL) are untouched throughout.
+//! Derived datasets (stats cache, addiction scores, count-by-timeframe) are
+//! intentionally skipped — we recompute those. See `docs/datamining.md`.
 
 pub mod gomap;
 mod source;
@@ -16,7 +22,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 
 use crate::{catalog, state::AppState};
-use source::{Row, ZipSource, boolv, i32v, i64v, s, ts_utc};
+use source::{Row, ZipSource, boolv, episode_id_of, i32v, i64v, s, ts_utc};
 
 #[derive(Debug, Default, serde::Serialize)]
 pub struct ImportSummary {
@@ -39,7 +45,12 @@ pub struct ImportSummary {
 /// path — prefetches the referenced series into the catalog.
 pub async fn run(state: &AppState, zip_path: &str) -> anyhow::Result<ImportSummary> {
     let src = ZipSource::open(zip_path)?;
-    import(state, src, None, true).await
+    import(state, src, None, true, basename(zip_path)).await
+}
+
+/// Last path segment of a zip path, for recording on the import batch.
+fn basename(path: &str) -> Option<String> {
+    path.rsplit(['/', '\\']).next().filter(|s| !s.is_empty()).map(str::to_string)
 }
 
 /// Import an uploaded zip's tracking data into an existing (logged-in) user.
@@ -47,7 +58,7 @@ pub async fn run(state: &AppState, zip_path: &str) -> anyhow::Result<ImportSumma
 /// request returns promptly.
 pub async fn run_into(state: &AppState, bytes: Vec<u8>, user_id: Uuid) -> anyhow::Result<ImportSummary> {
     let src = ZipSource::open_bytes(bytes)?;
-    import(state, src, Some(user_id), false).await
+    import(state, src, Some(user_id), false, None).await
 }
 
 /// Import a zip on disk into an existing user (repairs/refreshes their data).
@@ -55,7 +66,7 @@ pub async fn run_into(state: &AppState, bytes: Vec<u8>, user_id: Uuid) -> anyhow
 /// backfill an account whose earlier import was partial.
 pub async fn run_zip_into(state: &AppState, zip_path: &str, user_id: Uuid) -> anyhow::Result<ImportSummary> {
     let src = ZipSource::open(zip_path)?;
-    import(state, src, Some(user_id), true).await
+    import(state, src, Some(user_id), true, basename(zip_path)).await
 }
 
 async fn import(
@@ -63,6 +74,7 @@ async fn import(
     mut src: ZipSource,
     target_user: Option<Uuid>,
     prefetch: bool,
+    filename: Option<String>,
 ) -> anyhow::Result<ImportSummary> {
     // Load the CSVs we use (flat relational ones + the favorites list).
     let social = src.read_csv("user_social_data.csv")?;
@@ -74,7 +86,8 @@ async fn import(
     let seen_latest = src.read_csv("show_seen_episode_latest.csv")?;
     let lists = src.read_csv("lists-prod-lists.csv")?;
     let rewatched = src.read_csv("rewatched_episode.csv")?;
-    let ratings = src.read_csv("ratings-v2-prod-votes.csv")?;
+    // Per-episode ratings: TV Time renamed this file between export versions.
+    let ratings = src.read_csv_any(&["ratings-v2-prod-votes.csv", "ratings-3-prod-episode_votes.csv"])?;
     let tracking = src.read_csv("tracking-prod-records-v2.csv")?;
     // Movies live only in the v1 tracking export (`entity_type = movie`); v2 is
     // episode-only. Series carry a TheTVDB id, but movies are identified solely
@@ -109,9 +122,27 @@ async fn import(
     summary.rewatches = import_rewatches(state, user_id, &rewatched).await?;
     summary.ratings = import_ratings(state, user_id, &ratings).await?;
 
-    // ---- watch history (bulk, in one transaction) + TV Time's stats summary ----
-    summary.watch_events = import_watch_events(state, user_id, &tracking).await?;
+    // ---- watch history: open a fresh import batch (replacing this user's previous
+    // import events for the episodes THIS export contains, so a re-import doesn't
+    // duplicate them yet never deletes a watch the new export won't re-create), load
+    // the events tagged with it, then record the TV Time stats summary ----
+    let incoming_eps: Vec<i64> = tracking.iter().filter_map(episode_id_of).collect();
+    let import_id = begin_import_batch(state, user_id, filename.as_deref(), &incoming_eps).await?;
+    summary.watch_events = import_watch_events(state, user_id, &tracking, import_id).await?;
+    sqlx::query("UPDATE app.gdpr_import SET watch_events = $2 WHERE id = $1")
+        .bind(import_id)
+        .bind(summary.watch_events as i32)
+        .execute(&state.db)
+        .await?;
     import_stats(state, user_id, &tracking).await?;
+
+    // ---- reconcile the per-show seen-counter with the events we just imported ----
+    // `upsert_show` seeds `nb_episodes_seen` from TV Time's per-show aggregate, which
+    // can outlive or overstate the actual `watch_event` rows (e.g. an earlier import
+    // that dropped the history left a phantom counter with no episodes behind it).
+    // Recomputing from the events makes the counter self-healing: a re-import with the
+    // now-correct history lands the events and this snaps the counter to the truth.
+    reconcile_progress(state, user_id).await?;
 
     // ---- movies: stage the raw intent now (fast); resolve names below/in bg ----
     summary.movies = stage_movies(state, user_id, &tracking_v1).await?;
@@ -188,6 +219,107 @@ pub async fn backfill_unavailable(state: &AppState) -> (usize, usize) {
     let (ok, failed) = prefetch_series(state, ids.into_iter()).await;
     tracing::info!("backfill_unavailable: {ok}/{total} resolved, {failed} flagged/failed");
     (ok, failed)
+}
+
+/// Minimum episode events sharing one `created_at` MINUTE for that minute to count as
+/// a GDPR-import burst. An import inserts its history in dense bursts (dozens–hundreds
+/// of rows per minute over a few minutes); a manual watch is one row, and even a bulk
+/// "mark this season" is only a season's worth (< this). Minute (not second) grouping
+/// is deliberate — an import's rows spread across a minute's worth of seconds, so
+/// per-second buckets undercount and leave stragglers behind. NOTE: proximity to
+/// account creation is NOT reliable — a user can re-import days after signing up
+/// (theo's real import ran 3 days after account creation), so we key on density, not
+/// timing. Trade-off: a manual "mark an entire multi-season show" in one minute could
+/// exceed this and be tagged as import; rare, and re-import would just refresh it.
+const LEGACY_IMPORT_MIN_BURST: i64 = 30;
+
+/// Version of the `gdpr_import` migration. Its applied timestamp is the retro-tag
+/// cutoff: only events created before import batching shipped are legacy candidates.
+const IMPORT_BATCHING_MIGRATION: i64 = 41;
+
+/// One-off: attribute pre-existing import events to a synthetic "legacy" batch so a
+/// future re-import will REPLACE them instead of duplicating. Rows created before
+/// import batching have `import_id IS NULL`, indistinguishable at the row level from a
+/// manual watch — we separate them by burst density (see [`LEGACY_IMPORT_MIN_BURST`]):
+/// any `created_at` second carrying a large batch of episode events is an import. One
+/// legacy batch per user; per-user counts are logged so the (heuristic) attribution is
+/// auditable. Idempotent: already-tagged events are skipped, so re-running only picks
+/// up anything still untagged. Returns the total number of events tagged.
+pub async fn retro_tag_legacy_imports(state: &AppState) -> anyhow::Result<u64> {
+    // Cutoff: only events created BEFORE import batching shipped are legacy candidates.
+    // Anything created after is already attributed precisely by the import path
+    // (import_id set on import, NULL for manual), so the heuristic must never touch it —
+    // this permanently freezes the (heuristic) attribution to pre-batching history and
+    // can never sweep a manual watch made after the feature landed. Taken from the
+    // migration's applied time so it is stable no matter when/how often this is re-run.
+    let has_cutoff: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM _sqlx_migrations WHERE version = $1)",
+    )
+    .bind(IMPORT_BATCHING_MIGRATION)
+    .fetch_one(&state.db)
+    .await?;
+    if !has_cutoff {
+        anyhow::bail!(
+            "cannot resolve the import-batching migration ({IMPORT_BATCHING_MIGRATION}) applied time; \
+             refusing to retro-tag without a created_at cutoff"
+        );
+    }
+
+    let users: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT user_id FROM app.watch_event \
+         WHERE entity_type = 'episode' AND import_id IS NULL \
+           AND created_at < (SELECT installed_on FROM _sqlx_migrations WHERE version = $1)",
+    )
+    .bind(IMPORT_BATCHING_MIGRATION)
+    .fetch_all(&state.db)
+    .await?;
+
+    // Events whose created_at minute is a dense burst for this user (an import), not
+    // one of the sparse one-off watches added manually over time. Both the burst tally
+    // and the tagged set are bounded by the pre-batching cutoff ($3).
+    let tag_sql =
+        "UPDATE app.watch_event w SET import_id = $2 \
+         WHERE w.user_id = $1 AND w.entity_type = 'episode' AND w.import_id IS NULL \
+           AND w.created_at < (SELECT installed_on FROM _sqlx_migrations WHERE version = $3) \
+           AND date_trunc('minute', w.created_at) IN ( \
+               SELECT date_trunc('minute', created_at) FROM app.watch_event \
+               WHERE user_id = $1 AND entity_type = 'episode' AND import_id IS NULL \
+                 AND created_at < (SELECT installed_on FROM _sqlx_migrations WHERE version = $3) \
+               GROUP BY 1 HAVING count(*) >= $4)";
+
+    let (mut total, mut users_tagged) = (0u64, 0u64);
+    for user_id in users {
+        let import_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO app.gdpr_import (user_id, is_legacy, note) \
+             VALUES ($1, true, 'retro-tagged: dense created_at import burst (pre-batching)') RETURNING id",
+        )
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await?;
+        let tagged = sqlx::query(tag_sql)
+            .bind(user_id)
+            .bind(import_id)
+            .bind(IMPORT_BATCHING_MIGRATION)
+            .bind(LEGACY_IMPORT_MIN_BURST)
+            .execute(&state.db)
+            .await?
+            .rows_affected();
+        if tagged == 0 {
+            // No burst for this user (all their events look manual) — drop the empty batch.
+            sqlx::query("DELETE FROM app.gdpr_import WHERE id = $1").bind(import_id).execute(&state.db).await?;
+            continue;
+        }
+        sqlx::query("UPDATE app.gdpr_import SET watch_events = $2 WHERE id = $1")
+            .bind(import_id)
+            .bind(tagged as i32)
+            .execute(&state.db)
+            .await?;
+        tracing::info!("retro-tagged {tagged} legacy import event(s) for {user_id} (batch {import_id})");
+        total += tagged;
+        users_tagged += 1;
+    }
+    tracing::info!("retro_tag_legacy_imports: tagged {total} event(s) across {users_tagged} user(s)");
+    Ok(total)
 }
 
 async fn upsert_user(state: &AppState, social: &[Row], personal: &[Row]) -> anyhow::Result<Uuid> {
@@ -359,7 +491,7 @@ async fn upsert_show(state: &AppState, user_id: Uuid, series_id: i64, a: &ShowAc
 async fn import_rewatches(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
     let mut n = 0;
     for r in rows {
-        let Some(episode_id) = i64v(r, "episode_id") else { continue };
+        let Some(episode_id) = episode_id_of(r) else { continue };
         sqlx::query(
             "INSERT INTO app.episode_rewatch (user_id, episode_id, count, updated_at) \
              VALUES ($1,$2,$3, COALESCE($4::timestamptz, now())) \
@@ -379,7 +511,7 @@ async fn import_rewatches(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyh
 async fn import_ratings(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
     let mut n = 0;
     for r in rows {
-        let Some(episode_id) = i64v(r, "episode_id") else { continue };
+        let Some(episode_id) = episode_id_of(r) else { continue };
         // vote_key = "{episode_id}-{user_id}-{vote}"
         let vote: i16 = s(r, "vote_key")
             .and_then(|k| k.rsplit('-').next())
@@ -407,12 +539,63 @@ async fn import_ratings(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow
 /// (`key=user-series-…`) and a single stats-summary row (`key=tracking-stats`)
 /// with no episode_id — those are NOT movie watches (there are no per-movie rows in
 /// this export) so we skip them here. `key`/`uuid` gives idempotency.
-async fn import_watch_events(state: &AppState, user_id: Uuid, rows: &[Row]) -> anyhow::Result<usize> {
+/// Open a new import batch for `user_id` and clear the PREVIOUS import events that
+/// this export is about to re-create — i.e. only tagged events whose `episode_id` is
+/// in `incoming_eps`. That makes the delete loss-proof: a tagged event the new export
+/// does NOT contain (a since-removed show, or a manual watch that a heuristic backfill
+/// mistagged) is kept, not dropped, so re-import can never erase history it won't put
+/// back. Manual watches (`import_id IS NULL`, incl. movie events) are never touched.
+/// Empty prior batches left behind are pruned. Returns the new batch id.
+async fn begin_import_batch(
+    state: &AppState,
+    user_id: Uuid,
+    filename: Option<&str>,
+    incoming_eps: &[i64],
+) -> anyhow::Result<Uuid> {
+    let import_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO app.gdpr_import (user_id, filename) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(user_id)
+    .bind(filename)
+    .fetch_one(&state.db)
+    .await?;
+    // Remove only prior-import copies of episodes THIS export carries — those get
+    // re-inserted below. Everything else tagged stays put.
+    let removed = sqlx::query(
+        "DELETE FROM app.watch_event \
+         WHERE user_id = $1 AND entity_type = 'episode' AND import_id IS NOT NULL \
+           AND episode_id = ANY($2)",
+    )
+    .bind(user_id)
+    .bind(incoming_eps)
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    // Prune any earlier batch row that no longer has events (fully superseded); keep
+    // ones still holding events the new export didn't cover.
+    sqlx::query(
+        "DELETE FROM app.gdpr_import g \
+         WHERE g.user_id = $1 AND g.id <> $2 \
+           AND NOT EXISTS (SELECT 1 FROM app.watch_event w WHERE w.import_id = g.id)",
+    )
+    .bind(user_id)
+    .bind(import_id)
+    .execute(&state.db)
+    .await?;
+    if removed > 0 {
+        tracing::info!("import {import_id}: replaced {removed} prior-import event(s) for {user_id}");
+    }
+    Ok(import_id)
+}
+
+async fn import_watch_events(state: &AppState, user_id: Uuid, rows: &[Row], import_id: Uuid) -> anyhow::Result<usize> {
     let mut tx = state.db.begin().await?;
     let mut n = 0;
     for r in rows {
-        // Skip anything that isn't an actual episode watch.
-        let Some(episode_id) = i64v(r, "episode_id") else { continue };
+        // Skip anything that isn't an actual episode watch. Accept either the long
+        // `episode_id` (older export) or the short `ep_id` (2026-07+ export) — the
+        // series/season/episode columns below already tolerate both spellings.
+        let Some(episode_id) = episode_id_of(r) else { continue };
         let series_id = i64v(r, "s_id");
 
         let source_uuid = s(r, "key")
@@ -425,8 +608,8 @@ async fn import_watch_events(state: &AppState, user_id: Uuid, rows: &[Row]) -> a
         sqlx::query(
             "INSERT INTO app.watch_event \
                (user_id, entity_type, series_id, episode_id, season_number, \
-                episode_number, runtime, is_rewatch, bulk_type, source_uuid, watched_at, created_at) \
-             VALUES ($1,'episode',$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::timestamptz, now()), now()) \
+                episode_number, runtime, is_rewatch, bulk_type, source_uuid, watched_at, created_at, import_id) \
+             VALUES ($1,'episode',$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::timestamptz, now()), now(), $11) \
              ON CONFLICT (user_id, source_uuid) DO NOTHING",
         )
         .bind(user_id)
@@ -439,12 +622,42 @@ async fn import_watch_events(state: &AppState, user_id: Uuid, rows: &[Row]) -> a
         .bind(s(r, "bulk_type"))
         .bind(&source_uuid)
         .bind(ts_utc(r, "created_at"))
+        .bind(import_id)
         .execute(&mut *tx)
         .await?;
         n += 1;
     }
     tx.commit().await?;
     Ok(n)
+}
+
+/// Snap every tracked show's `nb_episodes_seen` to the distinct number of episodes
+/// actually present in `watch_event`. Idempotent and self-healing: shows whose
+/// per-episode history was dropped by an earlier import get their real count once a
+/// corrected re-import lands the events, and shows with a stale/overstated aggregate
+/// are corrected down (a show with no backing events settles to 0). One bulk UPDATE,
+/// touching only rows whose counter is wrong.
+async fn reconcile_progress(state: &AppState, user_id: Uuid) -> anyhow::Result<u64> {
+    let res = sqlx::query(
+        "UPDATE app.user_show us SET nb_episodes_seen = c.cnt, updated_at = now() \
+         FROM ( \
+             SELECT s.series_id, \
+                    (SELECT count(DISTINCT w.episode_id)::int FROM app.watch_event w \
+                     WHERE w.user_id = $1 AND w.series_id = s.series_id \
+                       AND w.episode_id IS NOT NULL) AS cnt \
+             FROM app.user_show s WHERE s.user_id = $1 \
+         ) c \
+         WHERE us.user_id = $1 AND us.series_id = c.series_id \
+           AND us.nb_episodes_seen <> c.cnt",
+    )
+    .bind(user_id)
+    .execute(&state.db)
+    .await?;
+    let fixed = res.rows_affected();
+    if fixed > 0 {
+        tracing::info!("import: reconciled nb_episodes_seen on {fixed} show(s) for {user_id}");
+    }
+    Ok(fixed)
 }
 
 /// Import TV Time's stats-summary row (`key=tracking-stats`) — the authoritative

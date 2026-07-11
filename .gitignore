@@ -44,6 +44,8 @@ key.properties
 catalog-backup.sql.gz
 architecture
 gdpr-data
+# raw TV Time GDPR exports (PII: tokens, IPs, emails)
+gdpr-*.zip
 # local backup FTP credentials/config
 scripts/backup.env
 cinetrack-backup-key.txt

@@ -3,8 +3,9 @@
 
 use std::collections::HashMap;
 
+use super::basename;
 use super::gomap::parse_favorite_objects;
-use super::source::{Row, boolv, i32v, i64v, s, ts_utc};
+use super::source::{Row, boolv, episode_id_of, i32v, i64v, s, ts_utc};
 
 fn row(pairs: &[(&str, &str)]) -> Row {
     pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<HashMap<_, _>>()
@@ -29,6 +30,35 @@ fn i64v_and_i32v_parse_numbers_only() {
     assert_eq!(i64v(&r, "bad"), None);
     assert_eq!(i32v(&r, "blank"), None);
     assert_eq!(i64v(&r, "missing"), None);
+}
+
+#[test]
+fn episode_id_reads_both_export_formats() {
+    // Newer export (theo, 2026-07): `tracking-prod-records-v2.csv` carries ONLY the
+    // short `ep_id`. Reading `episode_id` alone here dropped the whole watch history.
+    let new_fmt = row(&[("user_id", "57"), ("s_id", "355774"), ("ep_id", "6915147"), ("s_no", "1"), ("ep_no", "1")]);
+    assert_eq!(episode_id_of(&new_fmt), Some(6915147));
+
+    // Older export (shiranuit): the long `episode_id` (often alongside `ep_id`).
+    let old_fmt = row(&[("s_id", "355774"), ("ep_id", "6915147"), ("episode_id", "6915147"), ("ep_no", "1")]);
+    assert_eq!(episode_id_of(&old_fmt), Some(6915147));
+
+    // A follow / stats-summary row has no episode id at all → callers skip it.
+    let follow = row(&[("s_id", "355774"), ("key", "user-355774-follow"), ("is_followed", "1")]);
+    assert_eq!(episode_id_of(&follow), None);
+
+    // Blank/zero-string ids are treated as absent, not parsed to 0.
+    let blank = row(&[("episode_id", ""), ("ep_id", "  ")]);
+    assert_eq!(episode_id_of(&blank), None);
+}
+
+#[test]
+fn basename_extracts_the_zip_filename_for_the_import_batch() {
+    assert_eq!(basename("/home/u/gdpr-theo.zip").as_deref(), Some("gdpr-theo.zip"));
+    assert_eq!(basename("gdpr-theo.zip").as_deref(), Some("gdpr-theo.zip"));
+    assert_eq!(basename(r"C:\exports\gdpr.zip").as_deref(), Some("gdpr.zip"));
+    assert_eq!(basename("/trailing/slash/"), None); // no filename to record
+    assert_eq!(basename(""), None);
 }
 
 #[test]

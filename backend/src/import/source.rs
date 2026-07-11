@@ -36,7 +36,25 @@ impl ZipSource {
             tracing::warn!("{name} not found in zip — skipping");
             return Ok(vec![]);
         };
+        self.read_csv_at(idx)
+    }
 
+    /// Read the first of `names` that exists with rows. TV Time renames the same
+    /// dataset between export versions (e.g. the ratings file went
+    /// `ratings-v2-prod-votes.csv` → `ratings-3-prod-episode_votes.csv`), so callers
+    /// list every known spelling and take whichever the export actually ships.
+    pub fn read_csv_any(&mut self, names: &[&str]) -> anyhow::Result<Vec<Row>> {
+        for name in names {
+            let rows = self.read_csv(name)?;
+            if !rows.is_empty() {
+                return Ok(rows);
+            }
+        }
+        tracing::warn!("none of {names:?} found in zip — skipping");
+        Ok(vec![])
+    }
+
+    fn read_csv_at(&mut self, idx: usize) -> anyhow::Result<Vec<Row>> {
         let mut bytes = Vec::new();
         self.archive.by_index(idx)?.read_to_end(&mut bytes)?;
 
@@ -69,6 +87,16 @@ pub fn s<'a>(row: &'a Row, key: &str) -> Option<&'a str> {
 
 pub fn i64v(row: &Row, key: &str) -> Option<i64> {
     s(row, key).and_then(|v| v.parse().ok())
+}
+
+/// The TheTVDB episode id for a tracking/rewatch/rating row, tolerant of export
+/// format drift. TV Time's newer export (2026-07+) dropped the long `episode_id`
+/// column from `tracking-prod-records-v2.csv` in favour of the short `ep_id`; older
+/// exports carry `episode_id` (sometimes both). Reading only one name silently drops
+/// the entire watch history of the other format, so accept either. Returns `None`
+/// for non-episode rows (follow/summary), which callers skip.
+pub fn episode_id_of(row: &Row) -> Option<i64> {
+    i64v(row, "episode_id").or_else(|| i64v(row, "ep_id"))
 }
 
 pub fn i32v(row: &Row, key: &str) -> Option<i32> {
