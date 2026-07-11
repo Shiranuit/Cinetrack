@@ -48,3 +48,7 @@ gdpr-data
 scripts/backup.env
 cinetrack-backup-key.txt
 *.tar
+# downloaded off-site backups (archives + manifests; may be unencrypted DB dumps)
+/backup-download/
+cinetrack-*.tar.age
+cinetrack-*.meta
