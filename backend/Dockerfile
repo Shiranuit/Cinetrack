@@ -8,6 +8,10 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && r
 COPY src ./src
 COPY migrations ./migrations
 RUN touch src/main.rs && cargo build --release
+# Gather the server + every CLI (src/bin/*) into one dir so new binaries ship
+# automatically — no need to list each below. Top-level executables only, which
+# skips deps/, build/, *.d and the other build artifacts under target/release.
+RUN mkdir -p /out && find target/release -maxdepth 1 -type f -executable -exec cp -t /out {} +
 
 # Runtime
 FROM debian:bookworm-slim
@@ -17,16 +21,9 @@ ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/backend /usr/local/bin/backend
-# Admin/recovery CLIs (invoked via `docker compose exec|run backend <name> …`).
-COPY --from=builder /app/target/release/create_user /usr/local/bin/create_user
-COPY --from=builder /app/target/release/reset_password /usr/local/bin/reset_password
-COPY --from=builder /app/target/release/migrate /usr/local/bin/migrate
-# One-off catalog backfill: mirror every language's episode name/overview so
-# Mirror mode serves translated episodes offline. Resumable; safe to re-run.
-COPY --from=builder /app/target/release/backfill_episode_translations /usr/local/bin/backfill_episode_translations
-# One-off catalog backfill: re-fetch the series/movie ?meta=translations bundle to
-# store real translated titles (not aliases) + cache raw_translations. Resumable.
-COPY --from=builder /app/target/release/backfill_series_movie_translations /usr/local/bin/backfill_series_movie_translations
+# The server (CMD below) plus every admin/recovery/backfill CLI, each invokable via
+# `docker compose exec|run backend <name> …`. Copied wholesale from the build stage,
+# so adding a src/bin/*.rs ships automatically with no change here.
+COPY --from=builder /out/ /usr/local/bin/
 EXPOSE 8080
 CMD ["backend"]
