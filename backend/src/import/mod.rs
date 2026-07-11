@@ -733,9 +733,28 @@ fn build_movies(records: &[Row]) -> HashMap<String, MovieAcc> {
                 }
             }
             Some("rewatch_count") => a.watched_count += i32v(r, "rewatch_count").unwrap_or(0),
-            Some("follow") => a.followed_at = ts_utc(r, "created_at"),
+            // Following a movie means "I want to watch this" → watch-later. (The
+            // normalization below drops it again if the movie is also watched.)
+            Some("follow") => {
+                a.followed_at = ts_utc(r, "created_at");
+                a.watchlist = true;
+            }
             Some("towatch") => a.watchlist = true,
             _ => {}
+        }
+    }
+    // Enforce the movie state model: a movie is WATCHED or in WATCH-LATER, never both,
+    // and an un-watched movie carries no watch count. Rows are accumulated out of
+    // order, so normalize once at the end.
+    for a in map.values_mut() {
+        if a.watched_count > 0 {
+            a.watched = true; // a rewatch count with no explicit watch row still means watched
+        }
+        if a.watched {
+            a.watchlist = false; // watched movies are never "watch later"
+            a.watched_count = a.watched_count.max(1); // watched ⟹ at least one watch
+        } else {
+            a.watched_count = 0; // un-watched ⟹ no count
         }
     }
     map
@@ -793,7 +812,7 @@ async fn stage_movies(state: &AppState, user_id: Uuid, records: &[Row]) -> anyho
         .bind(a.year)
         .bind(a.runtime_secs)
         .bind(a.watched)
-        .bind(a.watched_count.max(1))
+        .bind(a.watched_count)
         .bind(a.watchlist)
         .bind(a.last_watched.as_deref())
         .bind(a.followed_at.as_deref())
@@ -964,12 +983,15 @@ async fn link_movie(state: &AppState, user_id: Uuid, source_uuid: &str, movie_id
     sqlx::query(
         "INSERT INTO app.user_movie \
            (user_id, movie_id, watched, watched_count, watchlist, last_watched, created_at, updated_at) \
-         SELECT im.user_id, $3, im.watched, GREATEST(im.watched_count, 1), im.watchlist, im.last_watched, now(), now() \
+         SELECT im.user_id, $3, im.watched, GREATEST(im.watched_count, im.watched::int), im.watchlist, im.last_watched, now(), now() \
          FROM app.import_movie im WHERE im.user_id = $1 AND im.source_uuid = $2 \
          ON CONFLICT (user_id, movie_id) DO UPDATE SET \
            watched = app.user_movie.watched OR EXCLUDED.watched, \
-           watched_count = GREATEST(app.user_movie.watched_count, EXCLUDED.watched_count), \
-           watchlist = app.user_movie.watchlist OR EXCLUDED.watchlist, \
+           watchlist = (app.user_movie.watchlist OR EXCLUDED.watchlist) \
+                       AND NOT (app.user_movie.watched OR EXCLUDED.watched), \
+           watched_count = CASE WHEN app.user_movie.watched OR EXCLUDED.watched \
+                                THEN GREATEST(app.user_movie.watched_count, EXCLUDED.watched_count, 1) \
+                                ELSE 0 END, \
            last_watched = GREATEST(app.user_movie.last_watched, EXCLUDED.last_watched), \
            updated_at = now()",
     )

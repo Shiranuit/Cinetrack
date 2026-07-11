@@ -197,6 +197,7 @@ fn build_movies_groups_watched_rows_by_uuid() {
     assert_eq!(a.search_name.as_deref(), Some("bleach hell verse"));
     assert_eq!(a.last_watched.as_deref(), Some("2020-09-02 18:43:32+00"));
     assert_eq!(a.followed_at.as_deref(), Some("2020-09-01 10:00:00+00"));
+    assert!(!a.watchlist); // watched wins: a watched movie is never watch-later
 }
 
 #[test]
@@ -209,7 +210,27 @@ fn build_movies_skips_zero_date_year_and_unwatched_stays_flagged() {
     let m = build_movies(&[towatch]);
     let a = &m["u2"];
     assert!(!a.watched);
+    assert!(a.watchlist); // plan-to-watch → watch-later
+    assert_eq!(a.watched_count, 0); // un-watched movies carry no watch count
     assert_eq!(a.year, None); // 0001 sentinel ignored
+}
+
+#[test]
+fn build_movies_follow_becomes_watch_later_unless_watched() {
+    // A follow-only movie → watch-later (so the library shows it under "Watch later").
+    let follow = row(&[("entity_type", "movie"), ("type", "follow"), ("uuid", "f1"), ("created_at", "2021-01-01 00:00:00")]);
+    let a = &build_movies(&[follow])["f1"];
+    assert!(a.watchlist);
+    assert!(!a.watched);
+    assert_eq!(a.watched_count, 0);
+
+    // Followed AND watched → watched wins, not in watch-later.
+    let follow2 = row(&[("entity_type", "movie"), ("type", "follow"), ("uuid", "f2")]);
+    let watch2 = row(&[("entity_type", "movie"), ("type", "watch"), ("uuid", "f2"), ("created_at", "2021-02-02 00:00:00")]);
+    let a = &build_movies(&[follow2, watch2])["f2"];
+    assert!(a.watched);
+    assert!(!a.watchlist);
+    assert_eq!(a.watched_count, 1);
 }
 
 #[test]

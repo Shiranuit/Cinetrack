@@ -54,3 +54,5 @@ cinetrack-backup-key.txt
 /backup-download/
 cinetrack-*.tar.age
 cinetrack-*.meta
+# generated user-data report (not for commit)
+affected-shows-report.md

@@ -47,11 +47,14 @@ pub async fn watch(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<
     // Cache the movie so the library has its name/poster.
     let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
 
+    // Watching a movie also removes it from watch-later — a movie is watched XOR
+    // watch-later, never both.
     sqlx::query(
-        "INSERT INTO app.user_movie (user_id, movie_id, watched, watched_count, last_watched, updated_at) \
-         VALUES ($1, $2, true, 1, now(), now()) \
+        "INSERT INTO app.user_movie (user_id, movie_id, watched, watched_count, watchlist, last_watched, updated_at) \
+         VALUES ($1, $2, true, 1, false, now(), now()) \
          ON CONFLICT (user_id, movie_id) DO UPDATE SET \
-           watched = true, watched_count = app.user_movie.watched_count + 1, last_watched = now(), updated_at = now()",
+           watched = true, watched_count = app.user_movie.watched_count + 1, \
+           watchlist = false, last_watched = now(), updated_at = now()",
     )
     .bind(user_id)
     .bind(movie_id)
@@ -87,23 +90,67 @@ pub async fn unwatch(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResul
     relation(state, user_id, movie_id).await
 }
 
-pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
-    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+/// Log one movie watch event for history, but only if this movie has none yet — so
+/// implicit "marked watched" actions (favorite, rating) keep the watched⇒has-history
+/// invariant without piling up phantom watches when re-triggered.
+async fn ensure_movie_watch_event(state: &AppState, user_id: Uuid, movie_id: i64) -> AppResult<()> {
     sqlx::query(
-        "INSERT INTO app.user_movie (user_id, movie_id, is_favorited, updated_at) \
-         VALUES ($1, $2, $3, now()) \
-         ON CONFLICT (user_id, movie_id) DO UPDATE SET is_favorited = $3, updated_at = now()",
+        "INSERT INTO app.watch_event (user_id, entity_type, movie_id, source_uuid, watched_at) \
+         SELECT $1, 'movie', $2, 'movie-' || $2 || '-' || gen_random_uuid(), now() \
+         WHERE NOT EXISTS ( \
+           SELECT 1 FROM app.watch_event WHERE user_id = $1 AND movie_id = $2 AND entity_type = 'movie')",
     )
     .bind(user_id)
     .bind(movie_id)
-    .bind(value)
     .execute(&state.db)
     .await?;
+    Ok(())
+}
+
+pub async fn set_favorite(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
+    let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    if !value {
+        // Un-favoriting only clears the flag; the watched state is left untouched.
+        sqlx::query(
+            "INSERT INTO app.user_movie (user_id, movie_id, is_favorited, updated_at) \
+             VALUES ($1, $2, false, now()) \
+             ON CONFLICT (user_id, movie_id) DO UPDATE SET is_favorited = false, updated_at = now()",
+        )
+        .bind(user_id)
+        .bind(movie_id)
+        .execute(&state.db)
+        .await?;
+        return relation(state, user_id, movie_id).await;
+    }
+
+    // Favoriting implies you've seen the movie: mark it watched (without bumping the
+    // rewatch count if it was already watched), and since a movie is watched XOR
+    // watch-later, it leaves watch-later.
+    sqlx::query(
+        "INSERT INTO app.user_movie \
+           (user_id, movie_id, is_favorited, watched, watched_count, watchlist, last_watched, updated_at) \
+         VALUES ($1, $2, true, true, 1, false, now(), now()) \
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET \
+           is_favorited = true, watched = true, \
+           watched_count = GREATEST(app.user_movie.watched_count, 1), \
+           watchlist = false, \
+           last_watched = COALESCE(app.user_movie.last_watched, now()), \
+           updated_at = now()",
+    )
+    .bind(user_id)
+    .bind(movie_id)
+    .execute(&state.db)
+    .await?;
+
+    ensure_movie_watch_event(state, user_id, movie_id).await?;
     relation(state, user_id, movie_id).await
 }
 
 /// Set (or clear with `None`) the user's labeled 1..5 rating for a movie. Rating a
-/// movie implicitly tracks it, mirroring `set_show_rating` for series.
+/// movie implicitly marks it watched — you rate what you've seen. This is
+/// MOVIE-specific: series (`set_show_rating`) must not be forced "watched" by a
+/// rating, since a show's watched state is its per-episode progress. Clearing the
+/// rating leaves the watched state alone.
 pub async fn set_rating(state: &AppState, user_id: Uuid, movie_id: i64, rating: Option<i16>) -> AppResult<MovieRelation> {
     if let Some(r) = rating
         && !(1..=5).contains(&r)
@@ -111,16 +158,41 @@ pub async fn set_rating(state: &AppState, user_id: Uuid, movie_id: i64, rating: 
         return Err(crate::error::AppError::BadRequest("rating must be between 1 and 5".into()));
     }
     let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    let Some(r) = rating else {
+        // Clearing the rating only clears the flag; the watched state is left untouched.
+        sqlx::query(
+            "INSERT INTO app.user_movie (user_id, movie_id, rating, updated_at) \
+             VALUES ($1, $2, NULL, now()) \
+             ON CONFLICT (user_id, movie_id) DO UPDATE SET rating = NULL, updated_at = now()",
+        )
+        .bind(user_id)
+        .bind(movie_id)
+        .execute(&state.db)
+        .await?;
+        return relation(state, user_id, movie_id).await;
+    };
+
+    // Rating implies you've seen the movie: mark it watched (without bumping the
+    // rewatch count if it was already watched), and since a movie is watched XOR
+    // watch-later, it leaves watch-later.
     sqlx::query(
-        "INSERT INTO app.user_movie (user_id, movie_id, rating, updated_at) \
-         VALUES ($1, $2, $3, now()) \
-         ON CONFLICT (user_id, movie_id) DO UPDATE SET rating = $3, updated_at = now()",
+        "INSERT INTO app.user_movie \
+           (user_id, movie_id, rating, watched, watched_count, watchlist, last_watched, updated_at) \
+         VALUES ($1, $2, $3, true, 1, false, now(), now()) \
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET \
+           rating = $3, watched = true, \
+           watched_count = GREATEST(app.user_movie.watched_count, 1), \
+           watchlist = false, \
+           last_watched = COALESCE(app.user_movie.last_watched, now()), \
+           updated_at = now()",
     )
     .bind(user_id)
     .bind(movie_id)
-    .bind(rating)
+    .bind(r)
     .execute(&state.db)
     .await?;
+
+    ensure_movie_watch_event(state, user_id, movie_id).await?;
     relation(state, user_id, movie_id).await
 }
 
@@ -128,10 +200,14 @@ pub async fn set_rating(state: &AppState, user_id: Uuid, movie_id: i64, rating: 
 /// series' `for_later` status).
 pub async fn set_watchlist(state: &AppState, user_id: Uuid, movie_id: i64, value: bool) -> AppResult<MovieRelation> {
     let _ = catalog::movie::get(state, movie_id, Some("eng")).await;
+    // A movie is watched XOR watch-later: adding an already-watched movie to
+    // watch-later is a no-op (removing it, value = false, is always allowed).
     sqlx::query(
         "INSERT INTO app.user_movie (user_id, movie_id, watchlist, updated_at) \
          VALUES ($1, $2, $3, now()) \
-         ON CONFLICT (user_id, movie_id) DO UPDATE SET watchlist = $3, updated_at = now()",
+         ON CONFLICT (user_id, movie_id) DO UPDATE SET \
+           watchlist = CASE WHEN $3 AND app.user_movie.watched THEN app.user_movie.watchlist ELSE $3 END, \
+           updated_at = now()",
     )
     .bind(user_id)
     .bind(movie_id)
