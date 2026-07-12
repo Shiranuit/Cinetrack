@@ -95,6 +95,47 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    // Optional background-work profiler: with BACKEND_PROFILE=1, log queue throughput,
+    // TheTVDB API rate (+ how much time is spent WAITING in the pacer vs the actual
+    // HTTP round-trip — high wait = at the RPS ceiling, ~0 wait = pacer starved so the
+    // bottleneck is elsewhere), 429 retry rate, and catalog DB-write rate/latency.
+    if state.config.backend_profile {
+        let p = state.clone();
+        tokio::spawn(async move {
+            const WINDOW: u64 = 15;
+            let (mut la, mut ls) = (p.tvdb.stats().snapshot(), p.profile.snapshot());
+            loop {
+                tokio::time::sleep(Duration::from_secs(WINDOW)).await;
+                let (a, s) = (p.tvdb.stats().snapshot(), p.profile.snapshot());
+                let (dcalls, dwait, dhttp, dretry) =
+                    (a.0 - la.0, a.1 - la.1, a.2 - la.2, a.3 - la.3);
+                let (denr, ddbw, ddbus) = (s.0 - ls.0, s.1 - ls.1, s.2 - ls.2);
+                (la, ls) = (a, s);
+                if dcalls == 0 && denr == 0 && ddbw == 0 {
+                    continue; // idle window — stay quiet
+                }
+                let qdepth: i64 = sqlx::query_scalar("SELECT count(*) FROM catalog.fetch_queue")
+                    .fetch_one(&p.db)
+                    .await
+                    .unwrap_or(-1);
+                let w = WINDOW as f64;
+                let avg = |num: u64, den: u64| if den > 0 { num / den / 1000 } else { 0 };
+                tracing::info!(
+                    "profile[{WINDOW}s]: enrich {:.1}/s (queue {qdepth}) | \
+                     api {:.1}/s (http {}ms, pacer-wait {}ms) retries {dretry} ({:.2}/s) | \
+                     db {:.1} writes/s ({}ms avg)",
+                    denr as f64 / w,
+                    dcalls as f64 / w,
+                    avg(dhttp, dcalls),
+                    avg(dwait, dcalls),
+                    dretry as f64 / w,
+                    ddbw as f64 / w,
+                    avg(ddbus, ddbw),
+                );
+            }
+        });
+    }
+
     let app = web::router(state);
 
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;

@@ -11,6 +11,14 @@ use crate::{
     state::AppState,
 };
 
+/// Episode translations change far less often than the rest of a series, and
+/// re-mirroring every language on every enrich is the dominant cost of a re-enrich
+/// (measured ~73% of enrich wall-clock). So a language is only re-fetched when an
+/// episode lacks a translation (a new episode) or its cached translation is older
+/// than this — not on every enrich. Long because the payoff of a needless refresh is
+/// tiny (episode text rarely changes) and the cost is a full per-language fetch.
+const EPISODE_TRANSLATION_TTL: &str = "30 days";
+
 /// Timing accumulators for the episode-translation backfill, so its logs show
 /// where wall-clock goes: TheTVDB fetches vs DB upserts. Microseconds, summed
 /// across all concurrent workers.
@@ -21,6 +29,20 @@ pub struct Metrics {
     insert_us: AtomicU64,
     insert_count: AtomicU64,
     rows: AtomicU64,
+}
+
+impl Metrics {
+    /// Snapshot `(api_calls, api_us, insert_stmts, insert_us, rows_written)` for
+    /// measurement/instrumentation.
+    pub fn snapshot(&self) -> (u64, u64, u64, u64, u64) {
+        (
+            self.fetch_count.load(Ordering::Relaxed),
+            self.fetch_us.load(Ordering::Relaxed),
+            self.insert_count.load(Ordering::Relaxed),
+            self.insert_us.load(Ordering::Relaxed),
+            self.rows.load(Ordering::Relaxed),
+        )
+    }
 }
 
 pub async fn get(state: &AppState, id: i64, lang: Option<&str>) -> AppResult<EpisodeRow> {
@@ -78,17 +100,27 @@ pub async fn mirror_translations(
             .await?
             .flatten();
 
-    let langs: Vec<String> = sqlx::query_scalar(
-        "SELECT DISTINCT lang FROM ( \
-            SELECT jsonb_array_elements_text(raw -> 'nameTranslations') AS lang \
-              FROM catalog.episode \
-              WHERE series_id = $1 AND NOT deleted AND jsonb_typeof(raw -> 'nameTranslations') = 'array' \
+    // Only fetch a language that still NEEDS work: some non-deleted episode advertises
+    // a translation in it but has no cached translation yet (a new episode), or the
+    // cached one is past EPISODE_TRANSLATION_TTL. A language whose episodes are all
+    // already translated & fresh is skipped — that's the dominant saving on a
+    // re-enrich (measured ~73% of enrich time was re-fetching translations we hold).
+    let langs: Vec<String> = sqlx::query_scalar(&format!(
+        "WITH ep_lang AS ( \
+            SELECT e.id AS ep_id, jsonb_array_elements_text(e.raw -> 'nameTranslations') AS lang \
+              FROM catalog.episode e \
+              WHERE e.series_id = $1 AND NOT e.deleted AND jsonb_typeof(e.raw -> 'nameTranslations') = 'array' \
             UNION \
-            SELECT jsonb_array_elements_text(raw -> 'overviewTranslations') AS lang \
-              FROM catalog.episode \
-              WHERE series_id = $1 AND NOT deleted AND jsonb_typeof(raw -> 'overviewTranslations') = 'array' \
-         ) t WHERE lang <> COALESCE($2, '') AND lang <> ''",
-    )
+            SELECT e.id, jsonb_array_elements_text(e.raw -> 'overviewTranslations') \
+              FROM catalog.episode e \
+              WHERE e.series_id = $1 AND NOT e.deleted AND jsonb_typeof(e.raw -> 'overviewTranslations') = 'array' \
+         ) \
+         SELECT DISTINCT el.lang FROM ep_lang el \
+         LEFT JOIN catalog.translation t \
+           ON t.entity_type = 'episode' AND t.entity_id = el.ep_id AND t.language = el.lang \
+         WHERE el.lang <> COALESCE($2, '') AND el.lang <> '' \
+           AND (t.entity_id IS NULL OR t.last_synced_at <= now() - interval '{EPISODE_TRANSLATION_TTL}')"
+    ))
     .bind(series_id)
     .bind(original.as_deref())
     .fetch_all(&state.db)
@@ -136,8 +168,10 @@ pub async fn mirror_translations(
             if !ids.is_empty() {
                 let insert_started = Instant::now();
                 translation::store_many(state, "episode", lang, &ids, &names, &overviews).await?;
+                let elapsed = insert_started.elapsed();
+                state.profile.record_write(elapsed);
                 if let Some(m) = metrics {
-                    m.insert_us.fetch_add(insert_started.elapsed().as_micros() as u64, Ordering::Relaxed);
+                    m.insert_us.fetch_add(elapsed.as_micros() as u64, Ordering::Relaxed);
                     m.insert_count.fetch_add(1, Ordering::Relaxed);
                     m.rows.fetch_add(ids.len() as u64, Ordering::Relaxed);
                 }
@@ -293,7 +327,7 @@ pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
 /// job is building the mirror) calls this directly regardless of mode, which is what
 /// keeps mirrored episode lists current (incl. newly-aired episodes). `primary` picks
 /// the list language; episodes otherwise stay in the series' origin language.
-pub(crate) async fn fetch_and_store_episodes(
+pub async fn fetch_and_store_episodes(
     state: &AppState,
     series_id: i64,
     season_type: &str,
@@ -435,7 +469,7 @@ pub(crate) async fn upsert(state: &AppState, id: i64, data: &Value) -> AppResult
     let finale_type = data["finaleType"].as_str();
     let last_updated = data["lastUpdated"].as_str();
 
-    sqlx::query(
+    let query = sqlx::query(
         "INSERT INTO catalog.episode \
            (id, series_id, season_number, number, absolute_number, name, overview, aired, \
             runtime, image_url, is_movie, finale_type, raw, last_updated, last_synced_at, deleted) \
@@ -460,9 +494,11 @@ pub(crate) async fn upsert(state: &AppState, id: i64, data: &Value) -> AppResult
     .bind(is_movie)
     .bind(finale_type)
     .bind(sqlx::types::Json(data))
-    .bind(last_updated)
-    .execute(&state.db)
-    .await?;
+    .bind(last_updated);
+    let started = Instant::now();
+    let res = query.execute(&state.db).await;
+    state.profile.record_write(started.elapsed());
+    res?;
 
     Ok(())
 }

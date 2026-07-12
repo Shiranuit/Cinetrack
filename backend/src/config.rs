@@ -128,8 +128,10 @@ pub struct Config {
     /// `DB_PROFILE=1`: log every SQL statement with its elapsed time, and
     /// `EXPLAIN (ANALYZE, BUFFERS)` the expensive read queries. Dev/diagnostics only.
     pub db_profile: bool,
-    /// `BACKEND_PROFILE=1`: per-request timing + connection-pool stats, and raise
-    /// app log verbosity to debug. Dev/diagnostics only.
+    /// `BACKEND_PROFILE=1`: per-request timing + connection-pool stats, and a periodic
+    /// background-work profile line (enrich throughput; TheTVDB API rate split into
+    /// pacer-wait vs HTTP time; 429 retries; catalog DB-write rate/latency) plus a log
+    /// on every 429 — to locate sync/enrich bottlenecks. Dev/diagnostics only.
     pub backend_profile: bool,
     /// Under `DB_PROFILE`, only statements at least this slow are logged (and the
     /// expensive queries EXPLAIN-ed), so fast queries don't spam the log. Default 50 ms.

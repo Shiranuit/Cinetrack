@@ -1,6 +1,9 @@
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, Mutex as StdMutex},
+    sync::{
+        Arc, Mutex as StdMutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -145,10 +148,38 @@ pub struct TheTvdbClient {
     token: RwLock<Option<Token>>,
     limiter: RateLimiter,
     inflight: StdMutex<HashMap<String, Arc<OnceCell<FetchOutcome>>>>,
+    stats: RequestStats,
+    /// `BACKEND_PROFILE`: log every 429 (rate-limit) hit, to see if the configured
+    /// RPS is being throttled. Off by default to avoid noise in normal operation.
+    profile: bool,
+}
+
+/// Cumulative request timings, for `BACKEND_PROFILE`. `wait` = time blocked in the
+/// rate pacer (high ⇒ we're at the RPS ceiling; ~0 ⇒ pacer starved, bottleneck is
+/// elsewhere). `http` = actual round-trip. `retries` = 429/5xx backoffs (high ⇒ the
+/// configured RPS is above what TheTVDB allows).
+#[derive(Default)]
+pub struct RequestStats {
+    pub calls: AtomicU64,
+    pub wait_us: AtomicU64,
+    pub http_us: AtomicU64,
+    pub retries: AtomicU64,
+}
+
+impl RequestStats {
+    /// `(calls, wait_us, http_us, retries)` — cumulative.
+    pub fn snapshot(&self) -> (u64, u64, u64, u64) {
+        (
+            self.calls.load(Ordering::Relaxed),
+            self.wait_us.load(Ordering::Relaxed),
+            self.http_us.load(Ordering::Relaxed),
+            self.retries.load(Ordering::Relaxed),
+        )
+    }
 }
 
 impl TheTvdbClient {
-    pub fn new(base_url: String, api_key: String, max_rps: u32) -> Self {
+    pub fn new(base_url: String, api_key: String, max_rps: u32, profile: bool) -> Self {
         Self {
             http: Client::new(),
             base_url,
@@ -156,7 +187,14 @@ impl TheTvdbClient {
             token: RwLock::new(None),
             limiter: RateLimiter::new(if max_rps > 0 { max_rps } else { MAX_REQUESTS_PER_SEC }),
             inflight: StdMutex::new(HashMap::new()),
+            stats: RequestStats::default(),
+            profile,
         }
+    }
+
+    /// Cumulative request stats (for `BACKEND_PROFILE`).
+    pub fn stats(&self) -> &RequestStats {
+        &self.stats
     }
 
     async fn login(&self) -> Result<String, AppError> {
@@ -228,9 +266,14 @@ impl TheTvdbClient {
         let url = format!("{}{}", self.base_url, path);
 
         for attempt in 0..=MAX_RETRIES {
+            let wait_started = Instant::now();
             self.limiter.acquire().await; // pace every attempt (retries included)
+            self.stats.wait_us.fetch_add(wait_started.elapsed().as_micros() as u64, Ordering::Relaxed);
 
+            let http_started = Instant::now();
             let resp = self.http.get(&url).query(params).bearer_auth(&token).send().await;
+            self.stats.http_us.fetch_add(http_started.elapsed().as_micros() as u64, Ordering::Relaxed);
+            self.stats.calls.fetch_add(1, Ordering::Relaxed);
             let resp = match resp {
                 Ok(r) => r,
                 Err(e) => return FetchOutcome::Err(format!("GET {path} failed: {e}")),
@@ -242,8 +285,20 @@ impl TheTvdbClient {
                 if attempt == MAX_RETRIES {
                     return FetchOutcome::Err(format!("GET {path} -> HTTP {status} after {MAX_RETRIES} retries"));
                 }
+                self.stats.retries.fetch_add(1, Ordering::Relaxed);
                 let wait = retry_after(&resp).unwrap_or_else(|| backoff(attempt));
-                tracing::warn!("TheTVDB {status} on {path}; retrying in {:.1}s", wait.as_secs_f64());
+                // A 429 means we're being throttled — surface it in profile mode so the
+                // configured RPS can be tuned. 5xx is transient; keep its warn always.
+                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    if self.profile {
+                        tracing::warn!(
+                            "TheTVDB 429 rate-limited on {path} (attempt {}/{}); backing off {:.1}s",
+                            attempt + 1, MAX_RETRIES, wait.as_secs_f64()
+                        );
+                    }
+                } else {
+                    tracing::warn!("TheTVDB {status} on {path}; retrying in {:.1}s", wait.as_secs_f64());
+                }
                 tokio::time::sleep(wait).await;
                 continue;
             }

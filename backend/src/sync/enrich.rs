@@ -123,6 +123,7 @@ async fn worker(state: AppState, counters: Arc<Counters>, claim_lock: Arc<Mutex<
         for item in items {
             match enrich_one(&state, &item).await {
                 Ok(()) => {
+                    state.profile.enriched.fetch_add(1, Ordering::Relaxed);
                     let done = counters.enriched.fetch_add(1, Ordering::Relaxed) + 1;
                     if done % PROGRESS_EVERY == 0 {
                         let remaining = queue::pending_count(&state).await?;
