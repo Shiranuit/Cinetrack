@@ -286,6 +286,48 @@ pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
     Ok(done.load(Ordering::Relaxed))
 }
 
+/// Fetch a series' full episode list (all pages) from TheTVDB and upsert it, then
+/// record `episodes_synced_at` and the non-special episode count. This ALWAYS calls
+/// TheTVDB — the caller decides whether that's permitted: the read-through
+/// (`list_for_series`) gates on `catalog_mode`, but the enrich worker (whose whole
+/// job is building the mirror) calls this directly regardless of mode, which is what
+/// keeps mirrored episode lists current (incl. newly-aired episodes). `primary` picks
+/// the list language; episodes otherwise stay in the series' origin language.
+pub(crate) async fn fetch_and_store_episodes(
+    state: &AppState,
+    series_id: i64,
+    season_type: &str,
+    primary: Option<&str>,
+) -> AppResult<()> {
+    let mut page = 0u32;
+    loop {
+        let data = state.tvdb.series_episodes(series_id, season_type, primary, page).await?;
+        let episodes = data["episodes"].as_array().cloned().unwrap_or_default();
+        if episodes.is_empty() {
+            break;
+        }
+        for e in &episodes {
+            if let Some(id) = as_i64(&e["id"]) {
+                upsert(state, id, e).await?;
+            }
+        }
+        if episodes.len() < 500 {
+            break; // last page
+        }
+        page += 1;
+    }
+    sqlx::query(
+        "UPDATE catalog.series SET episodes_synced_at = now(), \
+            episode_count = (SELECT count(*) FROM catalog.episode \
+                             WHERE series_id = $1 AND NOT deleted AND season_number > 0) \
+         WHERE id = $1",
+    )
+    .bind(series_id)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
 /// Episodes of a series for a season-type (default `default`), fetched
 /// read-through (all pages) and cached, then returned ordered. The bulk episode
 /// list stays in the series' original language, so translated name/overview are
@@ -311,35 +353,12 @@ pub async fn list_for_series(
     .fetch_optional(&state.db)
     .await?;
 
+    // Read-through only refreshes the list when the mode permits outbound calls. The
+    // mirror keeps episode lists current through the enrich worker, which calls
+    // `fetch_and_store_episodes` directly (regardless of mode) — so don't gate the
+    // mirror's freshness on this read path.
     if fresh != Some(true) && state.config.catalog_mode.allow_remote() {
-        let mut page = 0u32;
-        loop {
-            let data = state.tvdb.series_episodes(series_id, season_type, primary, page).await?;
-            let episodes = data["episodes"].as_array().cloned().unwrap_or_default();
-            if episodes.is_empty() {
-                break;
-            }
-            for e in &episodes {
-                if let Some(id) = as_i64(&e["id"]) {
-                    upsert(state, id, e).await?;
-                }
-            }
-            if episodes.len() < 500 {
-                break; // last page
-            }
-            page += 1;
-        }
-        // Record when we last synced the episode list, and the non-special episode
-        // count (for the "# episodes" filter).
-        sqlx::query(
-            "UPDATE catalog.series SET episodes_synced_at = now(), \
-                episode_count = (SELECT count(*) FROM catalog.episode \
-                                 WHERE series_id = $1 AND NOT deleted AND season_number > 0) \
-             WHERE id = $1",
-        )
-        .bind(series_id)
-        .execute(&state.db)
-        .await?;
+        fetch_and_store_episodes(state, series_id, season_type, primary).await?;
     }
 
     // Overlay per-episode translations for the requested language. TheTVDB only

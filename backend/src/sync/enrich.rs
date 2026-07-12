@@ -155,9 +155,12 @@ async fn enrich_one(state: &AppState, item: &queue::QueueItem) -> AppResult<()> 
     match item.entity_type.as_str() {
         "series" => {
             catalog::series::refresh_full(state, item.id).await?;
-            // Episodes (default season order) for offline completeness — best
-            // effort so a missing/edge episode set doesn't fail the whole item.
-            if let Err(e) = catalog::episode::list_for_series(state, item.id, "default", &[]).await {
+            // Refresh the full episode list (default season order) for offline
+            // completeness — directly, NOT via the read-through `list_for_series`,
+            // which suppresses outbound calls in Mirror mode. The enrich worker's job
+            // is to build the mirror, so it always fetches; this is what picks up
+            // newly-aired/added episodes. Best effort so an edge set doesn't fail the item.
+            if let Err(e) = catalog::episode::fetch_and_store_episodes(state, item.id, "default", None).await {
                 tracing::debug!("enrich series {} episodes skipped: {e}", item.id);
             }
             // Mirror per-episode translations (every available language) so Mirror

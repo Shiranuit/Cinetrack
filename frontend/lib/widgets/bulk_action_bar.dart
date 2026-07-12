@@ -8,6 +8,10 @@ import '../l10n/app_localizations.dart';
 import '../state/library_membership.dart';
 import '../state/selection.dart';
 
+/// Height of the action bar's button row (excluding the bottom safe-area inset).
+/// The confirmation snackbar is floated above this so it never covers the bar.
+const double _kBarHeight = 60;
+
 /// Bottom bar of bulk actions, shown while [controller] has a non-empty selection.
 /// Each action runs over the selected items (applying only where it makes sense:
 /// follow / for-later / stop are series-only, watch & favorite cover both), then
@@ -69,6 +73,18 @@ class _BulkActionBarState extends State<BulkActionBar> {
     final messenger = ScaffoldMessenger.of(context);
     final membership = context.read<LibraryMembership>();
     final items = widget.controller.items.where(applies).toList();
+    // Float the confirmation above the action bar (which sits at the very bottom) so
+    // it doesn't cover the buttons while it's visible; capture the inset before await.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    SnackBar lifted(String msg) => SnackBar(
+      content: Text(msg),
+      behavior: SnackBarBehavior.floating,
+      margin: EdgeInsets.only(
+        left: Insets.md,
+        right: Insets.md,
+        bottom: _kBarHeight + bottomInset + Insets.sm,
+      ),
+    );
     setState(() => _busy = true);
     try {
       final n = await _run(items, op);
@@ -82,10 +98,10 @@ class _BulkActionBarState extends State<BulkActionBar> {
         }
       }
       widget.controller.clear();
-      messenger.showSnackBar(SnackBar(content: Text(t.bulkUpdated(n))));
+      messenger.showSnackBar(lifted(t.bulkUpdated(n)));
       if (widget.onChanged != null) await widget.onChanged!();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      messenger.showSnackBar(lifted('$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -102,7 +118,7 @@ class _BulkActionBarState extends State<BulkActionBar> {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 60,
+          height: _kBarHeight,
           child: Row(
             children: [
               IconButton(
@@ -164,9 +180,14 @@ class _BulkActionBarState extends State<BulkActionBar> {
                           _action(
                             t.follow,
                             Icons.add_rounded,
+                            // Following adds to the library: a series is followed, a
+                            // movie goes to watch-later (movies are watched or
+                            // watch-later, never just "followed").
                             () => _act(
-                              _isSeries,
-                              (api, it) => api.setFollow(it.id, true),
+                              (_) => true,
+                              (api, it) => it.kind == SelKind.series
+                                  ? api.setFollow(it.id, true)
+                                  : api.watchlistMovie(it.id, true),
                             ),
                           ),
                         _action(
