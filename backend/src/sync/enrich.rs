@@ -132,10 +132,12 @@ async fn worker(state: AppState, counters: Arc<Counters>, claim_lock: Arc<Mutex<
                 }
                 // A phantom feed record (created then removed/merged upstream):
                 // `/extended` 404s and never will resolve, so drop it immediately
-                // instead of burning retries on it.
+                // instead of burning retries on it — and clear its stub marker so the
+                // stub sweep doesn't re-enqueue it every cycle (an endless 404 loop).
                 Err(crate::error::AppError::NotFound) => {
                     counters.not_found.fetch_add(1, Ordering::Relaxed);
-                    tracing::debug!("enrich {} {} not found upstream, dropping", item.entity_type, item.id);
+                    mark_not_found(&state, &item.entity_type, item.id).await;
+                    tracing::debug!("enrich {} {} not found upstream, marked deleted", item.entity_type, item.id);
                 }
                 Err(e) => {
                     tracing::warn!("enrich {} {} failed: {e}", item.entity_type, item.id);
@@ -149,6 +151,22 @@ async fn worker(state: AppState, counters: Arc<Counters>, claim_lock: Arc<Mutex<
         }
     }
     Ok(())
+}
+
+/// A 404 from TheTVDB means the id is dead upstream (a phantom/merged record). Clear
+/// its stub marker (`last_synced_at = epoch`) so `enqueue_stubs` stops re-sweeping it
+/// on every cycle — otherwise a permanently-missing stub loops forever, hammering
+/// TheTVDB with 404s and doing zero real work. Flag it `deleted` so reads hide it; a
+/// later `/updates` (with a newer timestamp) can still resurrect it if it reappears.
+async fn mark_not_found(state: &AppState, entity_type: &str, id: i64) {
+    // entity_type comes from our own queue; whitelist it before interpolating.
+    if !matches!(entity_type, "series" | "movie" | "season" | "episode") {
+        return;
+    }
+    let sql = format!("UPDATE catalog.{entity_type} SET deleted = true, last_synced_at = now() WHERE id = $1");
+    if let Err(e) = sqlx::query(&sql).bind(id).execute(&state.db).await {
+        tracing::warn!("mark_not_found {entity_type} {id} failed: {e}");
+    }
 }
 
 /// Fully populate one entity from TheTVDB.
