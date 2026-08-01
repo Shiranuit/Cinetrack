@@ -89,6 +89,26 @@ pub async fn user_library(
     Ok(Json(tracking::user_library(&state, me, target_id, &q.list()).await?))
 }
 
+/// Paging + language selection for the activity timeline.
+#[derive(Deserialize)]
+pub struct ActivityQuery {
+    pub langs: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+/// A user's activity timeline — their own, or another user's when that user's
+/// activity setting admits you (empty otherwise).
+pub async fn user_activity(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Path(target_id): Path<Uuid>,
+    Query(q): Query<ActivityQuery>,
+) -> AppResult<Json<Vec<tracking::ActivityItem>>> {
+    let langs = crate::web::query::LangsQuery { langs: q.langs }.list();
+    Ok(Json(tracking::user_activity(&state, me, target_id, &langs, q.limit, q.offset).await?))
+}
+
 /// Another user's watch statistics (zeroed if not visible to you).
 pub async fn user_stats(
     AuthUser(me): AuthUser,
@@ -172,6 +192,22 @@ pub async fn set_privacy(
 ) -> AppResult<Json<Value>> {
     tracking::set_private(&state, me, req.is_private).await?;
     Ok(Json(json!({ "is_private": req.is_private })))
+}
+
+#[derive(Deserialize)]
+pub struct ActivityVisibilityReq {
+    pub activity_visibility: String,
+}
+
+/// Set who can see the current user's activity timeline ('everyone' | 'friends' |
+/// 'only_me'). Rejects anything else with a 400.
+pub async fn set_activity_visibility(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<ActivityVisibilityReq>,
+) -> AppResult<Json<Value>> {
+    tracking::set_activity_visibility(&state, me, &req.activity_visibility).await?;
+    Ok(Json(json!({ "activity_visibility": req.activity_visibility })))
 }
 
 #[derive(Deserialize)]

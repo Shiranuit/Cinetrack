@@ -1815,6 +1815,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'In my library'**
   String get inMyLibrary;
+
+  /// No description provided for @activity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activity;
+
+  /// No description provided for @yourActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Your activity'**
+  String get yourActivity;
+
+  /// No description provided for @usersActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s activity'**
+  String usersActivity(String name);
+
+  /// No description provided for @activityVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can see your activity'**
+  String get activityVisibility;
+
+  /// No description provided for @activityVisibilityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your activity is the episodes and movies you mark as watched'**
+  String get activityVisibilityHint;
+
+  /// No description provided for @visibilityEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get visibilityEveryone;
+
+  /// No description provided for @visibilityFriends.
+  ///
+  /// In en, this message translates to:
+  /// **'Friends'**
+  String get visibilityFriends;
+
+  /// No description provided for @visibilityOnlyMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Only me'**
+  String get visibilityOnlyMe;
+
+  /// No description provided for @activityPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} keeps their activity private'**
+  String activityPrivate(String name);
+
+  /// No description provided for @activityPrivateSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Only you can see your activity'**
+  String get activityPrivateSelf;
+
+  /// No description provided for @rewatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewatched'**
+  String get rewatched;
+
+  /// No description provided for @justNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get justNow;
+
+  /// No description provided for @minutesAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{n}m ago'**
+  String minutesAgo(int n);
+
+  /// No description provided for @hoursAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{n}h ago'**
+  String hoursAgo(int n);
+
+  /// No description provided for @daysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{n}d ago'**
+  String daysAgo(int n);
 }
 
 class _AppLocalizationsDelegate

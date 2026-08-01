@@ -5,6 +5,16 @@
 // integers for catalog id/count fields and strings for text; user ids are UUID
 // strings. These patterns mirror the Rust types exactly.
 
+/// The showcase blocks a profile shows out of the box (mirrors the server-side
+/// default in migration 0043).
+const kDefaultProfileBlocks = ['stats', 'favorites', 'shows', 'movies', 'activity'];
+
+/// Who may see a user's activity timeline — mirrors `app.users.activity_visibility`.
+const kActivityEveryone = 'everyone';
+const kActivityFriends = 'friends';
+const kActivityOnlyMe = 'only_me';
+const kActivityVisibilities = [kActivityEveryone, kActivityFriends, kActivityOnlyMe];
+
 /// Public server feature flags (`GET /api/config`). Read at startup to tailor the
 /// UI to how the backend is configured.
 class ServerConfig {
@@ -40,6 +50,10 @@ class Me {
 
   /// Preferred content languages in priority order (server-synced across devices).
   final List<String> languages;
+
+  /// Who may see my activity timeline — one of [kActivityVisibilities]. Older
+  /// servers omit it; the default matches the backend's ('friends').
+  final String activityVisibility;
   const Me({
     required this.id,
     required this.screenName,
@@ -48,8 +62,9 @@ class Me {
     this.coverUrl,
     this.bio,
     this.isPrivate = false,
-    this.profileBlocks = const ['stats', 'favorites', 'shows', 'movies'],
+    this.profileBlocks = kDefaultProfileBlocks,
     this.languages = const ['eng'],
+    this.activityVisibility = kActivityFriends,
   });
 
   factory Me.fromJson(Map<String, dynamic> j) => switch (j) {
@@ -61,9 +76,9 @@ class Me {
             coverUrl: j['cover_url'] as String?,
             bio: j['bio'] as String?,
             isPrivate: j['is_private'] as bool? ?? false,
-            profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ??
-                const ['stats', 'favorites', 'shows', 'movies'],
+            profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ?? kDefaultProfileBlocks,
             languages: (j['languages'] as List?)?.cast<String>() ?? const ['eng'],
+            activityVisibility: j['activity_visibility'] as String? ?? kActivityFriends,
           ),
         _ => throw FormatException('Me: bad payload $j'),
       };
@@ -578,6 +593,11 @@ class UserProfile {
   final bool following;
   final bool requested;
   final bool visible;
+
+  /// Whether this user's activity timeline is visible to me (their privacy setting
+  /// applied on top of [visible]). Older servers omit it, so it defaults to false
+  /// and the activity block simply stays hidden.
+  final bool activityVisible;
   final int followerCount;
   final int followingCount;
   final List<String> profileBlocks;
@@ -592,9 +612,10 @@ class UserProfile {
     required this.following,
     required this.requested,
     required this.visible,
+    this.activityVisible = false,
     required this.followerCount,
     required this.followingCount,
-    this.profileBlocks = const ['stats', 'favorites', 'shows', 'movies'],
+    this.profileBlocks = kDefaultProfileBlocks,
   });
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
         id: j['id'] as String,
@@ -607,11 +628,69 @@ class UserProfile {
         following: j['following'] as bool? ?? false,
         requested: j['requested'] as bool? ?? false,
         visible: j['visible'] as bool? ?? false,
+        activityVisible: j['activity_visible'] as bool? ?? false,
         followerCount: j['follower_count'] as int? ?? 0,
         followingCount: j['following_count'] as int? ?? 0,
-        profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ??
-            const ['stats', 'favorites', 'shows', 'movies'],
+        profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ?? kDefaultProfileBlocks,
       );
+}
+
+/// One entry in a user's activity timeline: an episode or a movie they watched.
+/// `entityType` is `'episode'` or `'movie'` and decides which ids are populated.
+class ActivityItem {
+  /// The watch-event id — unique per watch, so it's a stable list key even when
+  /// the same episode is rewatched.
+  final int id;
+  final String entityType;
+  final int? seriesId;
+  final int? movieId;
+
+  /// The series (for an episode) or movie title, in the viewer's languages.
+  final String? name;
+  final String? imageUrl;
+  final int? episodeId;
+  final String? episodeName;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final bool isRewatch;
+
+  /// Unix epoch seconds.
+  final int? watchedAt;
+
+  const ActivityItem({
+    required this.id,
+    required this.entityType,
+    this.seriesId,
+    this.movieId,
+    this.name,
+    this.imageUrl,
+    this.episodeId,
+    this.episodeName,
+    this.seasonNumber,
+    this.episodeNumber,
+    this.isRewatch = false,
+    this.watchedAt,
+  });
+
+  bool get isMovie => entityType == 'movie';
+
+  factory ActivityItem.fromJson(Map<String, dynamic> j) => switch (j) {
+        {'id': final int id, 'entity_type': final String entityType} => ActivityItem(
+            id: id,
+            entityType: entityType,
+            seriesId: j['series_id'] as int?,
+            movieId: j['movie_id'] as int?,
+            name: j['name'] as String?,
+            imageUrl: j['image_url'] as String?,
+            episodeId: j['episode_id'] as int?,
+            episodeName: j['episode_name'] as String?,
+            seasonNumber: j['season_number'] as int?,
+            episodeNumber: j['episode_number'] as int?,
+            isRewatch: j['is_rewatch'] as bool? ?? false,
+            watchedAt: j['watched_at'] as int?,
+          ),
+        _ => throw FormatException('ActivityItem: bad payload $j'),
+      };
 }
 
 class FeedItem {

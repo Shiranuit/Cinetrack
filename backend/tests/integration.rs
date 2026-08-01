@@ -368,6 +368,126 @@ async fn other_user_library_privacy_gate() {
     assert!(tracking::profile_visible(&state, owner, owner).await.unwrap());
 }
 
+/// The activity timeline's visibility gate: `activity_visibility` narrows access on
+/// top of the profile privacy gate. Default is 'friends' (accepted followers only),
+/// 'everyone' opens it to anyone who can see the profile, 'only_me' closes it to all
+/// but the owner — and a private profile still wins over an open activity setting.
+#[tokio::test]
+async fn activity_visibility_gate() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+
+    let viewer = common::uid(1);
+    let owner = common::uid(2);
+    common::insert_user(&state.db, 1, "aviewer@test.local").await;
+    common::insert_user(&state.db, 2, "aowner@test.local").await;
+
+    // The owner (public profile) watched one episode.
+    common::insert_series(&state.db, 100, "OwnersShow", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::insert_episode(&state.db, 1001, 100, 1, 1, "2020-01-01", "Pilot").await;
+    common::watch_ago(&state.db, 2, 100, 1001, "w-a1", 1).await;
+
+    let seen = async |me, target| tracking::user_activity(&state, me, target, &langs(), None, None).await.unwrap().len();
+
+    // New accounts default to 'friends' (migration 0043), so a stranger sees nothing
+    // even though the profile itself is public.
+    let default_setting: String = sqlx::query_scalar("SELECT activity_visibility FROM app.users WHERE id = $1")
+        .bind(owner).fetch_one(&state.db).await.unwrap();
+    assert_eq!(default_setting, "friends", "activity defaults to friends-only");
+    assert!(!tracking::activity_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(seen(viewer, owner).await, 0, "a non-follower must not see friends-only activity");
+
+    // Owner is always able to see their own, whatever the setting.
+    assert!(tracking::activity_visible(&state, owner, owner).await.unwrap());
+    assert_eq!(seen(owner, owner).await, 1);
+
+    // A PENDING request is not a friend.
+    common::user_follow(&state.db, 1, 2, "pending").await;
+    assert!(!tracking::activity_visible(&state, viewer, owner).await.unwrap(), "pending request is not a friend");
+
+    // Accepted follow → friend → visible.
+    common::user_follow(&state.db, 1, 2, "accepted").await;
+    assert!(tracking::activity_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(seen(viewer, owner).await, 1);
+
+    // 'only_me' closes it even to an accepted follower.
+    common::set_activity_visibility(&state.db, 2, "only_me").await;
+    assert!(!tracking::activity_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(seen(viewer, owner).await, 0, "only_me hides activity from friends too");
+    assert_eq!(seen(owner, owner).await, 1, "…but never from the owner");
+
+    // 'everyone' opens it to a viewer with no follow at all.
+    sqlx::query("DELETE FROM app.user_follow WHERE follower_id=$1 AND followee_id=$2")
+        .bind(viewer).bind(owner).execute(&state.db).await.unwrap();
+    common::set_activity_visibility(&state.db, 2, "everyone").await;
+    assert!(tracking::activity_visible(&state, viewer, owner).await.unwrap());
+    assert_eq!(seen(viewer, owner).await, 1, "everyone is visible without following");
+
+    // The PROFILE gate still wins: private + 'everyone' is invisible to a non-follower.
+    sqlx::query("UPDATE app.users SET is_private = true WHERE id = $1").bind(owner).execute(&state.db).await.unwrap();
+    assert!(!tracking::activity_visible(&state, viewer, owner).await.unwrap(), "private profile overrides 'everyone'");
+    assert_eq!(seen(viewer, owner).await, 0);
+
+    // A user who hid their activity also drops out of their followers' feed.
+    sqlx::query("UPDATE app.users SET is_private = false WHERE id = $1").bind(owner).execute(&state.db).await.unwrap();
+    common::user_follow(&state.db, 1, 2, "accepted").await;
+    assert_eq!(tracking::feed(&state, viewer).await.unwrap().len(), 1, "an 'everyone' friend shows in the feed");
+    common::set_activity_visibility(&state.db, 2, "only_me").await;
+    assert!(tracking::feed(&state, viewer).await.unwrap().is_empty(), "only_me removes them from the feed");
+}
+
+/// The timeline itself: episodes and movies interleaved newest-first, carrying the
+/// fields the UI renders, and paging with limit/offset.
+#[tokio::test]
+async fn activity_lists_episodes_and_movies_newest_first() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "timeline@test.local").await;
+    let me = common::uid(1);
+
+    common::insert_series(&state.db, 10, "The Show", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::insert_episode(&state.db, 101, 10, 2, 5, "2021-03-04", "The Episode").await;
+    common::insert_movie(&state.db, 500, "The Movie", Some(1999), Some(120)).await;
+
+    // Oldest → newest: movie (5d), episode s2e5 (2d).
+    common::watch_movie_ago(&state.db, 1, 500, "w-movie", 5).await;
+    common::watch_se(&state.db, 1, 10, 101, 2, 5, "w-ep").await; // now
+
+    let items = tracking::activity(&state, me, &langs(), 30, 0).await.unwrap();
+    assert_eq!(items.len(), 2);
+
+    // Newest first: the episode.
+    let ep = &items[0];
+    assert_eq!(ep.entity_type, "episode");
+    assert_eq!(ep.series_id, Some(10));
+    assert_eq!(ep.name.as_deref(), Some("The Show"));
+    assert_eq!(ep.episode_name.as_deref(), Some("The Episode"));
+    assert_eq!((ep.season_number, ep.episode_number), (Some(2), Some(5)));
+    assert!(ep.watched_at.is_some());
+
+    let mv = &items[1];
+    assert_eq!(mv.entity_type, "movie");
+    assert_eq!(mv.movie_id, Some(500));
+    assert_eq!(mv.name.as_deref(), Some("The Movie"), "movies resolve their own title, not the series join");
+    assert!(mv.series_id.is_none() && mv.episode_id.is_none());
+
+    // Paging: limit/offset walk the same ordering without repeats.
+    let page1 = tracking::activity(&state, me, &langs(), 1, 0).await.unwrap();
+    let page2 = tracking::activity(&state, me, &langs(), 1, 1).await.unwrap();
+    assert_eq!(page1.len(), 1);
+    assert_eq!(page2.len(), 1);
+    assert_eq!(page1[0].id, ep.id);
+    assert_eq!(page2[0].id, mv.id);
+
+    // Titles follow the VIEWER's language preference.
+    sqlx::query("INSERT INTO catalog.translation (entity_type, entity_id, language, name) VALUES ('series',10,'fra','La Série')")
+        .execute(&state.db).await.unwrap();
+    let fr = tracking::activity(&state, me, &["fra".to_string(), "eng".to_string()], 30, 0).await.unwrap();
+    assert_eq!(fr[0].name.as_deref(), Some("La Série"));
+}
+
 /// A caught-up show moves to WATCHING (not STALE) when a fresh episode airs, even
 /// if the viewer's last watch was long ago — recency of new content counts, not
 /// just when they last watched. A backlog with only old episodes stays STALE.

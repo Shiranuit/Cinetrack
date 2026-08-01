@@ -103,6 +103,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/requests/{id}/accept", post(handlers::users::accept_request))
         .route("/api/users/requests/{id}/reject", post(handlers::users::reject_request))
         .route("/api/me/privacy", put(handlers::users::set_privacy))
+        .route("/api/me/activity-visibility", put(handlers::users::set_activity_visibility))
         .route("/api/me/profile-blocks", put(handlers::users::set_profile_blocks))
         .route("/api/me/languages", put(handlers::users::set_languages))
         .route("/api/feed", get(handlers::users::feed))
@@ -112,6 +113,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/users/{id}/filter", get(handlers::discover::user_filter))
         .route("/api/users/{id}/movies", get(handlers::users::user_movies))
         .route("/api/users/{id}/stats", get(handlers::users::user_stats))
+        .route("/api/users/{id}/activity", get(handlers::users::user_activity))
         .route("/api/users/{id}/follow", post(handlers::users::follow).delete(handlers::users::unfollow))
         // Resolve the route state first, then layer the cross-cutting middleware
         // (the gate carries its own AppState). Execution order, outer→inner:

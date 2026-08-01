@@ -920,4 +920,59 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get inMyLibrary => '내 라이브러리';
+
+  @override
+  String get activity => '활동';
+
+  @override
+  String get yourActivity => '내 활동';
+
+  @override
+  String usersActivity(String name) {
+    return '$name님의 활동';
+  }
+
+  @override
+  String get activityVisibility => '내 활동을 볼 수 있는 사람';
+
+  @override
+  String get activityVisibilityHint => '활동은 시청함으로 표시한 에피소드와 영화입니다';
+
+  @override
+  String get visibilityEveryone => '모두';
+
+  @override
+  String get visibilityFriends => '친구';
+
+  @override
+  String get visibilityOnlyMe => '나만';
+
+  @override
+  String activityPrivate(String name) {
+    return '$name님은 활동을 비공개로 설정했습니다';
+  }
+
+  @override
+  String get activityPrivateSelf => '나만 내 활동을 볼 수 있습니다';
+
+  @override
+  String get rewatched => '다시 시청';
+
+  @override
+  String get justNow => '방금';
+
+  @override
+  String minutesAgo(int n) {
+    return '$n분 전';
+  }
+
+  @override
+  String hoursAgo(int n) {
+    return '$n시간 전';
+  }
+
+  @override
+  String daysAgo(int n) {
+    return '$n일 전';
+  }
 }

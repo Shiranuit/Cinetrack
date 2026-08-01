@@ -936,4 +936,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inMyLibrary => 'In my library';
+
+  @override
+  String get activity => 'Activity';
+
+  @override
+  String get yourActivity => 'Your activity';
+
+  @override
+  String usersActivity(String name) {
+    return '$name\'s activity';
+  }
+
+  @override
+  String get activityVisibility => 'Who can see your activity';
+
+  @override
+  String get activityVisibilityHint =>
+      'Your activity is the episodes and movies you mark as watched';
+
+  @override
+  String get visibilityEveryone => 'Everyone';
+
+  @override
+  String get visibilityFriends => 'Friends';
+
+  @override
+  String get visibilityOnlyMe => 'Only me';
+
+  @override
+  String activityPrivate(String name) {
+    return '$name keeps their activity private';
+  }
+
+  @override
+  String get activityPrivateSelf => 'Only you can see your activity';
+
+  @override
+  String get rewatched => 'Rewatched';
+
+  @override
+  String get justNow => 'Just now';
+
+  @override
+  String minutesAgo(int n) {
+    return '${n}m ago';
+  }
+
+  @override
+  String hoursAgo(int n) {
+    return '${n}h ago';
+  }
+
+  @override
+  String daysAgo(int n) {
+    return '${n}d ago';
+  }
 }

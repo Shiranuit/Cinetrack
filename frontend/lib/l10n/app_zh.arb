@@ -334,5 +334,65 @@
   "sortDescending": "降序",
   "@sortDescending": {},
   "inMyLibrary": "在我的库中",
-  "@inMyLibrary": {}
+  "@inMyLibrary": {},
+  "activity": "动态",
+  "@activity": {},
+  "yourActivity": "你的动态",
+  "@yourActivity": {},
+  "usersActivity": "{name} 的动态",
+  "@usersActivity": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityVisibility": "谁可以查看你的动态",
+  "@activityVisibility": {},
+  "activityVisibilityHint": "动态是你标记为已观看的剧集和电影",
+  "@activityVisibilityHint": {},
+  "visibilityEveryone": "所有人",
+  "@visibilityEveryone": {},
+  "visibilityFriends": "好友",
+  "@visibilityFriends": {},
+  "visibilityOnlyMe": "仅自己",
+  "@visibilityOnlyMe": {},
+  "activityPrivate": "{name} 的动态是私密的",
+  "@activityPrivate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityPrivateSelf": "只有你可以查看自己的动态",
+  "@activityPrivateSelf": {},
+  "rewatched": "重看",
+  "@rewatched": {},
+  "justNow": "刚刚",
+  "@justNow": {},
+  "minutesAgo": "{n} 分钟前",
+  "@minutesAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{n} 小时前",
+  "@hoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{n} 天前",
+  "@daysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

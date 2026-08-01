@@ -918,4 +918,59 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get inMyLibrary => '在我的库中';
+
+  @override
+  String get activity => '动态';
+
+  @override
+  String get yourActivity => '你的动态';
+
+  @override
+  String usersActivity(String name) {
+    return '$name 的动态';
+  }
+
+  @override
+  String get activityVisibility => '谁可以查看你的动态';
+
+  @override
+  String get activityVisibilityHint => '动态是你标记为已观看的剧集和电影';
+
+  @override
+  String get visibilityEveryone => '所有人';
+
+  @override
+  String get visibilityFriends => '好友';
+
+  @override
+  String get visibilityOnlyMe => '仅自己';
+
+  @override
+  String activityPrivate(String name) {
+    return '$name 的动态是私密的';
+  }
+
+  @override
+  String get activityPrivateSelf => '只有你可以查看自己的动态';
+
+  @override
+  String get rewatched => '重看';
+
+  @override
+  String get justNow => '刚刚';
+
+  @override
+  String minutesAgo(int n) {
+    return '$n 分钟前';
+  }
+
+  @override
+  String hoursAgo(int n) {
+    return '$n 小时前';
+  }
+
+  @override
+  String daysAgo(int n) {
+    return '$n 天前';
+  }
 }

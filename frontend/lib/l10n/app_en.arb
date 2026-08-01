@@ -481,5 +481,65 @@
   "sortDescending": "Descending",
   "@sortDescending": {},
   "inMyLibrary": "In my library",
-  "@inMyLibrary": {}
+  "@inMyLibrary": {},
+  "activity": "Activity",
+  "@activity": {},
+  "yourActivity": "Your activity",
+  "@yourActivity": {},
+  "usersActivity": "{name}'s activity",
+  "@usersActivity": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityVisibility": "Who can see your activity",
+  "@activityVisibility": {},
+  "activityVisibilityHint": "Your activity is the episodes and movies you mark as watched",
+  "@activityVisibilityHint": {},
+  "visibilityEveryone": "Everyone",
+  "@visibilityEveryone": {},
+  "visibilityFriends": "Friends",
+  "@visibilityFriends": {},
+  "visibilityOnlyMe": "Only me",
+  "@visibilityOnlyMe": {},
+  "activityPrivate": "{name} keeps their activity private",
+  "@activityPrivate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityPrivateSelf": "Only you can see your activity",
+  "@activityPrivateSelf": {},
+  "rewatched": "Rewatched",
+  "@rewatched": {},
+  "justNow": "Just now",
+  "@justNow": {},
+  "minutesAgo": "{n}m ago",
+  "@minutesAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{n}h ago",
+  "@hoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{n}d ago",
+  "@daysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

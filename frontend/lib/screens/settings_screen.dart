@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show TextInput;
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
+import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
@@ -177,6 +178,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await auth.reloadMe();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Who can see the shows/movies I mark as watched.
+  Future<void> _setActivityVisibility(String value) async {
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthController>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.setActivityVisibility(value);
+      await auth.reloadMe(); // `me` drives the selected segment
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(_errText(e))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -375,6 +392,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = context.watch<SettingsController>();
     final me = context.watch<AuthController>().me;
     final isPrivate = me?.isPrivate ?? false;
+    // Guard against a value the client doesn't know (older/newer server) so the
+    // SegmentedButton always has exactly one valid selection.
+    final activityVisibility = kActivityVisibilities.contains(me?.activityVisibility)
+        ? me!.activityVisibility
+        : kActivityFriends;
     final available = kLanguages.keys
         .where((k) => !settings.languages.contains(k))
         .toList();
@@ -440,6 +462,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(t.privacyHint),
             value: isPrivate,
             onChanged: _busy ? null : _setPrivacy,
+          ),
+          ListTile(
+            leading: const Icon(Icons.history_rounded),
+            title: Text(t.activityVisibility),
+            subtitle: Text(t.activityVisibilityHint),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
+            child: SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: kActivityEveryone,
+                  icon: const Icon(Icons.public_rounded),
+                  label: Text(t.visibilityEveryone),
+                ),
+                ButtonSegment(
+                  value: kActivityFriends,
+                  icon: const Icon(Icons.group_rounded),
+                  label: Text(t.visibilityFriends),
+                ),
+                ButtonSegment(
+                  value: kActivityOnlyMe,
+                  icon: const Icon(Icons.lock_rounded),
+                  label: Text(t.visibilityOnlyMe),
+                ),
+              ],
+              selected: {activityVisibility},
+              onSelectionChanged: _busy ? null : (s) => _setActivityVisibility(s.first),
+            ),
           ),
           SectionHeader(
             title: t.sectionAppearance,

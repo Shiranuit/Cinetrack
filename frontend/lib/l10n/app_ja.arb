@@ -334,5 +334,65 @@
   "sortDescending": "降順",
   "@sortDescending": {},
   "inMyLibrary": "ライブラリ内",
-  "@inMyLibrary": {}
+  "@inMyLibrary": {},
+  "activity": "アクティビティ",
+  "@activity": {},
+  "yourActivity": "あなたのアクティビティ",
+  "@yourActivity": {},
+  "usersActivity": "{name}さんのアクティビティ",
+  "@usersActivity": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityVisibility": "アクティビティを閲覧できる人",
+  "@activityVisibility": {},
+  "activityVisibilityHint": "アクティビティとは、視聴済みにしたエピソードや映画のことです",
+  "@activityVisibilityHint": {},
+  "visibilityEveryone": "全員",
+  "@visibilityEveryone": {},
+  "visibilityFriends": "フレンド",
+  "@visibilityFriends": {},
+  "visibilityOnlyMe": "自分のみ",
+  "@visibilityOnlyMe": {},
+  "activityPrivate": "{name}さんはアクティビティを非公開にしています",
+  "@activityPrivate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityPrivateSelf": "アクティビティを閲覧できるのはあなただけです",
+  "@activityPrivateSelf": {},
+  "rewatched": "再視聴",
+  "@rewatched": {},
+  "justNow": "たった今",
+  "@justNow": {},
+  "minutesAgo": "{n}分前",
+  "@minutesAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{n}時間前",
+  "@hoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{n}日前",
+  "@daysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

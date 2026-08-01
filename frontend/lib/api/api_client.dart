@@ -366,6 +366,14 @@ class ApiClient extends ChangeNotifier {
           SearchResult.fromJson);
   Future<List<LibraryMovie>> userMovies(String id, {String? langs}) async =>
       _list(await _get('/api/users/$id/movies', {'langs': ?langs}), LibraryMovie.fromJson);
+
+  /// A user's activity timeline (newest first), paged with offset/limit. Pass your
+  /// own id for your own activity. Returns empty when their privacy setting hides it.
+  Future<List<ActivityItem>> userActivity(String id, {String? langs, int limit = 30, int offset = 0}) async =>
+      _list(
+        await _get('/api/users/$id/activity', {'langs': ?langs, 'limit': '$limit', 'offset': '$offset'}),
+        ActivityItem.fromJson,
+      );
   Future<List<UserBrief>> followRequests() async =>
       _list(await _get('/api/users/requests'), UserBrief.fromJson);
   Future<List<UserBrief>> followers() async => _list(await _get('/api/users/followers'), UserBrief.fromJson);
@@ -373,6 +381,10 @@ class ApiClient extends ChangeNotifier {
   Future<void> acceptRequest(String followerId) => _send('POST', '/api/users/requests/$followerId/accept');
   Future<void> rejectRequest(String followerId) => _send('POST', '/api/users/requests/$followerId/reject');
   Future<void> setPrivacy(bool isPrivate) => _send('PUT', '/api/me/privacy', body: {'is_private': isPrivate});
+
+  /// Who can see my activity — one of [kActivityVisibilities].
+  Future<void> setActivityVisibility(String value) =>
+      _send('PUT', '/api/me/activity-visibility', body: {'activity_visibility': value});
   Future<void> setProfileBlocks(List<String> blocks) => _send('PUT', '/api/me/profile-blocks', body: {'blocks': blocks});
   Future<void> setLanguages(List<String> languages) => _send('PUT', '/api/me/languages', body: {'languages': languages});
 

@@ -17,11 +17,18 @@ fn now_unix() -> i64 {
 /// order, falling back to the base `s.name`. `langs` is a bound `text[]` param
 /// placeholder (e.g. `$2`); `id_col` is the series-id column (e.g. `us.series_id`).
 fn translated_name_sql(id_col: &str, langs: &str) -> String {
+    translated_entity_name_sql("series", id_col, langs, "s.name")
+}
+
+/// Like [`translated_name_sql`] but for any catalog entity type, with an explicit
+/// `fallback` expression. Used by the activity timeline, which resolves series,
+/// movie and episode titles in a single query.
+fn translated_entity_name_sql(entity: &str, id_col: &str, langs: &str, fallback: &str) -> String {
     format!(
         "COALESCE((SELECT tr.name FROM catalog.translation tr \
-           WHERE tr.entity_type = 'series' AND tr.entity_id = {id_col} AND tr.name IS NOT NULL \
+           WHERE tr.entity_type = '{entity}' AND tr.entity_id = {id_col} AND tr.name IS NOT NULL \
              AND tr.language = ANY({langs}) \
-           ORDER BY array_position({langs}, tr.language) LIMIT 1), s.name)"
+           ORDER BY array_position({langs}, tr.language) LIMIT 1), {fallback})"
     )
 }
 
@@ -837,6 +844,52 @@ pub struct UserProfile {
     pub follower_count: i64,
     pub following_count: i64,
     pub profile_blocks: Vec<String>, // showcase layout chosen by this user
+    /// Their raw activity-visibility choice. Needed to derive `activity_visible`,
+    /// but never sent to other users — knowing someone picked "only me" is itself
+    /// a detail of their settings. The owner reads their own value from `/api/me`.
+    #[serde(skip_serializing)]
+    pub activity_visibility: String,
+    /// May I see their activity timeline? (`activity_visibility` applied on top of
+    /// `visible`.) The client uses this to hide the activity block up front.
+    pub activity_visible: bool,
+}
+
+/// Who may see a user's activity timeline (`app.users.activity_visibility`, see
+/// migration 0043). Kept in sync with the DB CHECK constraint.
+pub mod activity_visibility {
+    /// Anyone who can already see the profile.
+    pub const EVERYONE: &str = "everyone";
+    /// Accepted followers only — the default for every account.
+    pub const FRIENDS: &str = "friends";
+    /// Nobody but the owner.
+    pub const ONLY_ME: &str = "only_me";
+
+    pub const ALL: [&str; 3] = [EVERYONE, FRIENDS, ONLY_ME];
+
+    pub fn is_valid(v: &str) -> bool {
+        ALL.contains(&v)
+    }
+}
+
+/// One entry in a user's activity timeline: an episode or a movie they marked
+/// watched. Titles are resolved to the *viewer's* preferred languages.
+#[derive(serde::Serialize, sqlx::FromRow)]
+pub struct ActivityItem {
+    /// The watch_event id — a stable key for list widgets (watches of the same
+    /// episode repeat, so the episode id alone isn't unique).
+    pub id: i64,
+    pub entity_type: String, // 'episode' | 'movie'
+    pub series_id: Option<i64>,
+    pub movie_id: Option<i64>,
+    /// The series (for an episode) or movie title, translated.
+    pub name: Option<String>,
+    pub image_url: Option<String>,
+    pub episode_id: Option<i64>,
+    pub episode_name: Option<String>,
+    pub season_number: Option<i32>,
+    pub episode_number: Option<i32>,
+    pub is_rewatch: bool,
+    pub watched_at: Option<i64>, // unix epoch
 }
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -966,7 +1019,7 @@ pub async fn user_profile(state: &AppState, me: Uuid, target: Uuid) -> AppResult
                 false AS visible, \
                 (SELECT count(*) FROM app.user_follow WHERE followee_id = u.id AND status='accepted')::bigint AS follower_count, \
                 (SELECT count(*) FROM app.user_follow WHERE follower_id = u.id AND status='accepted')::bigint AS following_count, \
-                u.profile_blocks \
+                u.profile_blocks, u.activity_visibility, false AS activity_visible \
          FROM app.users u WHERE u.id = $2"
     ))
     .bind(me)
@@ -979,7 +1032,25 @@ pub async fn user_profile(state: &AppState, me: Uuid, target: Uuid) -> AppResult
     // avatar, cover background, bio — stays visible so a private profile still shows
     // "who" it is with a Follow button.
     p.visible = p.is_self || !p.is_private || p.following;
+    // Activity narrows further: it needs the profile to be visible AND the owner's
+    // activity setting to admit this viewer. Same rule as [`activity_visible`], but
+    // computed from the flags already fetched (no extra round-trip).
+    p.activity_visible = p.visible && can_see_activity(&p.activity_visibility, p.is_self, p.following);
     Ok(p)
+}
+
+/// Does an activity-visibility setting admit this viewer? `is_self` always wins;
+/// an unrecognized value FAILS CLOSED (treated as "only me"), so a row that
+/// somehow bypassed the DB constraint can never leak a timeline.
+fn can_see_activity(setting: &str, is_self: bool, is_follower: bool) -> bool {
+    if is_self {
+        return true;
+    }
+    match setting {
+        activity_visibility::EVERYONE => true,
+        activity_visibility::FRIENDS => is_follower,
+        _ => false,
+    }
 }
 
 /// Whether `me` may see `target`'s profile details (public, self, or accepted follower).
@@ -1024,7 +1095,9 @@ pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[Str
     library(state, target, langs, "my_rating", true).await
 }
 
-/// Recent watch activity from the people the user follows.
+/// Recent watch activity from the people the user follows. Everyone here is
+/// already an accepted follow, so 'everyone' and 'friends' both admit us; only
+/// users who set their activity to "only me" are filtered out.
 pub async fn feed(state: &AppState, me: Uuid) -> AppResult<Vec<FeedItem>> {
     let rows = sqlx::query_as::<_, FeedItem>(
         "SELECT we.user_id, u.screen_name, u.avatar_url, we.series_id, \
@@ -1035,6 +1108,7 @@ pub async fn feed(state: &AppState, me: Uuid) -> AppResult<Vec<FeedItem>> {
          JOIN app.users u ON u.id = we.user_id \
          LEFT JOIN catalog.series s ON s.id = we.series_id \
          WHERE we.entity_type = 'episode' \
+           AND u.activity_visibility <> 'only_me' \
            AND we.user_id IN (SELECT followee_id FROM app.user_follow WHERE follower_id = $1 AND status = 'accepted') \
          ORDER BY we.watched_at DESC LIMIT 60",
     )
@@ -1042,6 +1116,119 @@ pub async fn feed(state: &AppState, me: Uuid) -> AppResult<Vec<FeedItem>> {
     .fetch_all(&state.db)
     .await?;
     Ok(rows)
+}
+
+// ---- activity timeline ----
+
+/// Page size cap for one activity request (the client pages with `offset`).
+const ACTIVITY_MAX_LIMIT: i64 = 100;
+const ACTIVITY_DEFAULT_LIMIT: i64 = 30;
+
+/// Whether `me` may see `target`'s activity timeline. Two gates, in order: the
+/// profile must be visible at all (private-account rule from 0014), then the
+/// owner's `activity_visibility` must admit this viewer.
+pub async fn activity_visible(state: &AppState, me: Uuid, target: Uuid) -> AppResult<bool> {
+    if me == target {
+        return Ok(true);
+    }
+    if !profile_visible(state, me, target).await? {
+        return Ok(false);
+    }
+    let setting: String = sqlx::query_scalar("SELECT activity_visibility FROM app.users WHERE id = $1")
+        .bind(target)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(crate::error::AppError::NotFound)?;
+    // `me` reached here as a non-self viewer of a visible profile; for 'friends' we
+    // still need the accepted follow (a PUBLIC profile is visible to everyone).
+    let is_follower: bool = if setting == activity_visibility::FRIENDS {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM app.user_follow \
+             WHERE follower_id = $1 AND followee_id = $2 AND status = 'accepted')",
+        )
+        .bind(me)
+        .bind(target)
+        .fetch_one(&state.db)
+        .await?
+    } else {
+        false
+    };
+    Ok(can_see_activity(&setting, false, is_follower))
+}
+
+/// A user's watch history, newest first — episodes and movies interleaved, with
+/// titles resolved to `langs`. Ungated: callers must check [`activity_visible`]
+/// (use [`user_activity`] for the gated form).
+pub async fn activity(
+    state: &AppState,
+    user_id: Uuid,
+    langs: &[String],
+    limit: i64,
+    offset: i64,
+) -> AppResult<Vec<ActivityItem>> {
+    let series_name = translated_entity_name_sql("series", "we.series_id", "$2", "s.name");
+    let movie_name = translated_entity_name_sql("movie", "we.movie_id", "$2", "m.name");
+    let episode_name = translated_entity_name_sql("episode", "we.episode_id", "$2", "e.name");
+    // One pass over the user's events (served by watch_event_user_idx on
+    // (user_id, watched_at)); the movie/series split is a CASE rather than a UNION
+    // so the ordering and paging stay on that single index scan. `id DESC` breaks
+    // ties so bulk "watch season" inserts (identical watched_at) page deterministically
+    // instead of repeating or skipping rows across offsets.
+    let sql = format!(
+        "SELECT we.id, we.entity_type, we.series_id, we.movie_id, \
+                CASE WHEN we.entity_type = 'movie' THEN {movie_name} ELSE {series_name} END AS name, \
+                CASE WHEN we.entity_type = 'movie' THEN m.image_url ELSE s.image_url END AS image_url, \
+                we.episode_id, {episode_name} AS episode_name, \
+                we.season_number, we.episode_number, we.is_rewatch, \
+                extract(epoch FROM we.watched_at)::bigint AS watched_at \
+         FROM app.watch_event we \
+         LEFT JOIN catalog.series s ON s.id = we.series_id \
+         LEFT JOIN catalog.movie m ON m.id = we.movie_id \
+         LEFT JOIN catalog.episode e ON e.id = we.episode_id AND NOT e.deleted \
+         WHERE we.user_id = $1 \
+         ORDER BY we.watched_at DESC, we.id DESC \
+         LIMIT $3 OFFSET $4"
+    );
+    let rows = sqlx::query_as::<_, ActivityItem>(&sql)
+        .bind(user_id)
+        .bind(langs)
+        .bind(limit.clamp(1, ACTIVITY_MAX_LIMIT))
+        .bind(offset.max(0))
+        .fetch_all(&state.db)
+        .await?;
+    Ok(rows)
+}
+
+/// Another user's activity timeline — empty unless it's visible to `me`. `limit`
+/// defaults to [`ACTIVITY_DEFAULT_LIMIT`] and is capped server-side.
+pub async fn user_activity(
+    state: &AppState,
+    me: Uuid,
+    target: Uuid,
+    langs: &[String],
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> AppResult<Vec<ActivityItem>> {
+    if !activity_visible(state, me, target).await? {
+        return Ok(vec![]);
+    }
+    activity(state, target, langs, limit.unwrap_or(ACTIVITY_DEFAULT_LIMIT), offset.unwrap_or(0)).await
+}
+
+/// Set who may see the current user's activity timeline.
+pub async fn set_activity_visibility(state: &AppState, user_id: Uuid, value: &str) -> AppResult<()> {
+    if !activity_visibility::is_valid(value) {
+        return Err(crate::error::AppError::BadRequest(format!(
+            "activity_visibility must be one of {}",
+            activity_visibility::ALL.join(", ")
+        )));
+    }
+    sqlx::query("UPDATE app.users SET activity_visibility = $2, updated_at = now() WHERE id = $1")
+        .bind(user_id)
+        .bind(value)
+        .execute(&state.db)
+        .await?;
+    Ok(())
 }
 
 /// Follow a user. Public users are followed immediately ('accepted'); private

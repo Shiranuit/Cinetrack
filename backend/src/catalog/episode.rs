@@ -327,6 +327,76 @@ pub async fn backfill_all_translations(state: &AppState) -> AppResult<u64> {
 /// job is building the mirror) calls this directly regardless of mode, which is what
 /// keeps mirrored episode lists current (incl. newly-aired episodes). `primary` picks
 /// the list language; episodes otherwise stay in the series' origin language.
+/// Bulk-upsert a page of episode JSON records in a single multi-row statement (via
+/// `unnest` of parallel arrays), instead of one round-trip per episode. Records with
+/// no id are skipped. Returns the number upserted.
+pub(crate) async fn upsert_many(state: &AppState, episodes: &[Value]) -> AppResult<usize> {
+    let mut ids = Vec::new();
+    let (mut series_ids, mut seasons, mut numbers, mut absolutes) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut names, mut overviews, mut aireds, mut runtimes) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut images, mut is_movies, mut finales, mut raws, mut updateds) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for e in episodes {
+        let Some(id) = as_i64(&e["id"]) else { continue };
+        ids.push(id);
+        series_ids.push(as_i64(&e["seriesId"]));
+        seasons.push(as_i32(&e["seasonNumber"]));
+        numbers.push(as_i32(&e["number"]));
+        absolutes.push(as_i32(&e["absoluteNumber"]));
+        names.push(e["name"].as_str().map(str::to_string));
+        overviews.push(e["overview"].as_str().map(str::to_string));
+        aireds.push(e["aired"].as_str().filter(|s| !s.is_empty()).map(str::to_string));
+        runtimes.push(as_i32(&e["runtime"]));
+        images.push(super::image_url(&e["image"]));
+        is_movies.push(e["isMovie"].as_i64().map(|n| n != 0));
+        finales.push(e["finaleType"].as_str().map(str::to_string));
+        raws.push(e.to_string()); // bound as text[], cast to jsonb in SQL
+        updateds.push(e["lastUpdated"].as_str().map(str::to_string));
+    }
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let n = ids.len();
+    let started = Instant::now();
+    let res = sqlx::query(
+        "INSERT INTO catalog.episode \
+           (id, series_id, season_number, number, absolute_number, name, overview, aired, runtime, \
+            image_url, is_movie, finale_type, raw, last_updated, last_synced_at, deleted) \
+         SELECT t.id, t.series_id, t.season_number, t.number, t.absolute_number, t.name, t.overview, \
+                t.aired::date, t.runtime, t.image_url, t.is_movie, t.finale_type, t.raw::jsonb, \
+                (t.last_updated::timestamp AT TIME ZONE 'UTC'), now(), false \
+         FROM unnest($1::bigint[], $2::bigint[], $3::int[], $4::int[], $5::int[], $6::text[], $7::text[], \
+                     $8::text[], $9::int[], $10::text[], $11::boolean[], $12::text[], $13::text[], $14::text[]) \
+              AS t(id, series_id, season_number, number, absolute_number, name, overview, aired, runtime, \
+                   image_url, is_movie, finale_type, raw, last_updated) \
+         ON CONFLICT (id) DO UPDATE SET \
+           series_id=EXCLUDED.series_id, season_number=EXCLUDED.season_number, number=EXCLUDED.number, \
+           absolute_number=EXCLUDED.absolute_number, name=EXCLUDED.name, overview=EXCLUDED.overview, \
+           aired=EXCLUDED.aired, runtime=EXCLUDED.runtime, image_url=EXCLUDED.image_url, \
+           is_movie=EXCLUDED.is_movie, finale_type=EXCLUDED.finale_type, raw=EXCLUDED.raw, \
+           last_updated=EXCLUDED.last_updated, last_synced_at=now(), deleted=false",
+    )
+    .bind(ids)
+    .bind(series_ids)
+    .bind(seasons)
+    .bind(numbers)
+    .bind(absolutes)
+    .bind(names)
+    .bind(overviews)
+    .bind(aireds)
+    .bind(runtimes)
+    .bind(images)
+    .bind(is_movies)
+    .bind(finales)
+    .bind(raws)
+    .bind(updateds)
+    .execute(&state.db)
+    .await;
+    state.profile.record_write(started.elapsed());
+    res?;
+    Ok(n)
+}
+
 pub async fn fetch_and_store_episodes(
     state: &AppState,
     series_id: i64,
@@ -340,11 +410,11 @@ pub async fn fetch_and_store_episodes(
         if episodes.is_empty() {
             break;
         }
-        for e in &episodes {
-            if let Some(id) = as_i64(&e["id"]) {
-                upsert(state, id, e).await?;
-            }
-        }
+        // Bulk-upsert the whole page in one statement. A single-row upsert per episode
+        // means ~1 DB round-trip per episode — for a 1000-episode series that's seconds
+        // of sequential writes and was the queue's tail bottleneck; batching collapses
+        // it to one statement per page (≤500 rows).
+        upsert_many(state, &episodes).await?;
         if episodes.len() < 500 {
             break; // last page
         }

@@ -334,5 +334,65 @@
   "sortDescending": "내림차순",
   "@sortDescending": {},
   "inMyLibrary": "내 라이브러리",
-  "@inMyLibrary": {}
+  "@inMyLibrary": {},
+  "activity": "활동",
+  "@activity": {},
+  "yourActivity": "내 활동",
+  "@yourActivity": {},
+  "usersActivity": "{name}님의 활동",
+  "@usersActivity": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityVisibility": "내 활동을 볼 수 있는 사람",
+  "@activityVisibility": {},
+  "activityVisibilityHint": "활동은 시청함으로 표시한 에피소드와 영화입니다",
+  "@activityVisibilityHint": {},
+  "visibilityEveryone": "모두",
+  "@visibilityEveryone": {},
+  "visibilityFriends": "친구",
+  "@visibilityFriends": {},
+  "visibilityOnlyMe": "나만",
+  "@visibilityOnlyMe": {},
+  "activityPrivate": "{name}님은 활동을 비공개로 설정했습니다",
+  "@activityPrivate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityPrivateSelf": "나만 내 활동을 볼 수 있습니다",
+  "@activityPrivateSelf": {},
+  "rewatched": "다시 시청",
+  "@rewatched": {},
+  "justNow": "방금",
+  "@justNow": {},
+  "minutesAgo": "{n}분 전",
+  "@minutesAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{n}시간 전",
+  "@hoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{n}일 전",
+  "@daysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

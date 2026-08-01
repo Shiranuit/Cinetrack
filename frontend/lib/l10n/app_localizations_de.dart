@@ -936,4 +936,60 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get inMyLibrary => 'In meiner Bibliothek';
+
+  @override
+  String get activity => 'Aktivität';
+
+  @override
+  String get yourActivity => 'Deine Aktivität';
+
+  @override
+  String usersActivity(String name) {
+    return 'Aktivität von $name';
+  }
+
+  @override
+  String get activityVisibility => 'Wer deine Aktivität sehen kann';
+
+  @override
+  String get activityVisibilityHint =>
+      'Deine Aktivität sind die Folgen und Filme, die du als gesehen markierst';
+
+  @override
+  String get visibilityEveryone => 'Alle';
+
+  @override
+  String get visibilityFriends => 'Freunde';
+
+  @override
+  String get visibilityOnlyMe => 'Nur ich';
+
+  @override
+  String activityPrivate(String name) {
+    return '$name hält die eigene Aktivität privat';
+  }
+
+  @override
+  String get activityPrivateSelf => 'Nur du kannst deine Aktivität sehen';
+
+  @override
+  String get rewatched => 'Erneut gesehen';
+
+  @override
+  String get justNow => 'Gerade eben';
+
+  @override
+  String minutesAgo(int n) {
+    return 'vor $n Min.';
+  }
+
+  @override
+  String hoursAgo(int n) {
+    return 'vor $n Std.';
+  }
+
+  @override
+  String daysAgo(int n) {
+    return 'vor $n T.';
+  }
 }

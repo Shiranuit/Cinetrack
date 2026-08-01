@@ -9,25 +9,31 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../state/auth.dart';
 import '../state/settings.dart';
+import '../widgets/activity_tile.dart';
 import '../widgets/avatar.dart';
 import '../widgets/net_image.dart';
 import '../widgets/section.dart';
 import '../widgets/show_card.dart';
 import '../widgets/states.dart';
+import 'activity_screen.dart';
 import 'movie_detail_screen.dart';
 import 'settings_screen.dart';
 import 'show_detail_screen.dart';
 import 'user_library_screen.dart';
 
 /// The showcase blocks a profile can display, in customizable order.
-const kAllProfileBlocks = ['stats', 'favorites', 'shows', 'movies'];
+const kAllProfileBlocks = ['stats', 'favorites', 'shows', 'movies', 'activity'];
 String _blockLabel(AppLocalizations t, String key) => switch (key) {
       'stats' => t.statistics,
       'favorites' => t.favorites,
       'shows' => t.shows,
       'movies' => t.typeMovies,
+      'activity' => t.activity,
       _ => key,
     };
+
+/// How many recent activity entries the profile block previews before "See all".
+const int _kActivityPreview = 5;
 
 /// A user's profile showcase — the current user's own profile when [userId] is
 /// null, otherwise another user's (respecting their privacy). Both render the
@@ -48,6 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Stats> _stats;
   late Future<List<UserShow>> _shows;
   late Future<List<LibraryMovie>> _movies;
+  late Future<List<ActivityItem>> _activity;
   bool _busy = false;
 
   bool get _isSelf => widget.userId == null;
@@ -66,11 +73,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final st = api.userStats(_targetId);
     final sh = api.userShows(_targetId, langs: langs);
     final mv = api.userMovies(_targetId, langs: langs);
+    // Only a preview is shown here; "See all" opens the paged timeline. Like the
+    // other blocks this is fetched up front — the backend returns an empty list
+    // when their privacy setting hides it.
+    final ac = api.userActivity(_targetId, langs: langs, limit: _kActivityPreview);
     setState(() {
       _profile = p;
       _stats = st;
       _shows = sh;
       _movies = mv;
+      _activity = ac;
     });
   }
 
@@ -169,9 +181,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return _showsBlock(p);
       case 'movies':
         return _moviesBlock(p);
+      case 'activity':
+        return _activityBlock(p);
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  /// Recent watch activity — a short preview that opens the full paged timeline.
+  /// Reached here only when the profile itself is visible, so the one thing left
+  /// to honour is the owner's activity-visibility setting.
+  Widget _activityBlock(UserProfile p) {
+    final t = AppLocalizations.of(context);
+    if (!p.activityVisible) {
+      // Say WHY the section is empty rather than silently dropping it.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.xl, Insets.lg, 0),
+        child: Row(
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 16, color: context.scheme.onSurfaceVariant),
+            const SizedBox(width: Insets.sm),
+            Expanded(
+              child: Text(
+                t.activityPrivate(p.screenName),
+                style: context.text.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // On your own profile, flag the case where nobody else can see this — it's the
+    // one setting whose effect is otherwise invisible from here.
+    final me = _isSelf ? context.watch<AuthController>().me : null;
+    final hiddenFromOthers = me?.activityVisibility == kActivityOnlyMe;
+
+    return FutureBuilder<List<ActivityItem>>(
+      future: _activity,
+      builder: (context, snap) {
+        final items = snap.data ?? [];
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(
+              title: t.activity,
+              icon: Icons.history_rounded,
+              accent: context.colors.seen,
+              trailing: TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: Size.zero,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ActivityScreen(
+                    userId: _targetId,
+                    title: _isSelf ? t.yourActivity : t.usersActivity(p.screenName),
+                  ),
+                )),
+                child: Text(t.seeAll),
+              ),
+            ),
+            if (hiddenFromOthers)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_outline_rounded, size: 14, color: context.scheme.onSurfaceVariant),
+                    const SizedBox(width: Insets.xs),
+                    Expanded(
+                      child: Text(
+                        t.activityPrivateSelf,
+                        style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            for (final item in items)
+              ActivityTile(item: item, onTap: () => openActivityItem(context, item)),
+          ],
+        );
+      },
+    );
   }
 
   /// Watch statistics (episodes, time watched, movies).

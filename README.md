@@ -57,6 +57,8 @@ so you don't lose your history.
 - **Rate & review** - 1-10 ratings per show.
 - **Social** - follow other users, accept/decline follow requests, private profiles, a feed
   of friends' activity, and invitations.
+- **Activity timeline** - the episodes and movies you've watched, on your profile and your
+  friends', with per-user visibility (everyone / friends / only me; friends by default).
 - **Discover & filter** - advanced filtering by genre, tag, network, studio, year, runtime,
   language, country, and more; trigram-powered fuzzy search across titles and translations.
 - **Calendar** - recently aired and upcoming episodes for the shows you follow.

@@ -336,5 +336,65 @@
   "sortDescending": "Décroissant",
   "@sortDescending": {},
   "inMyLibrary": "Dans ma bibliothèque",
-  "@inMyLibrary": {}
+  "@inMyLibrary": {},
+  "activity": "Activité",
+  "@activity": {},
+  "yourActivity": "Votre activité",
+  "@yourActivity": {},
+  "usersActivity": "Activité de {name}",
+  "@usersActivity": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityVisibility": "Qui peut voir votre activité",
+  "@activityVisibility": {},
+  "activityVisibilityHint": "Votre activité, ce sont les épisodes et les films que vous marquez comme vus",
+  "@activityVisibilityHint": {},
+  "visibilityEveryone": "Tout le monde",
+  "@visibilityEveryone": {},
+  "visibilityFriends": "Amis",
+  "@visibilityFriends": {},
+  "visibilityOnlyMe": "Moi uniquement",
+  "@visibilityOnlyMe": {},
+  "activityPrivate": "{name} garde son activité privée",
+  "@activityPrivate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityPrivateSelf": "Vous seul pouvez voir votre activité",
+  "@activityPrivateSelf": {},
+  "rewatched": "Revu",
+  "@rewatched": {},
+  "justNow": "À l'instant",
+  "@justNow": {},
+  "minutesAgo": "il y a {n} min",
+  "@minutesAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "il y a {n} h",
+  "@hoursAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "il y a {n} j",
+  "@daysAgo": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  }
 }

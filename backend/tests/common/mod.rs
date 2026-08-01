@@ -72,10 +72,12 @@ pub async fn state() -> Option<AppState> {
 
 /// Wipe all app + catalog data so each test starts clean.
 pub async fn clean(db: &PgPool) {
+    // catalog.movie has no FK into the truncated set, so CASCADE won't reach it —
+    // it must be listed explicitly or mirrored movies leak between tests.
     sqlx::query(
-        "TRUNCATE app.users, app.user_show, app.watch_event, app.episode_rating, \
+        "TRUNCATE app.users, app.user_show, app.user_movie, app.watch_event, app.episode_rating, \
                   app.episode_rewatch, app.list, app.list_item, \
-                  catalog.series, catalog.episode, catalog.season, \
+                  catalog.series, catalog.movie, catalog.episode, catalog.season, \
                   catalog.translation, catalog.artwork RESTART IDENTITY CASCADE",
     )
     .execute(db)
@@ -217,6 +219,56 @@ pub async fn insert_episode_in_days(
     .execute(db)
     .await
     .expect("insert episode (relative)");
+}
+
+pub async fn insert_movie(db: &PgPool, id: i64, name: &str, year: Option<i32>, runtime: Option<i32>) {
+    sqlx::query("INSERT INTO catalog.movie (id, name, year, runtime) VALUES ($1,$2,$3,$4)")
+        .bind(id)
+        .bind(name)
+        .bind(year)
+        .bind(runtime)
+        .execute(db)
+        .await
+        .expect("insert movie");
+}
+
+/// A movie watch event `days_ago` in the past (the movie half of the activity timeline).
+pub async fn watch_movie_ago(db: &PgPool, user_id: i64, movie_id: i64, source_uuid: &str, days_ago: i64) {
+    sqlx::query(
+        "INSERT INTO app.watch_event (user_id, entity_type, movie_id, source_uuid, watched_at) \
+         VALUES ($1,'movie',$2,$3, now() - make_interval(days => $4::int))",
+    )
+    .bind(uid(user_id))
+    .bind(movie_id)
+    .bind(source_uuid)
+    .bind(days_ago as i32)
+    .execute(db)
+    .await
+    .expect("insert movie watch_event");
+}
+
+/// Create a follow edge between two users (`'accepted'` or `'pending'`).
+pub async fn user_follow(db: &PgPool, follower: i64, followee: i64, status: &str) {
+    sqlx::query(
+        "INSERT INTO app.user_follow (follower_id, followee_id, status) VALUES ($1,$2,$3) \
+         ON CONFLICT (follower_id, followee_id) DO UPDATE SET status = EXCLUDED.status",
+    )
+    .bind(uid(follower))
+    .bind(uid(followee))
+    .bind(status)
+    .execute(db)
+    .await
+    .expect("insert user_follow");
+}
+
+/// Set a user's `activity_visibility` ('everyone' | 'friends' | 'only_me').
+pub async fn set_activity_visibility(db: &PgPool, user_id: i64, value: &str) {
+    sqlx::query("UPDATE app.users SET activity_visibility = $2 WHERE id = $1")
+        .bind(uid(user_id))
+        .bind(value)
+        .execute(db)
+        .await
+        .expect("set activity_visibility");
 }
 
 pub async fn watch(db: &PgPool, user_id: i64, series_id: i64, episode_id: i64, source_uuid: &str) {
