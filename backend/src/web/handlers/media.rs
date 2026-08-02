@@ -20,8 +20,13 @@ fn now() -> u64 {
 const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 
 /// Read the first file field's bytes (+ content type) from a multipart body.
+/// Plain form values carry no `filename`, so they're skipped — a client can send
+/// metadata alongside the upload without it being mistaken for the payload.
 async fn first_file(mut mp: Multipart) -> AppResult<(Vec<u8>, String)> {
     while let Some(field) = mp.next_field().await.map_err(|e| AppError::BadRequest(format!("multipart: {e}")))? {
+        if field.file_name().is_none() {
+            continue;
+        }
         let ct = field.content_type().unwrap_or("application/octet-stream").to_string();
         let bytes = field.bytes().await.map_err(|e| AppError::BadRequest(format!("read upload: {e}")))?;
         return Ok((bytes.to_vec(), ct));

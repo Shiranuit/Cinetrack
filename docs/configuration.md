@@ -76,7 +76,8 @@ Applies to **every** catalog read (series/movies/episodes/seasons/artwork) and s
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SYNC_INTERVAL_SECS` | _(unset = disabled)_ | If set, the server runs the `/updates` sync worker every N seconds. The `/updates` feed is global - run it **often** (small windows). One-off equivalent: `cargo run --bin sync`. |
+| `SYNC_INTERVAL_SECS` | _(unset = disabled)_ | If set, the server runs the `/updates` sync worker every N seconds. Freshness only - correctness is `SYNC_SAFETY_LAG_SECS`' job, so there's nothing to gain from a very short interval. `900` is a sensible production value. One-off equivalent: `cargo run --bin sync`. |
+| `SYNC_SAFETY_LAG_SECS` | `1800` | How far behind wall clock the sync checkpoint parks. TheTVDB republishes `/updates` in batches - a record keeps its original `timeStamp` but only becomes visible minutes later (observed up to ~300s), so a run's answer is always incomplete at the leading edge. Advancing the cursor to `now` would strand those records behind it permanently. **Must exceed the worst-case publication delay.** The resulting re-scan costs no TheTVDB calls: already-captured records are dropped against each row's `last_synced_at`. |
 | `ENRICH_INTERVAL_SECS` | _(unset = disabled)_ | If set, runs the enrichment worker (turns stubs into full records). It's **event-driven** (woken on every enqueue); this interval is only a fallback heartbeat. Bulk fill: `cargo run --bin mirror`. |
 | `ENRICH_CONCURRENCY` | `8` | Concurrent in-flight enrichment fetches (the `THETVDB_MAX_RPS` pacer still caps total throughput). |
 

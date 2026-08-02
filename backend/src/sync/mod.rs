@@ -11,6 +11,13 @@
 //!
 //! Existence/freshness is checked one batch per feed page, not per record.
 //! Run once via `cargo run --bin sync`, or periodically by `SYNC_INTERVAL_SECS`.
+//!
+//! The checkpoint deliberately trails wall clock by `SYNC_SAFETY_LAG_SECS`: the
+//! feed is republished in batches, so a run only ever observes changes up to the
+//! feed's horizon, not up to `now`. Advancing the cursor to `now` would strand
+//! every record published afterwards with a `timeStamp` inside the window just
+//! marked complete — they'd fall behind the cursor and never be requested again.
+//! See [`next_checkpoint`].
 
 pub mod crawl;
 pub mod enrich;
@@ -39,6 +46,22 @@ const MAX_PAGES: u32 = 200;
 /// First-run reconciliation ceiling (TheTVDB `/updates` retention is undocumented
 /// but historically ~30 days).
 const BOOTSTRAP_WINDOW: &str = "30 days";
+
+/// Where the cursor lands after a run, given when the run started, the resume
+/// boundary (`Some` only when a type hit [`MAX_PAGES`]) and `SYNC_SAFETY_LAG_SECS`.
+///
+/// Never advance past `started - safety_lag`: the feed's horizon trails real time,
+/// so everything newer than that may still be unpublished, and a cursor placed
+/// there would skip it forever. The resume boundary is capped by the same rule —
+/// it's the newest `timeStamp` we *processed*, which says nothing about records
+/// below it that hadn't been published when we asked.
+///
+/// The cost is re-scanning `safety_lag` worth of feed each run, which `process_page`
+/// discards against each row's `last_synced_at` without a single outbound fetch.
+fn next_checkpoint(started: i64, resume: Option<i64>, safety_lag_secs: i64) -> i64 {
+    let observed_edge = started - safety_lag_secs;
+    resume.map_or(observed_edge, |boundary| boundary.min(observed_edge))
+}
 
 #[derive(Debug, Default, serde::Serialize)]
 pub struct SyncSummary {
@@ -102,8 +125,7 @@ async fn run_once_inner(state: &AppState) -> AppResult<SyncSummary> {
         }
     }
 
-    // Caught up fully → advance to run-start; capped → resume boundary.
-    let checkpoint = resume.unwrap_or(started);
+    let checkpoint = next_checkpoint(started, resume, state.config.sync_safety_lag_secs as i64);
     summary.until = checkpoint;
     set_last_sync_ts(state, checkpoint).await?;
     tracing::info!("sync: {summary:?}");
@@ -389,6 +411,7 @@ mod tests {
             s3_access_key: String::new(),
             s3_secret_key: String::new(),
             sync_interval_secs: None,
+            sync_safety_lag_secs: 1800,
             thetvdb_max_rps: 35,
             enrich_interval_secs: None,
             enrich_concurrency: 8,
@@ -417,6 +440,30 @@ mod tests {
             sqlx::query("DELETE FROM catalog.fetch_queue WHERE id=$1").bind(id).execute(&state.db).await.unwrap();
             sqlx::query("DELETE FROM catalog.series WHERE id=$1").bind(id).execute(&state.db).await.unwrap();
         }
+    }
+
+    /// The checkpoint must never land on a timestamp whose feed records may still
+    /// be unpublished — that's what silently dropped ~96% of the change feed when
+    /// the cursor advanced straight to run-start.
+    #[test]
+    fn checkpoint_never_advances_past_the_observed_feed_edge() {
+        const LAG: i64 = 1800;
+        let started = 1_000_000;
+
+        // Caught up: park behind the lag, NOT at run-start.
+        assert_eq!(next_checkpoint(started, None, LAG), started - LAG);
+
+        // Page cap hit early in the window: the resume boundary is older than the
+        // edge, so it wins and the next run picks up exactly where this one stopped.
+        assert_eq!(next_checkpoint(started, Some(started - 5000), LAG), started - 5000);
+
+        // Page cap hit near the leading edge: the boundary is a timestamp we
+        // processed, but records BELOW it may not have been published when we
+        // asked — so it's still capped at the edge.
+        assert_eq!(next_checkpoint(started, Some(started - 60), LAG), started - LAG);
+
+        // A zero lag reproduces the old behaviour, so the knob is the whole fix.
+        assert_eq!(next_checkpoint(started, None, 0), started);
     }
 
     /// The core guarantee behind anchoring `since` at `min(last_synced_at)`: an

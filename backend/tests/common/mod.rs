@@ -58,6 +58,7 @@ pub async fn state() -> Option<AppState> {
         s3_access_key: String::new(),
         s3_secret_key: String::new(),
         sync_interval_secs: None,
+        sync_safety_lag_secs: 1800,
         thetvdb_max_rps: 35,
         enrich_interval_secs: None,
         enrich_concurrency: 8,

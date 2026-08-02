@@ -135,7 +135,11 @@ services:
       MAIL_FROM: ${MAIL_FROM:-Cinetrack <no-reply@cine-track.com>}
       CATALOG_MODE: ${CATALOG_MODE:-hybrid}
       MIRROR_SCOPE: ${MIRROR_SCOPE:-full}
-      SYNC_INTERVAL_SECS: ${SYNC_INTERVAL_SECS:-300}
+      SYNC_INTERVAL_SECS: ${SYNC_INTERVAL_SECS:-900}
+      # How far behind wall clock the sync cursor parks. TheTVDB publishes /updates
+      # in batches, so a run never sees changes right up to `now`; without this lag
+      # the cursor steps over records that land moments later and loses them for good.
+      SYNC_SAFETY_LAG_SECS: ${SYNC_SAFETY_LAG_SECS:-1800}
       ENRICH_INTERVAL_SECS: ${ENRICH_INTERVAL_SECS:-30}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-64}
       # Concurrency of the one-off `backfill_episode_translations` bin (ignored by

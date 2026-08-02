@@ -106,6 +106,16 @@ pub struct Config {
     pub s3_secret_key: String,
     /// If set, the server runs the /updates sync worker on this interval (seconds).
     pub sync_interval_secs: Option<u64>,
+    /// How far behind wall clock the sync checkpoint parks, in seconds (default 1800).
+    /// TheTVDB republishes `/updates` in batches, so a record carries its original
+    /// `timeStamp` but only becomes visible minutes later — asking for `[since, now]`
+    /// returns only what has been published so far. Advancing the checkpoint to `now`
+    /// anyway would put those not-yet-published records permanently behind the cursor.
+    /// Parking the checkpoint this far back makes every run re-scan a window it has
+    /// already covered, by which time the batch for it has landed. Must exceed the
+    /// worst-case publication delay (measured up to ~300s); the re-scan is cheap
+    /// because `process_page` drops already-captured records with no outbound fetch.
+    pub sync_safety_lag_secs: u64,
     /// Max outbound requests/sec to TheTVDB (global pacer). Undocumented upstream;
     /// tune empirically. Default 35.
     pub thetvdb_max_rps: u32,
@@ -201,6 +211,7 @@ impl Config {
             s3_access_key: opt("S3_ACCESS_KEY", ""),
             s3_secret_key: opt("S3_SECRET_KEY", ""),
             sync_interval_secs: env::var("SYNC_INTERVAL_SECS").ok().and_then(|v| v.parse().ok()),
+            sync_safety_lag_secs: env::var("SYNC_SAFETY_LAG_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(1800),
             thetvdb_max_rps: env::var("THETVDB_MAX_RPS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(35),
             enrich_interval_secs: env::var("ENRICH_INTERVAL_SECS").ok().and_then(|v| v.parse().ok()),
             enrich_concurrency: env::var("ENRICH_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0).unwrap_or(8),
