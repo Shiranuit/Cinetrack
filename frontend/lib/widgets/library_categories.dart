@@ -100,3 +100,8 @@ List<SearchResult> mergeSectionResults(
   });
   return merged;
 }
+
+/// Key for one (section, kind) pair in a batched library-filter request. The
+/// server echoes it back verbatim, so it only has to be unique within a batch and
+/// splittable by the client that made it.
+String sectionBatchKey(String sectionId, String kind) => '$sectionId|$kind';

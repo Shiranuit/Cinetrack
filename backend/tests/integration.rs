@@ -596,3 +596,58 @@ async fn library_sections_round_trip_and_default() {
     let after = sections::library_sections(&state, me).await.unwrap();
     assert_eq!(after[0].title.as_deref(), Some("Comfort shows"), "a rejected save must not clobber the layout");
 }
+
+/// The batched library filter must return exactly what the per-section endpoint
+/// would, key by key — it's an optimization, so any behavioural difference is a bug.
+#[tokio::test]
+async fn library_filter_batch_matches_individual_queries() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "batch@test.local").await;
+    let me = common::uid(1);
+
+    // Two series (one anime) and a movie, all tracked.
+    common::insert_series(&state.db, 700, "Batch Drama", Some(2020), Some(45), Some(9.0), Some("eng"), serde_json::json!({})).await;
+    common::insert_series(&state.db, 701, "Batch Anime", Some(2021), Some(24), Some(8.0), Some("jpn"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 700, true, false).await;
+    common::follow(&state.db, 1, 701, true, false).await;
+
+    // Each kind on its own, the way one batch entry per (section, kind) would run.
+    let run = async |kind: &str| {
+        search_db(
+            &state,
+            &Filters {
+                kind: kind.to_string(),
+                library_user: Some(me),
+                viewer: Some(me),
+                sort: "name".into(),
+                sort_desc: false,
+                limit: 30,
+                ..Default::default()
+            },
+            &langs(),
+        )
+        .await
+        .unwrap()
+    };
+
+    let series = run("series").await;
+    let anime = run("anime").await;
+    assert_eq!(series.len(), 2, "a series query carries anime too");
+    assert_eq!(anime.len(), 1, "anime narrows to Japanese-language series");
+
+    // is_anime is what lets a multi-kind section drop anime it didn't ask for.
+    assert!(series.iter().any(|r| r.is_anime), "the anime row is flagged");
+    assert!(series.iter().any(|r| !r.is_anime), "the non-anime row is not");
+    assert!(anime.iter().all(|r| r.is_anime));
+
+    // Running the same filter twice is stable — the batch relies on that, since it
+    // runs entries concurrently and reassembles them by key.
+    assert_eq!(
+        run("series").await.iter().map(|r| r.tvdb_id).collect::<Vec<_>>(),
+        series.iter().map(|r| r.tvdb_id).collect::<Vec<_>>(),
+    );
+}

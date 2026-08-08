@@ -121,6 +121,92 @@ pub async fn library_filter(
     Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(uid), None, Some(uid)), &langs).await?))
 }
 
+/// One entry in a batched library-filter request: an opaque client key and the
+/// filter to run, as the query-param map a saved section stores.
+#[derive(Deserialize)]
+pub struct BatchEntry {
+    /// Echoed back verbatim so the client can match results to what it asked for.
+    /// Opaque here: a section spanning several kinds sends one entry per kind.
+    pub key: String,
+    pub filters: std::collections::HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+pub struct BatchRequest {
+    pub sections: Vec<BatchEntry>,
+    pub langs: Option<String>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct BatchResult {
+    pub key: String,
+    pub items: Vec<SearchResult>,
+}
+
+/// Ceiling on filters per batch, mirroring the per-user section cap — a request is
+/// one connection held for as long as the slowest filter, so this bounds it.
+const MAX_BATCH: usize = 40;
+
+/// How many of a batch's filters run at once. They're independent queries, so the
+/// wall clock is the slowest rather than the sum; the cap keeps one library load
+/// from taking a big slice of the pool that the enrich worker shares.
+const BATCH_CONCURRENCY: usize = 8;
+
+/// Run several library filters in ONE request.
+///
+/// The Library draws a rail per custom section, which as separate requests is a
+/// round trip each and a connection each. Batching also sets up the win that
+/// matters later: once sections can filter on watch state, every rail needs the
+/// same per-user aggregate, and computing it once for the whole batch is the
+/// difference between one pass over the watch history and N identical ones.
+pub async fn library_filter_batch(
+    AuthUser(uid): AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<BatchRequest>,
+) -> AppResult<Json<Vec<BatchResult>>> {
+    if req.sections.len() > MAX_BATCH {
+        return Err(crate::error::AppError::BadRequest(format!("too many filters in one batch (max {MAX_BATCH})")));
+    }
+    let langs = LangsQuery { langs: req.langs.clone() }.list();
+
+    let mut out: Vec<BatchResult> = Vec::with_capacity(req.sections.len());
+    // Chunked rather than all-at-once: `BATCH_CONCURRENCY` in flight, in request
+    // order, so the response order matches what was asked for.
+    for chunk in req.sections.chunks(BATCH_CONCURRENCY) {
+        let mut set = tokio::task::JoinSet::new();
+        for (i, entry) in chunk.iter().enumerate() {
+            // A stored filter IS a query-param map, so parse it with the same
+            // deserializer the GET endpoints use rather than a second parser that
+            // could drift from `DiscoverQuery`.
+            let mut q: DiscoverQuery = serde_urlencoded::from_str(&encode_params(&entry.filters))
+                .map_err(|e| crate::error::AppError::BadRequest(format!("bad filter for '{}': {e}", entry.key)))?;
+            // Paging is the caller's, not the saved filter's.
+            q.limit = req.limit;
+            q.offset = None;
+            let (st, ls, key) = (state.clone(), langs.clone(), entry.key.clone());
+            set.spawn(async move {
+                let items = catalog::discover::search_db(&st, &build_filters(&q, Some(uid), None, Some(uid)), &ls).await;
+                (i, key, items)
+            });
+        }
+        let mut done: Vec<(usize, String, AppResult<Vec<SearchResult>>)> = Vec::with_capacity(chunk.len());
+        while let Some(joined) = set.join_next().await {
+            done.push(joined.expect("library filter batch task panicked"));
+        }
+        done.sort_by_key(|(i, _, _)| *i);
+        for (_, key, items) in done {
+            out.push(BatchResult { key, items: items? });
+        }
+    }
+    Ok(Json(out))
+}
+
+/// Percent-encode a filter map back into a query string for [`serde_urlencoded`].
+fn encode_params(filters: &std::collections::HashMap<String, String>) -> String {
+    serde_urlencoded::to_string(filters.iter().collect::<Vec<_>>()).unwrap_or_default()
+}
+
 /// Advanced filter scoped to ANOTHER user's shows (empty unless their profile is
 /// visible to you) — lets you search/sort inside a friend's library.
 pub async fn user_filter(

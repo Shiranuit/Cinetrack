@@ -104,46 +104,72 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  /// Whether any of a section's kinds is one the type toggles have on. A section
-  /// spanning Series + Movies stays visible while either is selected; its contents
-  /// are narrowed to the selected kinds by [_sectionItems].
-  bool _customTypeVisible(LibrarySection s) => s.kinds.any((k) => switch (k) {
+  /// Whether one kind is currently shown by the type toggles.
+  bool _kindSelected(String kind) => switch (kind) {
         'movie' => _filter.contains(_Filter.movies),
         'anime' => _filter.contains(_Filter.anime),
         _ => _filter.contains(_Filter.series),
-      });
+      };
 
-  /// One custom section's rail. A section can span several kinds and the filter
-  /// endpoint takes one at a time, so this fans out and merges — intersected with
-  /// the screen's type toggles, so toggling Movies off empties the movie half of a
-  /// mixed section instead of leaving it stale.
-  Future<List<SearchResult>> _sectionItems(LibrarySection s) async {
-    final selected = s.kinds.where((k) => switch (k) {
-          'movie' => _filter.contains(_Filter.movies),
-          'anime' => _filter.contains(_Filter.anime),
-          _ => _filter.contains(_Filter.series),
-        }).toSet();
-    if (selected.isEmpty) return const [];
+  /// Whether any of a section's kinds is on. A section spanning Series + Movies
+  /// stays visible while either is selected; its contents are narrowed to the
+  /// selected kinds by [_loadCustomSections].
+  bool _customTypeVisible(LibrarySection s) => s.kinds.any(_kindSelected);
 
-    final filters = mergedSectionFilters(s, _f);
-    final lists = await Future.wait(sectionQueryKinds(selected)
-        .map((kind) => _api.librarySectionItems({...filters, 'type': kind}, langs: _langs)));
-    return mergeSectionResults(lists, selected,
-        sort: filters['sort'], desc: (filters['dir'] ?? 'desc') != 'asc');
-  }
-
-  /// Run each enabled custom section's filter. Requests go out together and each
-  /// rail appears as its own response lands.
+  /// Load every custom rail in ONE request.
+  ///
+  /// A section can span several kinds and the filter endpoint takes one at a time,
+  /// so this flattens to one batch entry per (section, kind) — keyed so the
+  /// responses can be regrouped — and merges each section's kinds back together.
+  /// The kinds are intersected with the screen's type toggles first, so toggling
+  /// Movies off empties the movie half of a mixed section rather than leaving it
+  /// stale.
   Future<void> _loadCustomSections() async {
-    final custom = _sections.where((s) => s.enabled && s.isCustom && s.id != null);
-    await Future.wait(custom.map((s) async {
-      try {
-        final items = await _sectionItems(s);
-        if (mounted) setState(() => _customItems[s.id!] = items);
-      } catch (_) {
-        if (mounted) setState(() => _customItems[s.id!] = const []);
+    final custom = _sections.where((s) => s.enabled && s.isCustom && s.id != null).toList();
+    if (custom.isEmpty) return;
+
+    // Resolved once and reused below, so the request and the regrouping can't
+    // disagree about which kinds a section covers.
+    final plan = {
+      for (final s in custom)
+        s.id!: (filters: mergedSectionFilters(s, _f), kinds: s.kinds.where(_kindSelected).toSet()),
+    };
+    final entries = [
+      for (final s in custom)
+        for (final kind in sectionQueryKinds(plan[s.id!]!.kinds))
+          (key: sectionBatchKey(s.id!, kind), filters: {...plan[s.id!]!.filters, 'type': kind}),
+    ];
+
+    try {
+      final byKey = entries.isEmpty
+          ? const <String, List<SearchResult>>{}
+          : await _api.librarySectionsItems(entries, langs: _langs);
+      if (!mounted) return;
+      setState(() {
+        for (final s in custom) {
+          final p = plan[s.id!]!;
+          _customItems[s.id!] = mergeSectionResults(
+            [
+              for (final kind in sectionQueryKinds(p.kinds))
+                byKey[sectionBatchKey(s.id!, kind)] ?? const <SearchResult>[],
+            ],
+            p.kinds,
+            sort: p.filters['sort'],
+            desc: (p.filters['dir'] ?? 'desc') != 'asc',
+          );
+        }
+      });
+    } catch (_) {
+      // One request now, so a failure takes every rail with it — show them empty
+      // rather than leaving stale contents from a previous filter.
+      if (mounted) {
+        setState(() {
+          for (final s in custom) {
+            _customItems[s.id!] = const [];
+          }
+        });
       }
-    }));
+    }
   }
 
   /// A write happened somewhere (any authenticated ApiClient call) — quietly

@@ -399,18 +399,29 @@ class ApiClient extends ChangeNotifier {
         LibrarySection.fromJson,
       );
 
-  /// One custom section's rail: its saved filter replayed against the library
-  /// filter endpoint. The filter map is already in query-param form, so it passes
-  /// straight through.
-  Future<List<SearchResult>> librarySectionItems(
-    Map<String, String> filters, {
+  /// Run several library filters in one request — the Library's custom rails.
+  ///
+  /// Each entry's `key` comes back verbatim, so a section spanning several kinds
+  /// sends one entry per kind and regroups the responses itself. One round trip
+  /// instead of one per rail, and the server gets the chance to share work across
+  /// the whole batch.
+  Future<Map<String, List<SearchResult>>> librarySectionsItems(
+    List<({String key, Map<String, String> filters})> entries, {
     String? langs,
     int limit = 30,
-  }) async =>
-      _list(
-        await _get('/api/library/filter', {...filters, 'limit': '$limit', 'langs': ?langs}),
-        SearchResult.fromJson,
-      );
+  }) async {
+    if (entries.isEmpty) return {};
+    final data = await _send('POST', '/api/library/filter/batch', body: {
+      'sections': [for (final e in entries) {'key': e.key, 'filters': e.filters}],
+      'limit': limit,
+      'langs': ?langs,
+    });
+    return {
+      for (final row in (data as List? ?? const []))
+        if (row case {'key': final String key, 'items': final List items})
+          key: [for (final i in items) if (i is Map<String, dynamic>) SearchResult.fromJson(i)],
+    };
+  }
   Future<void> setLanguages(List<String> languages) => _send('PUT', '/api/me/languages', body: {'languages': languages});
 
   Future<UserShow> showRelation(int seriesId, {String? langs}) async =>

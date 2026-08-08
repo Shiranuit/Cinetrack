@@ -57,6 +57,7 @@ pub fn router(state: AppState) -> Router {
         // ---- catalog (read-through mirror) ----
         .route("/api/discover", get(handlers::discover::discover))
         .route("/api/library/filter", get(handlers::discover::library_filter))
+        .route("/api/library/filter/batch", post(handlers::discover::library_filter_batch))
         .route("/api/filters", get(handlers::discover::filter_options))
         .route("/api/genres", get(handlers::discover::genres))
         .route("/api/calendar", get(handlers::discover::calendar))
@@ -197,7 +198,7 @@ fn is_public(method: &Method, path: &str) -> bool {
 fn is_expensive(path: &str) -> bool {
     matches!(
         path,
-        "/api/discover" | "/api/library/filter" | "/api/filters" | "/api/calendar"
+        "/api/discover" | "/api/library/filter" | "/api/library/filter/batch" | "/api/filters" | "/api/calendar"
     ) || (path.starts_with("/api/users/") && path.ends_with("/filter"))
 }
 
