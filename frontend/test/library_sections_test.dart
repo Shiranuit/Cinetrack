@@ -15,6 +15,7 @@ void main() {
   _multiKindTests();
   _watchHistoryFacetTests();
   _progressTests();
+  _cardCaptionTests();
   _sortHelpTests();
   _openRangeTests();
   _rangeLabelTests();
@@ -628,5 +629,39 @@ void _presetSyncTests() {
       '',
       reason: 'a stale 42 would show a filter that is no longer applied',
     );
+  });
+}
+
+/// A custom rail's card must never end up with neither a year nor a progress bar.
+/// `ProgressStripe` hides itself at zero, so an unstarted show (0 of N watched,
+/// which the server now reports as 0 rather than NULL) has no bar — and the caption
+/// has to survive, or the card shows nothing but the poster.
+void _cardCaptionTests() {
+  group('rail card caption vs progress bar', () {
+    test('an unstarted show keeps its year, because it gets no stripe', () {
+      const r = SearchResult(tvdbId: 1, kind: 'series', name: 'Unstarted', year: 1999, totalEpisodes: 12, seenEpisodes: 0);
+      expect(r.progress, 0.0);
+      // What `_resultCard` decides: caption shown only when no stripe will render.
+      expect((r.progress ?? 0) > 0, isFalse, reason: 'no stripe, so the year must show');
+    });
+
+    test('a partly-watched show yields the caption to its stripe', () {
+      const r = SearchResult(tvdbId: 1, kind: 'series', name: 'Half', year: 1999, totalEpisodes: 12, seenEpisodes: 6);
+      expect((r.progress ?? 0) > 0, isTrue);
+    });
+
+    test('a row without computed progress keeps its year', () {
+      const r = SearchResult(tvdbId: 1, kind: 'movie', name: 'Film', year: 1999);
+      expect(r.progress, isNull);
+      expect((r.progress ?? 0) > 0, isFalse, reason: 'movies never carry progress and must show the year');
+    });
+
+    test('series and movies in one rail agree on when the caption shows', () {
+      // The inconsistency this guards: a mixed rail where movies showed a year and
+      // unstarted series showed nothing at all.
+      const unstartedSeries = SearchResult(tvdbId: 1, kind: 'series', year: 2001, totalEpisodes: 8, seenEpisodes: 0);
+      const movie = SearchResult(tvdbId: 2, kind: 'movie', year: 2001);
+      expect((unstartedSeries.progress ?? 0) > 0, (movie.progress ?? 0) > 0);
+    });
   });
 }

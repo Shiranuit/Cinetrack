@@ -692,9 +692,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   ShowCard _resultCard(SearchResult r) => ShowCard(
         title: r.name ?? '—',
         imageUrl: r.imageUrl,
-        // The progress bar replaces the year caption, exactly as on the built-in
-        // rails — so a duplicated category's cards look like the ones it copied.
-        subtitle: r.progress == null ? r.year?.toString() : null,
+        // The caption yields to the progress bar, but only when there IS one:
+        // `ProgressStripe` hides itself at zero, so keying this on "progress was
+        // computed" left an unstarted show with no bar AND no year — an emptier
+        // card than before progress was added at all.
+        subtitle: (r.progress ?? 0) > 0 ? null : r.year?.toString(),
         // ShowCard treats 0 as "no stripe", which is also the right rendering for
         // a result whose progress was never computed.
         progress: r.progress ?? 0,

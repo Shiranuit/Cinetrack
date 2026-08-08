@@ -35,7 +35,6 @@ pub struct SearchResult {
     pub name: Option<String>,
     pub year: Option<i32>,
     pub image_url: Option<String>,
-    pub overview: Option<String>,
     /// Whether the viewer already tracks this title (so Discover can mark shows
     /// that are in the user's library). Always false for the non-viewer-scoped
     /// popular/remote paths.

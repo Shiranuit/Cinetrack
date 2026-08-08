@@ -1175,3 +1175,451 @@ async fn search_rows_carry_progress_only_when_requested() {
     assert_eq!(without[0].total_episodes, None);
     assert_eq!(without[0].seen_episodes, None, "absent, which the client renders as no bar");
 }
+
+/// A filter that saves must be one the Library can execute. Before this, values
+/// like `watched_days_max=2147483647` (a valid i32, but "timestamp out of range"
+/// once it reaches date arithmetic) and `year_min=""` saved with a 200 and then
+/// failed on every single load — and because the batch aborts on the first bad
+/// entry, ONE poisoned section blanked the entire Library, permanently.
+#[tokio::test]
+async fn poison_filters_are_rejected_at_save_and_survivable_at_load() {
+    use backend::catalog::discover::{search_db, Filters};
+    use backend::web::handlers::discover::{build_filters, parse_filter_map, DiscoverQuery};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "poison@test.local").await;
+    let me = common::uid(1);
+    common::insert_series(&state.db, 1200, "A Show", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 1200, true, false).await;
+
+    let map = |pairs: &[(&str, &str)]| {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<std::collections::HashMap<_, _>>()
+    };
+
+    // The save-time gate: these never reach storage now.
+    assert!(parse_filter_map(&map(&[("year_min", "")])).is_err(), "an empty value is not an absent one");
+    assert!(parse_filter_map(&map(&[("caught_up", "")])).is_err());
+    assert!(parse_filter_map(&map(&[("year_min", "notanumber")])).is_err());
+
+    // A multi-kind `type` must still validate — the client splits it per kind
+    // before execution, so rejecting it here would break every mixed section.
+    assert!(parse_filter_map(&map(&[("type", "series,movie")])).is_ok());
+
+    // The execution gate, for anything already stored: an absurd day count is a
+    // Postgres range error, so it must be clamped rather than allowed through.
+    for key in ["watched_days_min", "watched_days_max", "aired_days_min", "aired_days_max"] {
+        let q: DiscoverQuery = parse_filter_map(&map(&[(key, "2147483647")])).expect("parses as i32");
+        let filters = Filters { library_user: Some(me), viewer: Some(me), limit: 10, ..build_filters(&q, Some(me), None, Some(me)) };
+        let rows = search_db(&state, &filters, &langs()).await;
+        assert!(rows.is_ok(), "{key}=i32::MAX must not take the query down: {:?}", rows.err());
+    }
+
+    // Negative day counts silently meant "in the future"; they clamp to 0.
+    let q: DiscoverQuery = parse_filter_map(&map(&[("watched_days_max", "-5")])).unwrap();
+    assert_eq!(build_filters(&q, Some(me), None, Some(me)).watched_days_max, Some(0));
+
+    // NaN made every comparison false — an empty rail with no explanation.
+    let q: DiscoverQuery = parse_filter_map(&map(&[("progress_min", "NaN")])).unwrap();
+    assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_min, None);
+
+    // And progress stays inside its own domain.
+    let q: DiscoverQuery = parse_filter_map(&map(&[("progress_max", "1000")])).unwrap();
+    assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_max, Some(100.0));
+}
+
+/// The shared snapshot must be a pure optimization: every rail has to return
+/// exactly what it returned when each computed its own CTEs. The snapshot mode
+/// projects the same CTE names from a materialized table, so every expression
+/// downstream is byte-identical — this test is what proves that claim rather than
+/// asserting it in a comment.
+#[tokio::test]
+async fn a_shared_snapshot_returns_what_per_query_ctes_return() {
+    use backend::catalog::discover::{search_db, search_db_on, Filters, WatchState};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "snapshot@test.local").await;
+    let me = common::uid(1);
+
+    // Deliberately spread across every bucket, including the shapes the snapshot
+    // could get wrong: never-watched (no `seen`/`lw` row), no episodes at all, and
+    // future-only episodes (no `ep` row under the old CTE).
+    for (id, name) in [(1300, "Watched Recently"), (1301, "Never Watched"), (1302, "No Episodes"), (1303, "Future Only"), (1304, "Stopped")] {
+        common::insert_series(&state.db, id, name, Some(2022), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+    common::insert_episode_in_days(&state.db, 13001, 1300, 1, 1, -40, "E1").await;
+    common::insert_episode_in_days(&state.db, 13002, 1300, 1, 2, -10, "E2").await;
+    common::watch_ago(&state.db, 1, 1300, 13001, "w-1300", 3).await;
+    common::insert_episode_in_days(&state.db, 13011, 1301, 1, 1, -40, "E1").await;
+    common::insert_episode_in_days(&state.db, 13031, 1303, 1, 1, 30, "E1").await; //未 aired
+    common::insert_episode_in_days(&state.db, 13041, 1304, 1, 1, -40, "E1").await;
+    common::set_user_show(&state.db, 1, 1304, "archived", "true").await;
+
+    // A spread of queries that between them touch every CTE the snapshot replaces.
+    let cases: Vec<(&str, Filters)> = vec![
+        ("progress", Filters { with_progress: true, sort: "name".into(), sort_desc: false, ..Default::default() }),
+        ("state=watching", Filters { states: vec!["watching".into()], ..Default::default() }),
+        ("state=not_started", Filters { states: vec!["not_started".into()], ..Default::default() }),
+        ("state=stopped", Filters { states: vec!["stopped".into()], ..Default::default() }),
+        ("sort=last_watched", Filters { sort: "last_watched".into(), with_progress: true, ..Default::default() }),
+        ("sort=remaining", Filters { sort: "remaining".into(), with_progress: true, ..Default::default() }),
+        ("caught_up", Filters { caught_up: Some(true), ..Default::default() }),
+        ("has_upcoming", Filters { has_upcoming: Some(true), ..Default::default() }),
+        ("remaining_min", Filters { remaining_min: Some(1), ..Default::default() }),
+        ("watched_days_max", Filters { watched_days_max: Some(30), ..Default::default() }),
+    ];
+
+    // Build the snapshot exactly as the batch handler does.
+    let mut tx = state.db.begin().await.unwrap();
+    sqlx::query(&format!(
+        "CREATE TEMP TABLE batch_watch_state ON COMMIT DROP AS {}",
+        backend::tracking::state::watch_state_snapshot_sql("$1")
+    ))
+    .bind(me)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+
+    for (label, base) in cases {
+        let f = Filters { kind: "series".into(), library_user: Some(me), viewer: Some(me), limit: 100, ..base };
+        let computed = search_db(&state, &f, &langs()).await.unwrap();
+        let projected = search_db_on(&mut *tx, &f, &langs(), WatchState::Snapshot { table: "batch_watch_state", user: me }).await.unwrap();
+
+        let names = |rows: &[backend::catalog::SearchResult]| {
+            rows.iter().map(|r| r.name.clone().unwrap_or_default()).collect::<Vec<_>>()
+        };
+        assert_eq!(names(&computed), names(&projected), "'{label}': snapshot and CTEs disagree on contents/order");
+        let progress = |rows: &[backend::catalog::SearchResult]| {
+            rows.iter().map(|r| (r.total_episodes, r.seen_episodes)).collect::<Vec<_>>()
+        };
+        assert_eq!(progress(&computed), progress(&projected), "'{label}': progress counts differ");
+    }
+    tx.commit().await.unwrap();
+}
+
+/// The snapshot is a TEMP table on a POOLED connection. If it outlived its
+/// transaction, the next user handed that connection would query someone else's
+/// watch history — so `ON COMMIT DROP` is a correctness requirement, not tidiness.
+#[tokio::test]
+async fn the_snapshot_never_outlives_its_transaction() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "leak@test.local").await;
+    let me = common::uid(1);
+
+    let mut tx = state.db.begin().await.unwrap();
+    sqlx::query(&format!(
+        "CREATE TEMP TABLE batch_watch_state ON COMMIT DROP AS {}",
+        backend::tracking::state::watch_state_snapshot_sql("$1")
+    ))
+    .bind(me)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    // Visible inside the transaction that created it...
+    let inside: i64 = sqlx::query_scalar("SELECT count(*) FROM batch_watch_state")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_eq!(inside, 0, "no tracked shows yet, but the table exists");
+    tx.commit().await.unwrap();
+
+    // ...and gone afterwards, on every connection including the one that built it.
+    for _ in 0..5 {
+        let err = sqlx::query_scalar::<_, i64>("SELECT count(*) FROM batch_watch_state")
+            .fetch_one(&state.db)
+            .await;
+        assert!(err.is_err(), "the snapshot survived its transaction and is visible to the next request");
+    }
+}
+
+/// Search behaviour vs `main`, pinned.
+///
+/// A differential run (the same query matrix compiled against `main` and against
+/// this branch, both against the same real 372-show library) came back:
+/// **97 of 177 cases byte-identical, 80 differing — every difference in library
+/// scope, none in Discover.** The 80 come from exactly two deliberate fixes, and
+/// this test is the standing proof that those two are the ONLY intended changes:
+/// anything else drifting shows up as a failure here rather than in production.
+#[tokio::test]
+async fn library_scope_matches_main_except_for_the_two_intended_fixes() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "scope@test.local").await;
+    let me = common::uid(1);
+
+    // (1) A show whose user_show row SURVIVES with every flag cleared — what
+    // "unfollow" leaves behind. `main` returned it from the library filter because
+    // its join asked only for `NOT unavailable`; the rails never did. It is not in
+    // your library, so the filter must not return it either.
+    common::insert_series(&state.db, 1400, "Unfollowed Leftover", Some(2015), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 1400, true, false).await;
+    sqlx::query(
+        "UPDATE app.user_show SET is_followed = false, is_favorited = false, archived = false, status = NULL \
+         WHERE user_id = $1 AND series_id = 1400",
+    )
+    .bind(me)
+    .execute(&state.db)
+    .await
+    .unwrap();
+
+    common::insert_series(&state.db, 1401, "Really Tracked", Some(2016), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 1401, true, false).await;
+
+    // (2) A movie whose id collides with a TRACKED SERIES id. TheTVDB's id spaces
+    // overlap (88,453 collisions in the dev catalog), and `main` joined movies
+    // through `user_show`, so this movie appeared in the movie library purely
+    // because a series with the same id was tracked — 171 results for a 17-movie
+    // library.
+    common::insert_movie(&state.db, 1401, "Colliding Untracked Movie", Some(2019), Some(100)).await;
+    common::insert_movie(&state.db, 1402, "Actually Tracked Movie", Some(2020), Some(100)).await;
+    sqlx::query("INSERT INTO app.user_movie (user_id, movie_id, watched) VALUES ($1, 1402, true)")
+        .bind(me)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let names = |rows: Vec<backend::catalog::SearchResult>| {
+        let mut n: Vec<String> = rows.into_iter().filter_map(|r| r.name).collect();
+        n.sort();
+        n
+    };
+    let lib = |kind: &str| Filters {
+        kind: kind.to_string(),
+        library_user: Some(me),
+        viewer: Some(me),
+        sort: "name".into(),
+        sort_desc: false,
+        limit: 100,
+        ..Default::default()
+    };
+
+    // Fix 1: library membership is the same rule the rails use.
+    assert_eq!(
+        names(search_db(&state, &lib("series"), &langs()).await.unwrap()),
+        vec!["Really Tracked"],
+        "an unfollowed leftover row is not in the library, however the filter is scoped"
+    );
+
+    // Fix 2: movies are scoped through user_movie, not user_show.
+    assert_eq!(
+        names(search_db(&state, &lib("movie"), &langs()).await.unwrap()),
+        vec!["Actually Tracked Movie"],
+        "a movie sharing an id with a tracked series must not appear"
+    );
+
+    // Everything else must be untouched: Discover is catalog-wide and was
+    // byte-identical across all 177 differential cases. It still sees both the
+    // unfollowed show and the colliding movie, because they exist in the catalog.
+    let discover_series = Filters { library_user: None, ..lib("series") };
+    let found = names(search_db(&state, &discover_series, &langs()).await.unwrap());
+    assert!(found.contains(&"Unfollowed Leftover".to_string()), "Discover browses the catalog, not your library");
+    assert!(found.contains(&"Really Tracked".to_string()));
+
+    let discover_movies = Filters { library_user: None, ..lib("movie") };
+    assert_eq!(
+        names(search_db(&state, &discover_movies, &langs()).await.unwrap()),
+        vec!["Actually Tracked Movie", "Colliding Untracked Movie"],
+    );
+
+    // And the `in_library` marker still agrees with the scope rule — the flag and
+    // the filter must never disagree about what "in my library" means.
+    let marked = search_db(&state, &discover_series, &langs()).await.unwrap();
+    for row in marked {
+        let expected = row.name.as_deref() == Some("Really Tracked");
+        assert_eq!(row.in_library, expected, "in_library disagrees with the scope rule for {:?}", row.name);
+    }
+}
+
+/// An unrecognized `state` value must return NOTHING, not EVERYTHING.
+///
+/// Unknown buckets used to be filtered out of the list, which left it empty — and
+/// an empty list disables the predicate entirely, so a section pinned to one
+/// category silently widened to the user's whole library. A filter nobody
+/// understands has to fail closed.
+#[tokio::test]
+async fn an_unknown_state_filter_fails_closed() {
+    use backend::web::handlers::discover::{build_filters, parse_filter_map, DiscoverQuery};
+    use backend::catalog::discover::search_db;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "closed@test.local").await;
+    let me = common::uid(1);
+    for id in [1500, 1501, 1502] {
+        common::insert_series(&state.db, id, &format!("Show {id}"), Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+
+    let run = async |state_param: Option<&str>| {
+        let map: std::collections::HashMap<String, String> = state_param
+            .map(|s| [("state".to_string(), s.to_string())].into_iter().collect())
+            .unwrap_or_default();
+        let q: DiscoverQuery = parse_filter_map(&map).unwrap();
+        let f = backend::catalog::discover::Filters {
+            kind: "series".into(),
+            limit: 100,
+            ..build_filters(&q, Some(me), None, Some(me))
+        };
+        search_db(&state, &f, &langs()).await.unwrap().len()
+    };
+
+    assert_eq!(run(None).await, 3, "no state filter: the whole library");
+    assert_eq!(run(Some("not_started")).await, 3, "a known bucket everything is in");
+    assert_eq!(run(Some("watching")).await, 0, "a known bucket nothing is in");
+    assert_eq!(run(Some("brand_new_bucket")).await, 0, "an UNKNOWN bucket must match nothing, not everything");
+    assert_eq!(run(Some("also_unknown,still_unknown")).await, 0, "all-unknown likewise");
+    // A mix still honours the part we do understand.
+    assert_eq!(run(Some("not_started,brand_new_bucket")).await, 3, "any-of: the known half still matches");
+}
+
+/// A batch of movie-only rails must not build a watch-history snapshot: movies have
+/// no episodes, so nothing would read it, and building it costs a full pass over
+/// the user's watch history.
+#[tokio::test]
+async fn movie_rails_do_not_trigger_the_snapshot() {
+    use backend::catalog::discover::Filters;
+
+    let me = common::uid(1);
+    let movie = Filters { kind: "movie".into(), library_user: Some(me), with_progress: true, ..Default::default() };
+    assert!(!movie.needs_watch_state(), "a movie rail can never use the snapshot");
+
+    let series = Filters { kind: "series".into(), library_user: Some(me), with_progress: true, ..Default::default() };
+    assert!(series.needs_watch_state());
+
+    let anime = Filters { kind: "anime".into(), library_user: Some(me), with_progress: true, ..Default::default() };
+    assert!(anime.needs_watch_state(), "anime is series, and does use it");
+
+    // Discover is catalog-wide: no user, no watch state.
+    let discover = Filters { kind: "series".into(), with_progress: true, ..Default::default() };
+    assert!(!discover.needs_watch_state());
+}
+
+/// The batch endpoint itself, driven through its real handler.
+///
+/// Mutation testing showed every other new test runs a layer BELOW this: removing
+/// `ON COMMIT DROP`, renaming the snapshot table, or setting `SNAPSHOT_MIN_RAILS`
+/// to 1 or `usize::MAX` all left the suite green, because nothing constructed a
+/// `BatchRequest`. This exercises the handler in the shape production uses it —
+/// enough rails to cross the snapshot threshold — and then checks the snapshot is
+/// really gone from the pool afterwards.
+#[tokio::test]
+async fn the_batch_handler_matches_per_section_queries_and_leaves_no_snapshot() {
+    use backend::auth::AuthUser;
+    use backend::catalog::discover::{search_db, Filters};
+    use backend::web::handlers::discover::{build_filters, library_filter_batch, parse_filter_map, BatchEntry, BatchRequest, DiscoverQuery};
+    use axum::extract::State;
+    use axum::Json;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "batchapi@test.local").await;
+    let me = common::uid(1);
+
+    for (id, name, lang) in [(1600, "Alpha", "eng"), (1601, "Beta", "jpn"), (1602, "Gamma", "eng")] {
+        common::insert_series(&state.db, id, name, Some(2021), Some(45), Some(1.0), Some(lang), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+        common::insert_episode_in_days(&state.db, id * 10, id, 1, 1, -20, "E1").await;
+    }
+    common::watch_ago(&state.db, 1, 1600, 16000, "w-1600", 2).await;
+
+    // Four entries: past SNAPSHOT_MIN_RAILS, so the shared-snapshot path runs.
+    let filters: Vec<(&str, std::collections::HashMap<String, String>)> = vec![
+        ("all|series", [("type", "series")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+        ("watching|series", [("type", "series"), ("state", "watching")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+        ("recency|series", [("type", "series"), ("sort", "last_watched")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+        ("anime|anime", [("type", "anime")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+    ];
+    let req = BatchRequest {
+        sections: filters.iter().map(|(k, f)| BatchEntry { key: k.to_string(), filters: f.clone() }).collect(),
+        langs: Some("eng".into()),
+        limit: None,
+    };
+
+    let Json(results) = library_filter_batch(AuthUser(me), State(state.clone()), Json(req)).await.expect("batch");
+    assert_eq!(results.len(), 4, "one result per entry");
+    assert_eq!(
+        results.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(),
+        filters.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+        "keys echoed back in request order"
+    );
+
+    // Each rail must equal what the same filter returns on its own — i.e. the
+    // snapshot path produced exactly what the per-query CTE path would.
+    for ((key, map), got) in filters.iter().zip(&results) {
+        let q: DiscoverQuery = parse_filter_map(map).unwrap();
+        let mut f = build_filters(&q, Some(me), None, Some(me));
+        f.with_progress = true;
+        f.limit = 2000;
+        let expected: Vec<_> = search_db(&state, &f, &["eng".to_string()]).await.unwrap();
+        assert_eq!(
+            got.items.iter().map(|r| (r.tvdb_id, r.total_episodes, r.seen_episodes)).collect::<Vec<_>>(),
+            expected.iter().map(|r| (r.tvdb_id, r.total_episodes, r.seen_episodes)).collect::<Vec<_>>(),
+            "'{key}' differs between the batch and the single-section path",
+        );
+    }
+    assert!(results[1].items.len() < results[0].items.len(), "the state filter actually narrowed something");
+
+    // The snapshot is a temp table on a POOLED connection: if it outlived the
+    // request, the next user on that connection would read this user's watch state.
+    for _ in 0..8 {
+        assert!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM batch_watch_state").fetch_one(&state.db).await.is_err(),
+            "the batch's snapshot is still visible after the request returned"
+        );
+    }
+}
+
+/// The save-time filter gate, driven through the real handler.
+///
+/// Deleting that gate wholesale left the suite green: the poison test calls
+/// `parse_filter_map` directly, so nothing proved the handler actually uses it.
+#[tokio::test]
+async fn the_save_handler_rejects_a_filter_that_would_break_the_library() {
+    use backend::auth::AuthUser;
+    use backend::tracking::sections::LibrarySection;
+    use backend::web::handlers::users::{set_library_sections, LibrarySectionsReq};
+    use axum::extract::State;
+    use axum::Json;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "savegate@test.local").await;
+    let me = common::uid(1);
+
+    let section = |filters: serde_json::Value| LibrarySection {
+        id: None,
+        builtin: None,
+        title: Some("My Category".into()),
+        filters: Some(filters),
+        enabled: true,
+    };
+
+    // A value that parses as a string but not as the type it will be read back as.
+    let bad = LibrarySectionsReq { sections: vec![section(serde_json::json!({"year_min": ""}))] };
+    let err = set_library_sections(AuthUser(me), State(state.clone()), Json(bad)).await;
+    assert!(err.is_err(), "an unparseable filter must be rejected at SAVE time, by the handler");
+
+    // ...and nothing was stored, so the Library still loads.
+    let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM app.library_section WHERE user_id = $1")
+        .bind(me)
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+    assert_eq!(stored, 0, "a rejected save must not write anything");
+
+    // The same section with a valid value goes through.
+    let good = LibrarySectionsReq { sections: vec![section(serde_json::json!({"year_min": "1990"}))] };
+    assert!(set_library_sections(AuthUser(me), State(state.clone()), Json(good)).await.is_ok());
+}

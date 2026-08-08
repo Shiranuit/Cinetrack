@@ -17,9 +17,13 @@ use crate::{error::{AppError, AppResult}, state::AppState};
 pub const BUILTIN_SECTIONS: [&str; 7] =
     ["watching", "stale", "not_started", "for_later", "up_to_date", "stopped", "movies"];
 
-/// Ceiling on how many sections one user can have. Every enabled custom section is
-/// at least one query when the Library loads, so this bounds that fan-out.
-pub const MAX_SECTIONS: usize = 30;
+/// Ceiling on custom sections a user may keep, enabled or not.
+pub const MAX_CUSTOM_SECTIONS: usize = 15;
+
+/// Ceiling on sections shown at once, built-in and custom together. Every enabled
+/// section is at least one query when the Library loads, so this — not the stored
+/// count — is what bounds that fan-out.
+pub const MAX_ACTIVE_SECTIONS: usize = 15;
 
 /// Ceiling on a custom section's title, in characters.
 const MAX_TITLE_CHARS: usize = 40;
@@ -153,8 +157,18 @@ fn validate(sections: &[LibrarySection]) -> AppResult<()> {
         AppError::BadRequest(msg.into())
     }
 
-    if sections.len() > MAX_SECTIONS {
-        return Err(bad(format!("too many library sections (max {MAX_SECTIONS})")));
+    // Deliberately NOT a cap on the list length: `library_sections` appends missing
+    // built-ins on read, so a combined cap is one the READ path can breach by
+    // itself — the client then sends back what it was given and can never save
+    // again. Both counts below are unaffected by that append, because appended
+    // built-ins arrive disabled.
+    let custom = sections.iter().filter(|s| s.builtin.is_none()).count();
+    if custom > MAX_CUSTOM_SECTIONS {
+        return Err(bad(format!("too many custom categories (max {MAX_CUSTOM_SECTIONS})")));
+    }
+    let active = sections.iter().filter(|s| s.enabled).count();
+    if active > MAX_ACTIVE_SECTIONS {
+        return Err(bad(format!("too many categories shown at once (max {MAX_ACTIVE_SECTIONS})")));
     }
     let mut seen_builtin: Vec<&str> = Vec::new();
     let mut seen_id: Vec<Uuid> = Vec::new();
@@ -291,6 +305,58 @@ mod tests {
         assert!(validate(&[custom("bad", json!({"q": "x".repeat(MAX_FILTER_VALUE_CHARS + 1)}))]).is_err());
         // An empty filter is fine: "everything in my library, sorted this way".
         assert!(validate(&[custom("all", json!({}))]).is_ok());
+    }
+
+    #[test]
+    fn the_two_caps_are_independent_and_survive_a_read_write_round_trip() {
+        // The lockout this replaces: a cap on the LIST length is one the read path
+        // breaches by itself, because `library_sections` appends missing built-ins.
+        // Appended built-ins are disabled, so neither count moves — which is exactly
+        // why the caps are phrased this way.
+        let customs: Vec<_> = (0..MAX_CUSTOM_SECTIONS)
+            .map(|i| custom(&format!("c{i}"), json!({})))
+            .collect();
+        assert!(validate(&customs).is_ok(), "{MAX_CUSTOM_SECTIONS} custom sections is the limit, not over it");
+
+        let mut too_many = customs.clone();
+        too_many.push(custom("one too many", json!({})));
+        assert!(validate(&too_many).is_err());
+
+        // What a GET returns for that user: the customs plus every built-in,
+        // appended DISABLED. Saving it back must be accepted.
+        let round_tripped: Vec<_> = customs
+            .iter()
+            .cloned()
+            .chain(BUILTIN_SECTIONS.iter().map(|k| LibrarySection { enabled: false, ..LibrarySection::builtin(k) }))
+            .collect();
+        assert!(round_tripped.len() > MAX_ACTIVE_SECTIONS, "the round trip really does exceed the old combined cap");
+        assert!(validate(&round_tripped).is_ok(), "a user must always be able to save back what they were given");
+    }
+
+    #[test]
+    fn the_active_cap_counts_builtins_and_custom_together() {
+        // 15 shown at once, whatever the mix.
+        let mut layout: Vec<_> = BUILTIN_SECTIONS.iter().map(|k| LibrarySection::builtin(k)).collect();
+        layout.extend((0..8).map(|i| custom(&format!("c{i}"), json!({}))));
+        assert_eq!(layout.iter().filter(|s| s.enabled).count(), 15);
+        assert!(validate(&layout).is_ok());
+
+        layout.push(custom("sixteenth", json!({})));
+        assert!(validate(&layout).is_err(), "a 16th enabled section is rejected");
+
+        // ...but the same layout is fine once it's hidden, since hidden sections
+        // cost nothing at load time.
+        let last = layout.len() - 1;
+        layout[last] = LibrarySection { enabled: false, ..layout[last].clone() };
+        assert!(validate(&layout).is_ok());
+    }
+
+    #[test]
+    fn the_default_layout_and_a_reset_layout_are_both_within_the_caps() {
+        // `default_sections` and the client's "reset layout" both enable every
+        // built-in; that must stay legal by construction.
+        assert!(BUILTIN_SECTIONS.len() <= MAX_ACTIVE_SECTIONS);
+        assert!(validate(&default_sections()).is_ok());
     }
 
     #[test]

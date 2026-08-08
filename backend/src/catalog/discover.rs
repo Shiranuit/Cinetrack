@@ -108,6 +108,33 @@ pub struct Filters {
     pub exclude_anime: bool,
 }
 
+impl Filters {
+    /// Whether this query needs the per-user watch aggregates — a state filter, a
+    /// watch-history facet, a recency sort, or progress on the rows. Callers that
+    /// run several queries together use it to decide whether a shared snapshot is
+    /// worth building at all.
+    pub fn needs_watch_state(&self) -> bool {
+        // Movies have no episodes, so no movie query can use the snapshot. Counting
+        // them toward the threshold made a batch of movie-only rails build a full
+        // pass over the watch history that nothing then reads.
+        self.kind != "movie"
+            && self.library_user.is_some()
+            && (!self.states.is_empty()
+                || self.with_progress
+                || matches!(self.sort.as_str(), "last_watched" | "last_aired" | "remaining" | "progress")
+                || self.watched_days_min.is_some()
+                || self.watched_days_max.is_some()
+                || self.aired_days_min.is_some()
+                || self.aired_days_max.is_some()
+                || self.remaining_min.is_some()
+                || self.remaining_max.is_some()
+                || self.progress_min.is_some()
+                || self.progress_max.is_some()
+                || self.caught_up.is_some()
+                || self.has_upcoming.is_some())
+    }
+}
+
 /// "In the library" predicate for a `user_show` alias. A show counts as tracked
 /// when it is followed, favorited, archived, or has a status, and is not a dead-id
 /// placeholder. MUST match the `lib` CTE in `tracking::library`, so Discover's "in
@@ -125,7 +152,38 @@ fn movie_membership_sql(alias: &str) -> String {
     format!("({alias}.watched OR {alias}.is_favorited OR {alias}.watchlist)")
 }
 
+/// Where a query gets its per-user watch aggregates from.
+pub enum WatchState<'a> {
+    /// Compute them inline as CTEs — one full pass over the user's watch history.
+    /// Right for a one-off query.
+    Compute,
+    /// Project them from a snapshot table already materialized by the caller. The
+    /// Library's batch builds one per request and runs every rail against it, so
+    /// the aggregate is paid once instead of once per rail.
+    ///
+    /// Carries the user it was built FOR. A snapshot is one user's watch history;
+    /// running it against a query scoped to somebody else returns the right rows
+    /// with the WRONG counts — no error, just quietly incorrect numbers. Pairing
+    /// the id with the table name makes that mismatch impossible to write by
+    /// accident.
+    Snapshot { table: &'a str, user: Uuid },
+}
+
 pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppResult<Vec<SearchResult>> {
+    search_db_on(&state.db, f, langs, WatchState::Compute).await
+}
+
+/// [`search_db`] against an explicit executor, so a batch can run several queries
+/// inside one transaction alongside a shared snapshot.
+pub async fn search_db_on<'e, E>(
+    exec: E,
+    f: &Filters,
+    langs: &[String],
+    watch_state: WatchState<'_>,
+) -> AppResult<Vec<SearchResult>>
+where
+    E: sqlx::Executor<'e, Database = Postgres>,
+{
     let is_movie = f.kind == "movie";
     let is_anime = f.kind == "anime";
     let (table, etype, result_kind) =
@@ -154,19 +212,33 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         || f.has_upcoming.is_some();
     // Progress needs the same aggregates, so asking for it pulls them in too.
     let with_state = (watch_state_facets || watch_state_sort || f.with_progress) && f.library_user.is_some();
-    let mut qb: QueryBuilder<Postgres> = if with_state && !is_movie {
-        // The user bind lands first, so it is `$1` for `watch_state_ctes`.
-        let mut b = QueryBuilder::new("WITH lib AS (SELECT us.series_id, us.nb_episodes_seen, us.status, us.archived \
-             FROM app.user_show us WHERE us.user_id = ");
-        b.push_bind(f.library_user.expect("with_state implies library_user"));
-        b.push(format!(
-            " AND {}), {} SELECT x.id, ",
-            show_membership_sql("us"),
-            crate::tracking::state::watch_state_ctes("$1")
-        ));
-        b
-    } else {
-        QueryBuilder::new("SELECT x.id, ")
+    let mut qb: QueryBuilder<Postgres> = match (&watch_state, with_state && !is_movie) {
+        // Projected from a snapshot the caller already built: no user bind here, so
+        // the first bind is whatever the SELECT list pushes.
+        (WatchState::Snapshot { table, user }, true) => {
+            debug_assert_eq!(
+                Some(*user),
+                f.library_user,
+                "watch-state snapshot belongs to a different user than this query is scoped to"
+            );
+            QueryBuilder::new(format!(
+                "WITH {} SELECT x.id, ",
+                crate::tracking::state::watch_state_ctes_from_snapshot(table)
+            ))
+        }
+        (WatchState::Compute, true) => {
+            // The user bind lands first, so it is `$1` for `watch_state_ctes`.
+            let mut b = QueryBuilder::new("WITH lib AS (SELECT us.series_id \
+                 FROM app.user_show us WHERE us.user_id = ");
+            b.push_bind(f.library_user.expect("with_state implies library_user"));
+            b.push(format!(
+                " AND {}), {} SELECT x.id, ",
+                show_membership_sql("us"),
+                crate::tracking::state::watch_state_ctes("$1")
+            ));
+            b
+        }
+        _ => QueryBuilder::new("SELECT x.id, "),
     };
     qb.push("COALESCE((SELECT tr.name FROM catalog.translation tr WHERE tr.entity_type = ");
     qb.push_bind(etype);
@@ -174,7 +246,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     qb.push_bind(langs.to_vec());
     qb.push(") ORDER BY array_position(");
     qb.push_bind(langs.to_vec());
-    qb.push(", tr.language) LIMIT 1), x.name) AS name, x.year, x.image_url, x.overview");
+    qb.push(", tr.language) LIMIT 1), x.name) AS name, x.year, x.image_url");
     // Does the viewer already track this title? Lets Discover mark library shows.
     match f.viewer {
         Some(viewer) if is_movie => {
@@ -231,7 +303,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
     // Progress columns, when asked for and available (movies have no episodes).
     if with_state && !is_movie {
-        qb.push(", ep.total_episodes, seen.seen_episodes");
+        // COALESCEd like the rails do (`tracking::library`): a never-watched show
+        // has no `seen` row, and a raw NULL here means the client can't tell
+        // "0 of 12 watched" from "progress wasn't computed" — so it drew no
+        // progress bar at all for every unstarted show.
+        qb.push(", COALESCE(ep.total_episodes, 0)::bigint, COALESCE(seen.seen_episodes, 0)::bigint");
     } else {
         qb.push(", NULL::bigint AS total_episodes, NULL::bigint AS seen_episodes");
     }
@@ -528,19 +604,18 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool, bool, Option<i64>, Option<i64>)>()
-        .fetch_all(&state.db)
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, bool, Option<i16>, bool, bool, Option<i64>, Option<i64>)>()
+        .fetch_all(exec)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited, is_anime, total_episodes, seen_episodes)| SearchResult {
+        .map(|(id, name, year, image_url, in_library, rating, is_favorited, is_anime, total_episodes, seen_episodes)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
             year,
             image_url,
-            overview,
             in_library,
             rating,
             is_favorited,
@@ -732,7 +807,7 @@ async fn popular_local(
     let is_movie = kind == "movie";
     let (table, result_kind) = if is_movie { ("catalog.movie", "movie") } else { ("catalog.series", "series") };
 
-    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT x.id, x.name, x.year, x.image_url, x.overview FROM ");
+    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT x.id, x.name, x.year, x.image_url FROM ");
     qb.push(table);
     qb.push(" x WHERE NOT x.deleted");
     if let Some(y) = year {
@@ -752,18 +827,17 @@ async fn popular_local(
     qb.push(" LIMIT 50");
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>)>()
         .fetch_all(&state.db)
         .await?;
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview)| SearchResult {
+        .map(|(id, name, year, image_url)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
             year,
             image_url,
-            overview,
             in_library: false,
             rating: None,
             is_favorited: false,
@@ -819,7 +893,6 @@ async fn popular_remote(
             name: r["name"].as_str().map(str::to_string),
             year,
             image_url: img,
-            overview: r["overview"].as_str().map(str::to_string),
             in_library: false,
             rating: None,
             is_favorited: false,

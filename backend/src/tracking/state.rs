@@ -85,6 +85,54 @@ pub const PROGRESS_EXPR: &str =
 /// Whether a future-dated episode is already on the schedule.
 pub const HAS_UPCOMING_EXPR: &str = "COALESCE(ep.has_upcoming, false)";
 
+/// Columns of a watch-state snapshot — one row per tracked series, carrying
+/// everything [`watch_state_ctes`] computes. See [`watch_state_snapshot_sql`].
+pub const SNAPSHOT_COLUMNS: &str =
+    "series_id, total_episodes, max_aired, has_upcoming, last_watched, seen_episodes, caught";
+
+/// A `SELECT` materializing the whole aggregate for one user, for callers that run
+/// several queries against it (the Library's batch) and would otherwise recompute
+/// it per query. `user_bind` is the placeholder holding the user id.
+///
+/// Rows are emitted for every tracked series, with NULL metrics where the CTEs
+/// would have produced no row — so a projection of this snapshot behaves exactly
+/// like the CTEs it replaces.
+pub fn watch_state_snapshot_sql(user_bind: &str) -> String {
+    format!(
+        "WITH lib AS ( \
+            SELECT us.series_id FROM app.user_show us \
+            WHERE us.user_id = {user_bind} AND NOT us.unavailable \
+              AND (us.is_followed OR us.is_favorited OR us.archived OR us.status IS NOT NULL) \
+         ), {ctes} \
+         SELECT lib.series_id, ep.total_episodes, ep.max_aired, \
+                COALESCE(ep.has_upcoming, false) AS has_upcoming, \
+                lw.last_watched, seen.seen_episodes, \
+                (caught.series_id IS NOT NULL) AS caught \
+         FROM lib {joins}",
+        ctes = watch_state_ctes(user_bind),
+        joins = watch_state_joins("lib.series_id"),
+    )
+}
+
+/// The same CTE names, but projected from a snapshot table instead of recomputed.
+///
+/// Deliberately shaped so that every expression downstream — [`state_case`],
+/// [`CAUGHT_UP_EXPR`], the facets, the joins — is byte-identical between the two
+/// modes. The only thing that varies is where `ep`/`lw`/`seen`/`caught` come from,
+/// which is what makes sharing the aggregate a low-risk change rather than a
+/// second implementation of the classification.
+///
+/// `latest_eps` is not reproduced: nothing outside `caught` refers to it, and
+/// `caught` is a stored column here.
+pub fn watch_state_ctes_from_snapshot(table: &str) -> String {
+    format!(
+        "ep AS (SELECT series_id, total_episodes, max_aired, has_upcoming FROM {table}), \
+         lw AS (SELECT series_id, last_watched FROM {table}), \
+         seen AS (SELECT series_id, seen_episodes FROM {table}), \
+         caught AS (SELECT series_id FROM {table} WHERE caught)"
+    )
+}
+
 /// The `LEFT JOIN`s pairing [`watch_state_ctes`] to a base row. `id_expr` is the
 /// series id in the caller's FROM (e.g. `lib.series_id` or `x.id`).
 pub fn watch_state_joins(id_expr: &str) -> String {
@@ -164,6 +212,24 @@ mod tests {
         for state in ["up_to_date", "for_later", "not_started"] {
             assert!(movie_case.contains(&format!("'{state}'")), "{state} missing");
             assert!(is_valid(state));
+        }
+    }
+
+    #[test]
+    fn the_snapshot_carries_every_column_its_projections_read() {
+        // SNAPSHOT_COLUMNS is the contract between what the snapshot SELECTs and
+        // what `watch_state_ctes_from_snapshot` projects back out. Without this the
+        // two lists drift silently and the projection references a column that was
+        // never materialized — a runtime SQL error, only on the batch path.
+        let snapshot = watch_state_snapshot_sql("$1");
+        let projections = watch_state_ctes_from_snapshot("ws");
+        for col in SNAPSHOT_COLUMNS.split(',').map(str::trim) {
+            assert!(snapshot.contains(col), "snapshot does not produce `{col}`");
+            assert!(projections.contains(col), "no projection reads `{col}`");
+        }
+        // And the projections must not read anything the snapshot doesn't produce.
+        for cte in ["ep", "lw", "seen", "caught"] {
+            assert!(projections.contains(&format!("{cte} AS (SELECT")), "missing `{cte}` projection");
         }
     }
 
