@@ -998,30 +998,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get customizeLibrary => 'Personnaliser la bibliothèque';
 
   @override
-  String get addCategory => 'Nouvelle catégorie';
-
-  @override
-  String get editCategory => 'Modifier la catégorie';
-
-  @override
-  String get categoryName => 'Nom de la catégorie';
-
-  @override
-  String get deleteCategory => 'Supprimer la catégorie';
-
-  @override
   String get sortLastWatched => 'Vu récemment';
 
   @override
   String get sortLastAired => 'Dernier épisode diffusé';
-
-  @override
-  String categoryCopy(String name) {
-    return '$name (copie)';
-  }
-
-  @override
-  String get duplicateCategory => 'Dupliquer';
 
   @override
   String get libraryStatus => 'Catégorie de bibliothèque';
@@ -1029,10 +1009,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get libNoSections =>
       'Aucune catégorie n\'est affichée. Personnalisez votre bibliothèque pour en réactiver.';
-
-  @override
-  String get libSectionsHiddenByType =>
-      'Vos catégories sont masquées par le filtre de type ci-dessus — activez le type correspondant ou modifiez la catégorie.';
 
   @override
   String get filterWatchedDays => 'Vu (il y a … jours)';

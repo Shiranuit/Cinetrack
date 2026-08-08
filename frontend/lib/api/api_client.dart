@@ -395,40 +395,18 @@ class ApiClient extends ChangeNotifier {
       _list(await _get('/api/me/library-sections'), LibrarySection.fromJson);
 
   /// Replace the Library layout. Returns the stored list, which carries the ids the
-  /// server assigned to newly-created sections.
+  /// server assigned to rows it just created.
+  ///
+  /// `notify: false`: this changes which categories are DRAWN, not what's in them,
+  /// and the caller adopts the response directly. Signalling "data changed" here
+  /// would make every switch flip refetch the whole library and movie list — a
+  /// debounced save is one write, but it would cost two big reads.
   Future<List<LibrarySection>> setLibrarySections(List<LibrarySection> sections) async => _list(
         await _send('PUT', '/api/me/library-sections',
-            body: {'sections': [for (final s in sections) s.toJson()]}),
+            notify: false, body: {'sections': [for (final s in sections) s.toJson()]}),
         LibrarySection.fromJson,
       );
 
-  /// Run several library filters in one request — the Library's custom rails.
-  ///
-  /// Each entry's `key` comes back verbatim, so a section spanning several kinds
-  /// sends one entry per kind and regroups the responses itself. One round trip
-  /// instead of one per rail, and the server gets the chance to share work across
-  /// the whole batch.
-  /// `limit` is omitted by default: a custom rail shows every matching title, the
-  /// way the built-in rails do. Pass one only for a genuinely paged caller.
-  Future<Map<String, List<SearchResult>>> librarySectionsItems(
-    List<({String key, Map<String, String> filters})> entries, {
-    String? langs,
-    int? limit,
-  }) async {
-    if (entries.isEmpty) return {};
-    // A read, despite the verb: it must not trip the change signal that screens
-    // reload on (see `_send`).
-    final data = await _send('POST', '/api/library/filter/batch', notify: false, body: {
-      'sections': [for (final e in entries) {'key': e.key, 'filters': e.filters}],
-      'limit': ?limit,
-      'langs': ?langs,
-    });
-    return {
-      for (final row in (data as List? ?? const []))
-        if (row case {'key': final String key, 'items': final List items})
-          key: [for (final i in items) if (i is Map<String, dynamic>) SearchResult.fromJson(i)],
-    };
-  }
   Future<void> setLanguages(List<String> languages) => _send('PUT', '/api/me/languages', body: {'languages': languages});
 
   Future<UserShow> showRelation(int seriesId, {String? langs}) async =>

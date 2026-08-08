@@ -538,46 +538,30 @@ async fn library_sections_round_trip_and_default() {
     common::insert_user(&state.db, 1, "layout@test.local").await;
     let me = common::uid(1);
 
+    let section = |key: &str, enabled: bool| LibrarySection { id: None, builtin: key.into(), enabled };
+
     // Never customized -> every built-in, enabled, in default order.
     let defaults = sections::library_sections(&state, me).await.unwrap();
     assert_eq!(defaults.len(), sections::BUILTIN_SECTIONS.len());
-    assert!(defaults.iter().all(|s| s.enabled && s.builtin.is_some()));
-    assert_eq!(defaults[0].builtin.as_deref(), Some("watching"));
+    assert!(defaults.iter().all(|s| s.enabled));
+    assert_eq!(defaults[0].builtin, "watching");
 
-    // Save a reordered layout: one built-in hidden, one dropped entirely, and a
-    // custom section carrying its own filter.
-    let custom = LibrarySection {
-        id: None,
-        builtin: None,
-        title: Some("Comfort anime".into()),
-        filters: Some(serde_json::json!({"type": "anime", "sort": "my_rating", "favorites": "true"})),
-        enabled: true,
-    };
-    let saved = sections::set_library_sections(
-        &state,
-        me,
-        &[
-            custom.clone(),
-            LibrarySection { id: None, builtin: Some("watching".into()), title: None, filters: None, enabled: true },
-            LibrarySection { id: None, builtin: Some("stopped".into()), title: None, filters: None, enabled: false },
-        ],
-    )
-    .await
-    .unwrap();
+    // Save a reordered layout: one hidden, the rest dropped entirely.
+    let saved = sections::set_library_sections(&state, me, &[section("stopped", false), section("watching", true)])
+        .await
+        .unwrap();
 
-    // Order is the payload: the custom rail comes first, as sent.
-    assert_eq!(saved[0].title.as_deref(), Some("Comfort anime"));
-    assert_eq!(saved[0].filters.as_ref().unwrap()["type"], "anime");
-    assert!(saved[0].id.is_some(), "the server assigns an id to a new section");
-    assert_eq!(saved[1].builtin.as_deref(), Some("watching"));
-    assert_eq!(saved[2].builtin.as_deref(), Some("stopped"));
-    assert!(!saved[2].enabled, "a hidden section keeps its place in the order");
+    // Order is the payload, exactly as sent.
+    assert_eq!(saved[0].builtin, "stopped");
+    assert!(!saved[0].enabled, "a hidden section keeps its place in the order");
+    assert_eq!(saved[1].builtin, "watching");
+    assert!(saved[0].id.is_some(), "the server assigns an id to a new row");
 
     // Built-ins the saved layout never mentioned are appended DISABLED, so they
     // surface in the customize sheet without rearranging the user's Library.
-    let appended: Vec<_> = saved[3..].iter().map(|s| s.builtin.clone().unwrap()).collect();
+    let appended: Vec<_> = saved[2..].iter().map(|s| s.builtin.clone()).collect();
     assert!(appended.contains(&"movies".to_string()));
-    assert!(saved[3..].iter().all(|s| !s.enabled), "newly-surfaced built-ins stay off");
+    assert!(saved[2..].iter().all(|s| !s.enabled), "newly-surfaced built-ins stay off");
 
     // Reading it back gives the same thing (ids preserved, no duplicate rows).
     let reread = sections::library_sections(&state, me).await.unwrap();
@@ -585,71 +569,17 @@ async fn library_sections_round_trip_and_default() {
     assert_eq!(reread[0].id, saved[0].id, "ids are stable across reads");
 
     // Re-saving with the assigned id keeps that id rather than minting a new row.
-    let edited = LibrarySection { title: Some("Comfort shows".into()), ..saved[0].clone() };
-    let resaved = sections::set_library_sections(&state, me, &[edited]).await.unwrap();
-    assert_eq!(resaved[0].id, saved[0].id, "editing preserves the section id");
-    assert_eq!(resaved[0].title.as_deref(), Some("Comfort shows"));
+    let resaved = sections::set_library_sections(&state, me, &[LibrarySection { enabled: true, ..saved[0].clone() }])
+        .await
+        .unwrap();
+    assert_eq!(resaved[0].id, saved[0].id, "a re-save preserves the row id");
+    assert!(resaved[0].enabled);
 
     // A rejected save leaves the stored layout untouched.
-    let bad = vec![LibrarySection { id: None, builtin: Some("not_a_category".into()), title: None, filters: None, enabled: true }];
-    assert!(sections::set_library_sections(&state, me, &bad).await.is_err());
+    assert!(sections::set_library_sections(&state, me, &[section("not_a_category", true)]).await.is_err());
     let after = sections::library_sections(&state, me).await.unwrap();
-    assert_eq!(after[0].title.as_deref(), Some("Comfort shows"), "a rejected save must not clobber the layout");
-}
-
-/// The batched library filter must return exactly what the per-section endpoint
-/// would, key by key — it's an optimization, so any behavioural difference is a bug.
-#[tokio::test]
-async fn library_filter_batch_matches_individual_queries() {
-    use backend::catalog::discover::{search_db, Filters};
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "batch@test.local").await;
-    let me = common::uid(1);
-
-    // Two series (one anime) and a movie, all tracked.
-    common::insert_series(&state.db, 700, "Batch Drama", Some(2020), Some(45), Some(9.0), Some("eng"), serde_json::json!({})).await;
-    common::insert_series(&state.db, 701, "Batch Anime", Some(2021), Some(24), Some(8.0), Some("jpn"), serde_json::json!({})).await;
-    common::follow(&state.db, 1, 700, true, false).await;
-    common::follow(&state.db, 1, 701, true, false).await;
-
-    // Each kind on its own, the way one batch entry per (section, kind) would run.
-    let run = async |kind: &str| {
-        search_db(
-            &state,
-            &Filters {
-                kind: kind.to_string(),
-                library_user: Some(me),
-                viewer: Some(me),
-                sort: "name".into(),
-                sort_desc: false,
-                limit: 30,
-                ..Default::default()
-            },
-            &langs(),
-        )
-        .await
-        .unwrap()
-    };
-
-    let series = run("series").await;
-    let anime = run("anime").await;
-    assert_eq!(series.len(), 2, "a series query carries anime too");
-    assert_eq!(anime.len(), 1, "anime narrows to Japanese-language series");
-
-    // is_anime is what lets a multi-kind section drop anime it didn't ask for.
-    assert!(series.iter().any(|r| r.is_anime), "the anime row is flagged");
-    assert!(series.iter().any(|r| !r.is_anime), "the non-anime row is not");
-    assert!(anime.iter().all(|r| r.is_anime));
-
-    // Running the same filter twice is stable — the batch relies on that, since it
-    // runs entries concurrently and reassembles them by key.
-    assert_eq!(
-        run("series").await.iter().map(|r| r.tvdb_id).collect::<Vec<_>>(),
-        series.iter().map(|r| r.tvdb_id).collect::<Vec<_>>(),
-    );
+    assert_eq!(after[0].builtin, "stopped", "a rejected save must not clobber the layout");
+    assert!(after[0].enabled, "including the change the accepted save made");
 }
 
 /// The property the shared SQL classification exists to guarantee: the bucket a
@@ -789,110 +719,6 @@ async fn library_filter_scopes_movies_by_movie_membership() {
         movies.is_empty(),
         "a movie sharing an id with a tracked SERIES must not appear in the movie library"
     );
-}
-
-/// Anime shares the series table, so `type=series` returns it. A section that wants
-/// series but NOT anime must have it excluded IN SQL — filtering client-side runs
-/// after LIMIT, which empties a rail whose top results all happen to be anime.
-#[tokio::test]
-async fn exclude_anime_applies_before_the_limit() {
-    use backend::catalog::discover::{search_db, Filters};
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "noanime@test.local").await;
-    let me = common::uid(1);
-
-    // Three anime sort ahead of the one live-action show (by name), so a limit of 3
-    // would return only anime if the exclusion happened afterwards.
-    for (id, name) in [(910, "AAA Anime"), (911, "BBB Anime"), (912, "CCC Anime")] {
-        common::insert_series(&state.db, id, name, Some(2020), Some(24), Some(1.0), Some("jpn"), serde_json::json!({})).await;
-        common::follow(&state.db, 1, id, true, false).await;
-    }
-    common::insert_series(&state.db, 913, "ZZZ Drama", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
-    common::follow(&state.db, 1, 913, true, false).await;
-    // An unknown original language is NOT anime and must survive the exclusion.
-    common::insert_series(&state.db, 914, "ZZZ Unknown", Some(2020), Some(45), Some(1.0), None, serde_json::json!({})).await;
-    common::follow(&state.db, 1, 914, true, false).await;
-
-    let run = async |exclude_anime: bool, limit: i64| {
-        search_db(
-            &state,
-            &Filters {
-                kind: "series".into(),
-                library_user: Some(me),
-                viewer: Some(me),
-                sort: "name".into(),
-                sort_desc: false,
-                limit,
-                exclude_anime,
-                ..Default::default()
-            },
-            &langs(),
-        )
-        .await
-        .unwrap()
-    };
-
-    // Without the flag, a series query carries anime — that's the trap.
-    assert_eq!(run(false, 3).await.len(), 3);
-    assert!(run(false, 3).await.iter().all(|r| r.is_anime), "the top 3 by name are all anime");
-
-    // With it, the limit applies to the shows that actually qualify.
-    let kept = run(true, 3).await;
-    assert_eq!(kept.len(), 2, "only the non-anime shows remain");
-    assert!(kept.iter().all(|r| !r.is_anime));
-    let names: Vec<_> = kept.iter().filter_map(|r| r.name.as_deref()).collect();
-    assert!(names.contains(&"ZZZ Drama"));
-    assert!(names.contains(&"ZZZ Unknown"), "unknown original language is not anime");
-}
-
-/// A custom rail shows every matching title, like the built-in rails — not a page
-/// of 30. The old default silently truncated a rail whose match count exceeded it.
-#[tokio::test]
-async fn a_library_rail_is_not_capped_at_a_page() {
-    use backend::catalog::discover::{search_db, Filters};
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "nocap@test.local").await;
-    let me = common::uid(1);
-
-    // More shows than the old per-rail default.
-    for i in 0..45_i64 {
-        let id = 3000 + i;
-        common::insert_series(&state.db, id, &format!("Show {i:02}"), Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
-        common::follow(&state.db, 1, id, true, false).await;
-    }
-
-    let all = search_db(
-        &state,
-        &Filters {
-            kind: "series".into(),
-            library_user: Some(me),
-            viewer: Some(me),
-            // What the batch handler passes when the client sends no limit.
-            limit: 2000,
-            ..Default::default()
-        },
-        &langs(),
-    )
-    .await
-    .unwrap();
-    assert_eq!(all.len(), 45, "the rail returns the whole match set");
-
-    // Discover stays capped: it browses the entire catalog, where an unbounded
-    // limit would be a very different proposition.
-    let discovered = search_db(
-        &state,
-        &Filters { kind: "series".into(), viewer: Some(me), limit: 2000, ..Default::default() },
-        &langs(),
-    )
-    .await
-    .unwrap();
-    assert!(discovered.len() <= 200, "catalog-wide queries keep the tight ceiling");
 }
 
 /// The exact filter map the client stores for an anime rail, driven through the
@@ -1142,49 +968,20 @@ async fn watch_history_ranges_are_half_open() {
     assert_eq!(anything_left.len(), 2, "a min of 0 constrains nothing away");
 }
 
-/// A custom rail's cards draw a progress bar, so the search rows need the same
-/// counts `LibraryShow` carries — and only when asked, since computing them costs
-/// the watch-history aggregates.
-#[tokio::test]
-async fn search_rows_carry_progress_only_when_requested() {
-    use backend::catalog::discover::{search_db, Filters};
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "progress@test.local").await;
-    let me = common::uid(1);
-
-    common::insert_series(&state.db, 990, "Half Watched", Some(2024), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
-    common::follow(&state.db, 1, 990, true, false).await;
-    for n in 1..=4_i64 {
-        common::insert_episode_in_days(&state.db, 9900 + n, 990, 1, n as i32, -30, &format!("E{n}")).await;
-    }
-    common::watch_ago(&state.db, 1, 990, 9901, "w-990-1", 5).await;
-    common::watch_ago(&state.db, 1, 990, 9902, "w-990-2", 4).await;
-
-    let base = || Filters { kind: "series".into(), library_user: Some(me), viewer: Some(me), limit: 10, ..Default::default() };
-
-    // Opt-in: what the batch endpoint asks for.
-    let with = search_db(&state, &Filters { with_progress: true, ..base() }, &langs()).await.unwrap();
-    assert_eq!(with[0].total_episodes, Some(4));
-    assert_eq!(with[0].seen_episodes, Some(2), "2 of 4 aired episodes seen");
-
-    // Off by default, so a paged search doesn't pay for aggregates it won't draw.
-    let without = search_db(&state, &base(), &langs()).await.unwrap();
-    assert_eq!(without[0].total_episodes, None);
-    assert_eq!(without[0].seen_episodes, None, "absent, which the client renders as no bar");
+/// Build a `DiscoverQuery` the way the GET handlers do — by deserializing a query
+/// string. `Err` here is exactly what axum's `Query` extractor turns into a 400.
+fn parse_query(pairs: &[(&str, &str)]) -> Result<backend::web::handlers::discover::DiscoverQuery, String> {
+    let encoded = serde_urlencoded::to_string(pairs).map_err(|e| e.to_string())?;
+    serde_urlencoded::from_str(&encoded).map_err(|e| e.to_string())
 }
 
-/// A filter that saves must be one the Library can execute. Before this, values
-/// like `watched_days_max=2147483647` (a valid i32, but "timestamp out of range"
-/// once it reaches date arithmetic) and `year_min=""` saved with a 200 and then
-/// failed on every single load — and because the batch aborts on the first bad
-/// entry, ONE poisoned section blanked the entire Library, permanently.
+/// A filter value that reaches the query layer must be one the Library can
+/// execute. `watched_days_max=2147483647` is a valid i32 but "timestamp out of
+/// range" once it hits date arithmetic — a 500 rather than an empty result.
 #[tokio::test]
-async fn poison_filters_are_rejected_at_save_and_survivable_at_load() {
+async fn poison_filter_values_are_rejected_or_clamped() {
     use backend::catalog::discover::{search_db, Filters};
-    use backend::web::handlers::discover::{build_filters, parse_filter_map, DiscoverQuery};
+    use backend::web::handlers::discover::{build_filters, DiscoverQuery};
 
     let _g = common::guard().await;
     let Some(state) = common::state().await else { return };
@@ -1194,148 +991,31 @@ async fn poison_filters_are_rejected_at_save_and_survivable_at_load() {
     common::insert_series(&state.db, 1200, "A Show", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
     common::follow(&state.db, 1, 1200, true, false).await;
 
-    let map = |pairs: &[(&str, &str)]| {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<std::collections::HashMap<_, _>>()
-    };
+    // Rejected at the door: these never reach the query layer at all.
+    assert!(parse_query(&[("year_min", "")]).is_err(), "an empty value is not an absent one");
+    assert!(parse_query(&[("caught_up", "")]).is_err());
+    assert!(parse_query(&[("year_min", "notanumber")]).is_err());
 
-    // The save-time gate: these never reach storage now.
-    assert!(parse_filter_map(&map(&[("year_min", "")])).is_err(), "an empty value is not an absent one");
-    assert!(parse_filter_map(&map(&[("caught_up", "")])).is_err());
-    assert!(parse_filter_map(&map(&[("year_min", "notanumber")])).is_err());
-
-    // A multi-kind `type` must still validate — the client splits it per kind
-    // before execution, so rejecting it here would break every mixed section.
-    assert!(parse_filter_map(&map(&[("type", "series,movie")])).is_ok());
-
-    // The execution gate, for anything already stored: an absurd day count is a
-    // Postgres range error, so it must be clamped rather than allowed through.
+    // Accepted by the type, but absurd: an out-of-range day count is a Postgres
+    // error, so it must be clamped rather than allowed through.
     for key in ["watched_days_min", "watched_days_max", "aired_days_min", "aired_days_max"] {
-        let q: DiscoverQuery = parse_filter_map(&map(&[(key, "2147483647")])).expect("parses as i32");
+        let q: DiscoverQuery = parse_query(&[(key, "2147483647")]).expect("parses as i32");
         let filters = Filters { library_user: Some(me), viewer: Some(me), limit: 10, ..build_filters(&q, Some(me), None, Some(me)) };
         let rows = search_db(&state, &filters, &langs()).await;
         assert!(rows.is_ok(), "{key}=i32::MAX must not take the query down: {:?}", rows.err());
     }
 
     // Negative day counts silently meant "in the future"; they clamp to 0.
-    let q: DiscoverQuery = parse_filter_map(&map(&[("watched_days_max", "-5")])).unwrap();
+    let q = parse_query(&[("watched_days_max", "-5")]).unwrap();
     assert_eq!(build_filters(&q, Some(me), None, Some(me)).watched_days_max, Some(0));
 
-    // NaN made every comparison false — an empty rail with no explanation.
-    let q: DiscoverQuery = parse_filter_map(&map(&[("progress_min", "NaN")])).unwrap();
+    // NaN made every comparison false — an empty result with no explanation.
+    let q = parse_query(&[("progress_min", "NaN")]).unwrap();
     assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_min, None);
 
     // And progress stays inside its own domain.
-    let q: DiscoverQuery = parse_filter_map(&map(&[("progress_max", "1000")])).unwrap();
+    let q = parse_query(&[("progress_max", "1000")]).unwrap();
     assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_max, Some(100.0));
-}
-
-/// The shared snapshot must be a pure optimization: every rail has to return
-/// exactly what it returned when each computed its own CTEs. The snapshot mode
-/// projects the same CTE names from a materialized table, so every expression
-/// downstream is byte-identical — this test is what proves that claim rather than
-/// asserting it in a comment.
-#[tokio::test]
-async fn a_shared_snapshot_returns_what_per_query_ctes_return() {
-    use backend::catalog::discover::{search_db, search_db_on, Filters, WatchState};
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "snapshot@test.local").await;
-    let me = common::uid(1);
-
-    // Deliberately spread across every bucket, including the shapes the snapshot
-    // could get wrong: never-watched (no `seen`/`lw` row), no episodes at all, and
-    // future-only episodes (no `ep` row under the old CTE).
-    for (id, name) in [(1300, "Watched Recently"), (1301, "Never Watched"), (1302, "No Episodes"), (1303, "Future Only"), (1304, "Stopped")] {
-        common::insert_series(&state.db, id, name, Some(2022), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
-        common::follow(&state.db, 1, id, true, false).await;
-    }
-    common::insert_episode_in_days(&state.db, 13001, 1300, 1, 1, -40, "E1").await;
-    common::insert_episode_in_days(&state.db, 13002, 1300, 1, 2, -10, "E2").await;
-    common::watch_ago(&state.db, 1, 1300, 13001, "w-1300", 3).await;
-    common::insert_episode_in_days(&state.db, 13011, 1301, 1, 1, -40, "E1").await;
-    common::insert_episode_in_days(&state.db, 13031, 1303, 1, 1, 30, "E1").await; //未 aired
-    common::insert_episode_in_days(&state.db, 13041, 1304, 1, 1, -40, "E1").await;
-    common::set_user_show(&state.db, 1, 1304, "archived", "true").await;
-
-    // A spread of queries that between them touch every CTE the snapshot replaces.
-    let cases: Vec<(&str, Filters)> = vec![
-        ("progress", Filters { with_progress: true, sort: "name".into(), sort_desc: false, ..Default::default() }),
-        ("state=watching", Filters { states: vec!["watching".into()], ..Default::default() }),
-        ("state=not_started", Filters { states: vec!["not_started".into()], ..Default::default() }),
-        ("state=stopped", Filters { states: vec!["stopped".into()], ..Default::default() }),
-        ("sort=last_watched", Filters { sort: "last_watched".into(), with_progress: true, ..Default::default() }),
-        ("sort=remaining", Filters { sort: "remaining".into(), with_progress: true, ..Default::default() }),
-        ("caught_up", Filters { caught_up: Some(true), ..Default::default() }),
-        ("has_upcoming", Filters { has_upcoming: Some(true), ..Default::default() }),
-        ("remaining_min", Filters { remaining_min: Some(1), ..Default::default() }),
-        ("watched_days_max", Filters { watched_days_max: Some(30), ..Default::default() }),
-    ];
-
-    // Build the snapshot exactly as the batch handler does.
-    let mut tx = state.db.begin().await.unwrap();
-    sqlx::query(&format!(
-        "CREATE TEMP TABLE batch_watch_state ON COMMIT DROP AS {}",
-        backend::tracking::state::watch_state_snapshot_sql("$1")
-    ))
-    .bind(me)
-    .execute(&mut *tx)
-    .await
-    .unwrap();
-
-    for (label, base) in cases {
-        let f = Filters { kind: "series".into(), library_user: Some(me), viewer: Some(me), limit: 100, ..base };
-        let computed = search_db(&state, &f, &langs()).await.unwrap();
-        let projected = search_db_on(&mut *tx, &f, &langs(), WatchState::Snapshot { table: "batch_watch_state", user: me }).await.unwrap();
-
-        let names = |rows: &[backend::catalog::SearchResult]| {
-            rows.iter().map(|r| r.name.clone().unwrap_or_default()).collect::<Vec<_>>()
-        };
-        assert_eq!(names(&computed), names(&projected), "'{label}': snapshot and CTEs disagree on contents/order");
-        let progress = |rows: &[backend::catalog::SearchResult]| {
-            rows.iter().map(|r| (r.total_episodes, r.seen_episodes)).collect::<Vec<_>>()
-        };
-        assert_eq!(progress(&computed), progress(&projected), "'{label}': progress counts differ");
-    }
-    tx.commit().await.unwrap();
-}
-
-/// The snapshot is a TEMP table on a POOLED connection. If it outlived its
-/// transaction, the next user handed that connection would query someone else's
-/// watch history — so `ON COMMIT DROP` is a correctness requirement, not tidiness.
-#[tokio::test]
-async fn the_snapshot_never_outlives_its_transaction() {
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "leak@test.local").await;
-    let me = common::uid(1);
-
-    let mut tx = state.db.begin().await.unwrap();
-    sqlx::query(&format!(
-        "CREATE TEMP TABLE batch_watch_state ON COMMIT DROP AS {}",
-        backend::tracking::state::watch_state_snapshot_sql("$1")
-    ))
-    .bind(me)
-    .execute(&mut *tx)
-    .await
-    .unwrap();
-    // Visible inside the transaction that created it...
-    let inside: i64 = sqlx::query_scalar("SELECT count(*) FROM batch_watch_state")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
-    assert_eq!(inside, 0, "no tracked shows yet, but the table exists");
-    tx.commit().await.unwrap();
-
-    // ...and gone afterwards, on every connection including the one that built it.
-    for _ in 0..5 {
-        let err = sqlx::query_scalar::<_, i64>("SELECT count(*) FROM batch_watch_state")
-            .fetch_one(&state.db)
-            .await;
-        assert!(err.is_err(), "the snapshot survived its transaction and is visible to the next request");
-    }
 }
 
 /// Search behaviour vs `main`, pinned.
@@ -1447,7 +1127,7 @@ async fn library_scope_matches_main_except_for_the_two_intended_fixes() {
 /// understands has to fail closed.
 #[tokio::test]
 async fn an_unknown_state_filter_fails_closed() {
-    use backend::web::handlers::discover::{build_filters, parse_filter_map, DiscoverQuery};
+    use backend::web::handlers::discover::build_filters;
     use backend::catalog::discover::search_db;
 
     let _g = common::guard().await;
@@ -1461,10 +1141,8 @@ async fn an_unknown_state_filter_fails_closed() {
     }
 
     let run = async |state_param: Option<&str>| {
-        let map: std::collections::HashMap<String, String> = state_param
-            .map(|s| [("state".to_string(), s.to_string())].into_iter().collect())
-            .unwrap_or_default();
-        let q: DiscoverQuery = parse_filter_map(&map).unwrap();
+        let pairs: Vec<(&str, &str)> = state_param.map(|s| vec![("state", s)]).unwrap_or_default();
+        let q = parse_query(&pairs).unwrap();
         let f = backend::catalog::discover::Filters {
             kind: "series".into(),
             limit: 100,
@@ -1482,110 +1160,14 @@ async fn an_unknown_state_filter_fails_closed() {
     assert_eq!(run(Some("not_started,brand_new_bucket")).await, 3, "any-of: the known half still matches");
 }
 
-/// A batch of movie-only rails must not build a watch-history snapshot: movies have
-/// no episodes, so nothing would read it, and building it costs a full pass over
-/// the user's watch history.
-#[tokio::test]
-async fn movie_rails_do_not_trigger_the_snapshot() {
-    use backend::catalog::discover::Filters;
-
-    let me = common::uid(1);
-    let movie = Filters { kind: "movie".into(), library_user: Some(me), with_progress: true, ..Default::default() };
-    assert!(!movie.needs_watch_state(), "a movie rail can never use the snapshot");
-
-    let series = Filters { kind: "series".into(), library_user: Some(me), with_progress: true, ..Default::default() };
-    assert!(series.needs_watch_state());
-
-    let anime = Filters { kind: "anime".into(), library_user: Some(me), with_progress: true, ..Default::default() };
-    assert!(anime.needs_watch_state(), "anime is series, and does use it");
-
-    // Discover is catalog-wide: no user, no watch state.
-    let discover = Filters { kind: "series".into(), with_progress: true, ..Default::default() };
-    assert!(!discover.needs_watch_state());
-}
-
-/// The batch endpoint itself, driven through its real handler.
+/// A rejected layout must leave the stored one untouched, driven through the real
+/// handler.
 ///
-/// Mutation testing showed every other new test runs a layer BELOW this: removing
-/// `ON COMMIT DROP`, renaming the snapshot table, or setting `SNAPSHOT_MIN_RAILS`
-/// to 1 or `usize::MAX` all left the suite green, because nothing constructed a
-/// `BatchRequest`. This exercises the handler in the shape production uses it —
-/// enough rails to cross the snapshot threshold — and then checks the snapshot is
-/// really gone from the pool afterwards.
+/// The save is a delete-then-reinsert of the whole list, so validation running
+/// after the delete — or not running in the handler at all — would wipe a good
+/// layout on a bad request.
 #[tokio::test]
-async fn the_batch_handler_matches_per_section_queries_and_leaves_no_snapshot() {
-    use backend::auth::AuthUser;
-    use backend::catalog::discover::{search_db, Filters};
-    use backend::web::handlers::discover::{build_filters, library_filter_batch, parse_filter_map, BatchEntry, BatchRequest, DiscoverQuery};
-    use axum::extract::State;
-    use axum::Json;
-
-    let _g = common::guard().await;
-    let Some(state) = common::state().await else { return };
-    common::clean(&state.db).await;
-    common::insert_user(&state.db, 1, "batchapi@test.local").await;
-    let me = common::uid(1);
-
-    for (id, name, lang) in [(1600, "Alpha", "eng"), (1601, "Beta", "jpn"), (1602, "Gamma", "eng")] {
-        common::insert_series(&state.db, id, name, Some(2021), Some(45), Some(1.0), Some(lang), serde_json::json!({})).await;
-        common::follow(&state.db, 1, id, true, false).await;
-        common::insert_episode_in_days(&state.db, id * 10, id, 1, 1, -20, "E1").await;
-    }
-    common::watch_ago(&state.db, 1, 1600, 16000, "w-1600", 2).await;
-
-    // Four entries: past SNAPSHOT_MIN_RAILS, so the shared-snapshot path runs.
-    let filters: Vec<(&str, std::collections::HashMap<String, String>)> = vec![
-        ("all|series", [("type", "series")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-        ("watching|series", [("type", "series"), ("state", "watching")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-        ("recency|series", [("type", "series"), ("sort", "last_watched")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-        ("anime|anime", [("type", "anime")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-    ];
-    let req = BatchRequest {
-        sections: filters.iter().map(|(k, f)| BatchEntry { key: k.to_string(), filters: f.clone() }).collect(),
-        langs: Some("eng".into()),
-        limit: None,
-    };
-
-    let Json(results) = library_filter_batch(AuthUser(me), State(state.clone()), Json(req)).await.expect("batch");
-    assert_eq!(results.len(), 4, "one result per entry");
-    assert_eq!(
-        results.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(),
-        filters.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
-        "keys echoed back in request order"
-    );
-
-    // Each rail must equal what the same filter returns on its own — i.e. the
-    // snapshot path produced exactly what the per-query CTE path would.
-    for ((key, map), got) in filters.iter().zip(&results) {
-        let q: DiscoverQuery = parse_filter_map(map).unwrap();
-        let mut f = build_filters(&q, Some(me), None, Some(me));
-        f.with_progress = true;
-        f.limit = 2000;
-        let expected: Vec<_> = search_db(&state, &f, &["eng".to_string()]).await.unwrap();
-        assert_eq!(
-            got.items.iter().map(|r| (r.tvdb_id, r.total_episodes, r.seen_episodes)).collect::<Vec<_>>(),
-            expected.iter().map(|r| (r.tvdb_id, r.total_episodes, r.seen_episodes)).collect::<Vec<_>>(),
-            "'{key}' differs between the batch and the single-section path",
-        );
-    }
-    assert!(results[1].items.len() < results[0].items.len(), "the state filter actually narrowed something");
-
-    // The snapshot is a temp table on a POOLED connection: if it outlived the
-    // request, the next user on that connection would read this user's watch state.
-    for _ in 0..8 {
-        assert!(
-            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM batch_watch_state").fetch_one(&state.db).await.is_err(),
-            "the batch's snapshot is still visible after the request returned"
-        );
-    }
-}
-
-/// The save-time filter gate, driven through the real handler.
-///
-/// Deleting that gate wholesale left the suite green: the poison test calls
-/// `parse_filter_map` directly, so nothing proved the handler actually uses it.
-#[tokio::test]
-async fn the_save_handler_rejects_a_filter_that_would_break_the_library() {
+async fn a_rejected_layout_save_leaves_the_stored_one_intact() {
     use backend::auth::AuthUser;
     use backend::tracking::sections::LibrarySection;
     use backend::web::handlers::users::{set_library_sections, LibrarySectionsReq};
@@ -1598,28 +1180,30 @@ async fn the_save_handler_rejects_a_filter_that_would_break_the_library() {
     common::insert_user(&state.db, 1, "savegate@test.local").await;
     let me = common::uid(1);
 
-    let section = |filters: serde_json::Value| LibrarySection {
-        id: None,
-        builtin: None,
-        title: Some("My Category".into()),
-        filters: Some(filters),
-        enabled: true,
-    };
+    let section = |key: &str, enabled: bool| LibrarySection { id: None, builtin: key.into(), enabled };
 
-    // A value that parses as a string but not as the type it will be read back as.
-    let bad = LibrarySectionsReq { sections: vec![section(serde_json::json!({"year_min": ""}))] };
-    let err = set_library_sections(AuthUser(me), State(state.clone()), Json(bad)).await;
-    assert!(err.is_err(), "an unparseable filter must be rejected at SAVE time, by the handler");
+    // Store a good layout first.
+    let good = LibrarySectionsReq { sections: vec![section("watching", true), section("stale", false)] };
+    let stored = set_library_sections(AuthUser(me), State(state.clone()), Json(good)).await.expect("saves");
+    assert_eq!(stored.0.iter().filter(|s| s.enabled).count(), 1);
 
-    // ...and nothing was stored, so the Library still loads.
-    let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM app.library_section WHERE user_id = $1")
-        .bind(me)
-        .fetch_one(&state.db)
-        .await
-        .unwrap();
-    assert_eq!(stored, 0, "a rejected save must not write anything");
+    // A key the client has no way to render would be an invisible, unremovable row.
+    let bad = LibrarySectionsReq { sections: vec![section("watching", true), section("nonsense", true)] };
+    assert!(
+        set_library_sections(AuthUser(me), State(state.clone()), Json(bad)).await.is_err(),
+        "an unknown built-in must be rejected by the handler"
+    );
 
-    // The same section with a valid value goes through.
-    let good = LibrarySectionsReq { sections: vec![section(serde_json::json!({"year_min": "1990"}))] };
-    assert!(set_library_sections(AuthUser(me), State(state.clone()), Json(good)).await.is_ok());
+    // The same built-in twice maps to one bucket, so the second would duplicate it.
+    let dup = LibrarySectionsReq { sections: vec![section("watching", true), section("watching", true)] };
+    assert!(set_library_sections(AuthUser(me), State(state.clone()), Json(dup)).await.is_err());
+
+    // Neither rejection touched storage.
+    let rows: Vec<(String, bool)> =
+        sqlx::query_as("SELECT builtin, enabled FROM app.library_section WHERE user_id = $1 ORDER BY position")
+            .bind(me)
+            .fetch_all(&state.db)
+            .await
+            .unwrap();
+    assert_eq!(rows, vec![("watching".to_string(), true), ("stale".to_string(), false)]);
 }

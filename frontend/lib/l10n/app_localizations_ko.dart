@@ -980,40 +980,16 @@ class AppLocalizationsKo extends AppLocalizations {
   String get customizeLibrary => '라이브러리 사용자 지정';
 
   @override
-  String get addCategory => '새 카테고리';
-
-  @override
-  String get editCategory => '카테고리 편집';
-
-  @override
-  String get categoryName => '카테고리 이름';
-
-  @override
-  String get deleteCategory => '카테고리 삭제';
-
-  @override
   String get sortLastWatched => '최근 시청순';
 
   @override
   String get sortLastAired => '최신 에피소드 방영일';
 
   @override
-  String categoryCopy(String name) {
-    return '$name (사본)';
-  }
-
-  @override
-  String get duplicateCategory => '복제';
-
-  @override
   String get libraryStatus => '라이브러리 카테고리';
 
   @override
   String get libNoSections => '표시된 카테고리가 없습니다. 라이브러리를 사용자 지정해 다시 켜세요.';
-
-  @override
-  String get libSectionsHiddenByType =>
-      '위의 유형 필터가 카테고리를 숨기고 있습니다. 해당 유형을 켜거나 카테고리를 편집하세요.';
 
   @override
   String get filterWatchedDays => '시청 (며칠 전)';

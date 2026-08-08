@@ -397,34 +397,14 @@
   },
   "customizeLibrary": "ライブラリをカスタマイズ",
   "@customizeLibrary": {},
-  "addCategory": "新しいカテゴリ",
-  "@addCategory": {},
-  "editCategory": "カテゴリを編集",
-  "@editCategory": {},
-  "categoryName": "カテゴリ名",
-  "@categoryName": {},
-  "deleteCategory": "カテゴリを削除",
-  "@deleteCategory": {},
   "sortLastWatched": "最近視聴した順",
   "@sortLastWatched": {},
   "sortLastAired": "最新話の放送日",
   "@sortLastAired": {},
-  "categoryCopy": "{name}（コピー）",
-  "@categoryCopy": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "duplicateCategory": "複製",
-  "@duplicateCategory": {},
   "libraryStatus": "ライブラリのカテゴリ",
   "@libraryStatus": {},
   "libNoSections": "表示中のカテゴリがありません。ライブラリをカスタマイズして有効にしてください。",
   "@libNoSections": {},
-  "libSectionsHiddenByType": "上のタイプフィルターでカテゴリが非表示になっています。該当のタイプを有効にするか、カテゴリを編集してください。",
-  "@libSectionsHiddenByType": {},
   "filterWatchedDays": "視聴（何日前）",
   "@filterWatchedDays": {},
   "filterAiredDays": "最新話（何日前）",

@@ -2,21 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../api/api_client.dart';
-import '../api/filters.dart';
 import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import 'confirm_actions.dart';
-import 'filter_sheet.dart';
 import 'library_categories.dart';
 
-/// A section's name in the customize sheet: the translated label for a built-in,
-/// the user's own title for a custom one.
+/// A section's translated name in the customize sheet.
 String sectionLabel(AppLocalizations t, LibrarySection s) {
-  if (s.isCustom) return s.title ?? '';
   if (s.builtin == 'movies') return t.typeMovies;
-  return builtinCats[s.builtin]?.title(t) ?? s.builtin!;
+  return builtinCats[s.builtin]?.title(t) ?? s.builtin;
 }
 
 /// Persists a layout and returns it as stored (with server-assigned ids).
@@ -26,23 +22,21 @@ typedef LibrarySectionsSaver = Future<List<LibrarySection>> Function(List<Librar
 /// or finishing a drag costs one request instead of one per gesture.
 const _kAutoSaveDelay = Duration(milliseconds: 400);
 
-/// Reorder / toggle the Library's sections and manage custom ones.
+/// Reorder / show / hide the Library's sections.
 ///
-/// Saves itself, like the profile's customize sheet: every reorder, toggle, add,
-/// edit and delete persists on its own (debounced), and [onSaved] reports the
-/// stored layout so the Library behind the sheet can follow along. There is no
-/// Save button and no confirmation step — closing the sheet, however it's closed,
-/// leaves nothing unsaved.
+/// Saves itself, like the profile's customize sheet: every reorder and toggle
+/// persists on its own (debounced), and [onSaved] reports the stored layout so the
+/// Library behind the sheet can follow along. There is no Save button and no
+/// confirmation step — closing the sheet, however it's closed, leaves nothing
+/// unsaved.
 class LibraryCustomizeSheet extends StatefulWidget {
   const LibraryCustomizeSheet({
     super.key,
     required this.sections,
-    required this.options,
     required this.save,
     this.onSaved,
   });
   final List<LibrarySection> sections;
-  final FilterOptions options;
 
   /// Injected rather than read from a provider so the auto-save behaviour is
   /// testable without a live client.
@@ -62,9 +56,8 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
   bool _saving = false;
   String? _error;
 
-  /// New sections have no id yet, so they're keyed by identity until the server
-  /// assigns one on save.
-  Key _keyFor(LibrarySection s, int i) => ValueKey(s.key ?? 'new-$i-${identityHashCode(s)}');
+  /// A built-in appears at most once, so its key is a stable list identity.
+  Key _keyFor(LibrarySection s) => ValueKey(s.key);
 
   /// Record a change and schedule the save.
   void _touch() {
@@ -119,12 +112,7 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
     super.dispose();
   }
 
-  /// Restore the stock layout: every built-in back in its default order and shown,
-  /// custom categories HIDDEN rather than deleted.
-  ///
-  /// Hiding is the whole point — a custom category can represent a lot of tuning,
-  /// so a reset that threw them away would be unrecoverable. They keep their
-  /// filters and can be switched back on individually.
+  /// Restore the stock layout: every category back in its default order and shown.
   ///
   /// Confirmed first: the sheet saves on its own, so there's no cancel to fall back
   /// on once this runs.
@@ -149,49 +137,13 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
 
     // Reuse each built-in's existing row so its id survives the reset; only the
     // order and the enabled flag are being restored.
-    final existing = {for (final s in _order) if (!s.isCustom) s.builtin!: s};
-    final builtins = [
-      for (final key in kBuiltinLibrarySections)
-        (existing[key] ?? LibrarySection(builtin: key)).copyWith(enabled: true),
-    ];
-    final hiddenCustom = [
-      for (final s in _order)
-        if (s.isCustom) s.copyWith(enabled: false),
-    ];
+    final existing = {for (final s in _order) s.builtin: s};
     setState(() => _order
       ..clear()
-      ..addAll([...builtins, ...hiddenCustom]));
-    _touch();
-  }
-
-  /// Copy a custom category, inserted right after the original.
-  ///
-  /// The copy carries no id, so the server treats it as a new section rather than
-  /// an edit of the one it came from. Useful for variants of a filter you've
-  /// already tuned — "the same, but only anime" — without rebuilding it.
-  void _duplicateCustom(int index) {
-    final t = AppLocalizations.of(context);
-    final source = _order[index];
-    setState(() => _order.insert(
-          index + 1,
-          LibrarySection(
-            title: t.categoryCopy(sectionLabel(t, source)),
-            filters: {...source.filters},
-            enabled: source.enabled,
-          ),
-        ));
-    _touch();
-  }
-
-  Future<void> _editCustom({LibrarySection? existing, int? index}) async {
-    final edited = await showModalBottomSheet<LibrarySection>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => LibraryCategoryEditor(section: existing, options: widget.options),
-    );
-    if (edited == null || !mounted) return;
-    setState(() => index == null ? _order.add(edited) : _order[index] = edited);
+      ..addAll([
+        for (final key in kBuiltinLibrarySections)
+          (existing[key] ?? LibrarySection(builtin: key)).copyWith(enabled: true),
+      ]));
     _touch();
   }
 
@@ -241,57 +193,18 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
               children: [
                 for (var i = 0; i < _order.length; i++)
                   ListTile(
-                    key: _keyFor(_order[i], i),
+                    key: _keyFor(_order[i]),
                     leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle_rounded)),
                     title: Text(sectionLabel(t, _order[i])),
-                    // Custom sections are editable and removable; built-ins can only
-                    // be reordered and hidden (they're computed, not configured).
-                    subtitle: _order[i].isCustom ? Text(t.filters, style: context.text.labelSmall) : null,
-                    onTap: _order[i].isCustom ? () => _editCustom(existing: _order[i], index: i) : null,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Only custom sections can be copied or removed. A built-in
-                        // is computed, not configured — there's nothing to copy that
-                        // the filter sheet can't already express.
-                        if (_order[i].isCustom) ...[
-                          IconButton(
-                            tooltip: t.duplicateCategory,
-                            icon: const Icon(Icons.copy_rounded),
-                            onPressed: () => _duplicateCustom(i),
-                          ),
-                          IconButton(
-                            tooltip: t.deleteCategory,
-                            icon: const Icon(Icons.delete_outline_rounded),
-                            onPressed: () {
-                              setState(() => _order.removeAt(i));
-                              _touch();
-                            },
-                          ),
-                        ],
-                        Switch(
-                          value: _order[i].enabled,
-                          onChanged: (on) {
-                            setState(() => _order[i] = _order[i].copyWith(enabled: on));
-                            _touch();
-                          },
-                        ),
-                      ],
+                    trailing: Switch(
+                      value: _order[i].enabled,
+                      onChanged: (on) {
+                        setState(() => _order[i] = _order[i].copyWith(enabled: on));
+                        _touch();
+                      },
                     ),
                   ),
               ],
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(Insets.sm),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                icon: const Icon(Icons.add_rounded),
-                label: Text(t.addCategory),
-                onPressed: () => _editCustom(),
-              ),
             ),
           ),
         ],
@@ -299,134 +212,3 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
     );
   }
 }
-
-/// Name + filter for one custom section. The filter itself is captured by the
-/// existing [FilterSheet], so a saved category can express exactly what the
-/// Library's own filter can.
-class LibraryCategoryEditor extends StatefulWidget {
-  const LibraryCategoryEditor({super.key, this.section, required this.options});
-  final LibrarySection? section;
-  final FilterOptions options;
-  @override
-  State<LibraryCategoryEditor> createState() => LibraryCategoryEditorState();
-}
-
-class LibraryCategoryEditorState extends State<LibraryCategoryEditor> {
-  late final TextEditingController _name = TextEditingController(text: widget.section?.title ?? '');
-  // Seeded from the saved filter when editing, so reopening a category shows the
-  // facets it was built with rather than a blank sheet.
-  late final AdvancedFilters _f = widget.section == null
-      ? AdvancedFilters(defaultSort: 'my_rating')
-      : AdvancedFilters.fromQuery(widget.section!.filters, defaultSort: 'my_rating');
-
-  /// The kinds this category covers. Held separately from `_f.type` (a single
-  /// value the filter sheet uses) and written back into the saved filter as a
-  /// comma list on submit.
-  late Set<String> _kinds = widget.section?.kinds.toSet() ?? {'series'};
-
-  /// A segment label that shrinks instead of overflowing on a narrow sheet.
-  static Widget _lbl(String s) => Text(s, maxLines: 1, softWrap: false, overflow: TextOverflow.fade);
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  Future<void> _openFilters() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => FilterSheet(filters: _f, options: widget.options, showFavorites: true),
-    );
-    if (mounted) setState(() {}); // refresh the active-filter count
-  }
-
-  void _submit() {
-    final title = _name.text.trim();
-    if (title.isEmpty) return;
-    // `id` carries over when editing so the server updates in place instead of
-    // replacing the row (and the rail keeps its cached items).
-    Navigator.of(context).pop(LibrarySection(
-      id: widget.section?.id,
-      title: title,
-      // The kind chips own `type`, not the filter sheet's single-valued one.
-      filters: {..._f.toQuery(), 'type': _kinds.join(',')},
-      enabled: widget.section?.enabled ?? true,
-    ));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-            Insets.lg, 0, Insets.lg, MediaQuery.viewInsetsOf(context).bottom + Insets.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.section == null ? t.addCategory : t.editCategory, style: context.text.titleMedium),
-            const SizedBox(height: Insets.md),
-            TextField(
-              controller: _name,
-              autofocus: widget.section == null,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(labelText: t.categoryName),
-              onChanged: (_) => setState(() {}), // enables/disables Save
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: Insets.md),
-            // Which kinds the category covers. Multi-select, and it lives here
-            // rather than in the filter sheet because it's part of what the
-            // category IS — the Library's own toggles are a view on top.
-            // `emptySelectionAllowed: false` keeps at least one kind, since a
-            // category covering nothing can only ever render an empty rail.
-            SegmentedButton<String>(
-              multiSelectionEnabled: true,
-              showSelectedIcon: false,
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
-              segments: [
-                // Labels shrink rather than overflow on a narrow sheet.
-                ButtonSegment(value: 'series', label: _lbl(t.typeSeries)),
-                ButtonSegment(value: 'anime', label: _lbl(t.typeAnime)),
-                ButtonSegment(value: 'movie', label: _lbl(t.typeMovies)),
-              ],
-              selected: _kinds,
-              onSelectionChanged: (s) => setState(() {
-                if (s.isNotEmpty) _kinds = s;
-              }),
-            ),
-            const SizedBox(height: Insets.sm),
-            Row(
-              children: [
-                Badge(
-                  isLabelVisible: _f.activeCount > 0,
-                  label: Text('${_f.activeCount}'),
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.tune_rounded),
-                    label: Text(t.filters),
-                    onPressed: _openFilters,
-                  ),
-                ),
-                const Spacer(),
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(t.cancel)),
-              ],
-            ),
-            const SizedBox(height: Insets.sm),
-            // Full-width primary action, as a direct Column child — the app themes
-            // FilledButton with `Size.fromHeight(52)` (an INFINITE minimum width),
-            // so one inside a Row would be asked to lay out at infinite width.
-            FilledButton(
-              onPressed: _name.text.trim().isEmpty ? null : _submit,
-              child: Text(t.save),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-

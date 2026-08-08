@@ -397,34 +397,14 @@
   },
   "customizeLibrary": "自定义媒体库",
   "@customizeLibrary": {},
-  "addCategory": "新建分类",
-  "@addCategory": {},
-  "editCategory": "编辑分类",
-  "@editCategory": {},
-  "categoryName": "分类名称",
-  "@categoryName": {},
-  "deleteCategory": "删除分类",
-  "@deleteCategory": {},
   "sortLastWatched": "最近观看",
   "@sortLastWatched": {},
   "sortLastAired": "最新剧集播出",
   "@sortLastAired": {},
-  "categoryCopy": "{name}（副本）",
-  "@categoryCopy": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "duplicateCategory": "复制",
-  "@duplicateCategory": {},
   "libraryStatus": "媒体库分类",
   "@libraryStatus": {},
   "libNoSections": "未显示任何分类。自定义媒体库以重新启用。",
   "@libNoSections": {},
-  "libSectionsHiddenByType": "上方的类型筛选隐藏了你的分类——请启用对应类型，或编辑该分类。",
-  "@libSectionsHiddenByType": {},
   "filterWatchedDays": "观看于（几天前）",
   "@filterWatchedDays": {},
   "filterAiredDays": "最新剧集（几天前）",

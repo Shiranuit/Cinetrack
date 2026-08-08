@@ -980,40 +980,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get customizeLibrary => 'ライブラリをカスタマイズ';
 
   @override
-  String get addCategory => '新しいカテゴリ';
-
-  @override
-  String get editCategory => 'カテゴリを編集';
-
-  @override
-  String get categoryName => 'カテゴリ名';
-
-  @override
-  String get deleteCategory => 'カテゴリを削除';
-
-  @override
   String get sortLastWatched => '最近視聴した順';
 
   @override
   String get sortLastAired => '最新話の放送日';
 
   @override
-  String categoryCopy(String name) {
-    return '$name（コピー）';
-  }
-
-  @override
-  String get duplicateCategory => '複製';
-
-  @override
   String get libraryStatus => 'ライブラリのカテゴリ';
 
   @override
   String get libNoSections => '表示中のカテゴリがありません。ライブラリをカスタマイズして有効にしてください。';
-
-  @override
-  String get libSectionsHiddenByType =>
-      '上のタイプフィルターでカテゴリが非表示になっています。該当のタイプを有効にするか、カテゴリを編集してください。';
 
   @override
   String get filterWatchedDays => '視聴（何日前）';

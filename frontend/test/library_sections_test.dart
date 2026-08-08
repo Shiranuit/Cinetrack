@@ -5,17 +5,12 @@ import 'package:frontend/api/filters.dart';
 import 'package:frontend/l10n/app_localizations.dart';
 import 'package:frontend/widgets/filter_sheet.dart';
 import 'package:frontend/api/models.dart';
-import 'package:frontend/widgets/library_categories.dart';
 
-/// A custom Library section stores its filter as the query-param map the filter
-/// endpoint speaks, so `toQuery` → `fromQuery` has to round-trip: what the user
-/// picked when they created the category is what they see when they reopen it.
+/// A Library section stores its filter as the query-param map the filter endpoint
+/// speaks, so `toQuery` → `fromQuery` has to round-trip: what the user picked in
+/// the filter sheet is what they see when they reopen it.
 void main() {
-  _mergeTests();
-  _multiKindTests();
   _watchHistoryFacetTests();
-  _progressTests();
-  _cardCaptionTests();
   _sortHelpTests();
   _openRangeTests();
   _rangeLabelTests();
@@ -88,155 +83,25 @@ void main() {
     test('defaults mirror the server-side built-ins', () {
       final defaults = defaultLibrarySections();
       expect(defaults.map((s) => s.builtin), kBuiltinLibrarySections);
-      expect(defaults.every((s) => s.enabled && !s.isCustom), isTrue);
+      expect(defaults.every((s) => s.enabled), isTrue);
     });
 
-    test('serializes built-in and custom sections in the shapes the server accepts', () {
-      // A built-in carries no title/filters...
-      final builtin = const LibrarySection(builtin: 'watching').toJson();
-      expect(builtin['builtin'], 'watching');
-      expect(builtin['title'], isNull);
-      expect(builtin['filters'], isNull);
-
-      // ...and a custom section carries no builtin.
-      final custom = const LibrarySection(
-        id: 'abc',
-        title: '90s sci-fi',
-        filters: {'type': 'series', 'year_max': '1999'},
-      ).toJson();
-      expect(custom['builtin'], isNull);
-      expect(custom['title'], '90s sci-fi');
-      expect(custom['filters'], {'type': 'series', 'year_max': '1999'});
-      expect(custom['id'], 'abc', reason: 'editing must update in place, not create a new row');
+    test('serializes the shape the server accepts', () {
+      final json = const LibrarySection(id: 'abc', builtin: 'watching', enabled: false).toJson();
+      expect(json, {'id': 'abc', 'builtin': 'watching', 'enabled': false});
+      expect(json.containsKey('filters'), isFalse, reason: 'the layout carries no saved filters');
     });
 
     test('round-trips through fromJson', () {
-      const section = LibrarySection(id: 'x', title: 'Rewatch', filters: {'favorites': 'true'}, enabled: false);
+      const section = LibrarySection(id: 'x', builtin: 'stale', enabled: false);
       final back = LibrarySection.fromJson(section.toJson().cast<String, dynamic>());
       expect(back.id, 'x');
-      expect(back.title, 'Rewatch');
-      expect(back.filters, {'favorites': 'true'});
+      expect(back.builtin, 'stale');
       expect(back.enabled, isFalse);
-      expect(back.isCustom, isTrue);
+      expect(back.key, 'stale', reason: 'the key is the list identity for reordering');
     });
   });
 }
-
-/// A custom section's saved filter is merged with the Library's live filter state
-/// when its rail is fetched — see `mergedSectionFilters`.
-void _mergeTests() {
-  group('mergedSectionFilters', () {
-    const section = LibrarySection(
-      id: 's1',
-      title: 'Comfort anime',
-      filters: {'type': 'anime', 'sort': 'year', 'dir': 'asc', 'favorites': 'true'},
-    );
-
-    test('leaves the section alone while the Library sort is untouched', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating');
-      final merged = mergedSectionFilters(section, f);
-      expect(merged['sort'], 'year', reason: 'the sort saved with the section still applies');
-      expect(merged['dir'], 'asc');
-      expect(merged['favorites'], 'true');
-    });
-
-    test('the Library sort wins once the user picks one', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')..sort = 'name';
-      final merged = mergedSectionFilters(section, f);
-      expect(merged['sort'], 'name');
-      expect(merged['dir'], 'desc');
-    });
-
-    test('a reversed direction counts as picking a sort', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')..sortDesc = false;
-      expect(mergedSectionFilters(section, f)['dir'], 'asc');
-      expect(mergedSectionFilters(section, f)['sort'], 'my_rating');
-    });
-
-    test('global facets narrow the section', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')..scoreMin = 8.0;
-      f.genresInc.add(12);
-      final merged = mergedSectionFilters(section, f);
-      expect(merged['score_min'], '8.0');
-      expect(merged['genres'], '12');
-      expect(merged['favorites'], 'true', reason: 'the section keeps its own facets too');
-    });
-
-    test('never overrides the kind the section pinned', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')..type = 'movie';
-      expect(mergedSectionFilters(section, f)['type'], 'anime');
-    });
-  });
-}
-
-/// A category can span Series, Anime and Movies at once. `search_db` takes one kind
-/// per call, so the client fans out and merges — these pin that resolution.
-void _multiKindTests() {
-  SearchResult res(String name, {String kind = 'series', bool anime = false, int? year, int? rating}) =>
-      SearchResult(tvdbId: name.hashCode, kind: kind, name: name, year: year, rating: rating, isAnime: anime);
-
-  group('sectionQueryKinds', () {
-    test('series absorbs anime — querying both would return every anime twice', () {
-      expect(sectionQueryKinds({'series', 'anime'}), ['series']);
-      expect(sectionQueryKinds({'series'}), ['series']);
-    });
-
-    test('anime is queried on its own only when series is not selected', () {
-      expect(sectionQueryKinds({'anime'}), ['anime']);
-      expect(sectionQueryKinds({'anime', 'movie'}), ['anime', 'movie']);
-    });
-
-    test('movies are always their own query', () {
-      expect(sectionQueryKinds({'movie'}), ['movie']);
-      expect(sectionQueryKinds({'series', 'anime', 'movie'}), ['series', 'movie']);
-    });
-  });
-
-  group('mergeSectionResults', () {
-    test('drops anime the section did not ask for', () {
-      // A `series` query carries anime whether or not it was requested.
-      final series = [res('Breaking Bad'), res('Cowboy Bebop', anime: true)];
-      final merged = mergeSectionResults([series], {'series'});
-      expect(merged.map((r) => r.name), ['Breaking Bad']);
-    });
-
-    test('keeps anime when the section covers it', () {
-      final series = [res('Breaking Bad'), res('Cowboy Bebop', anime: true)];
-      expect(mergeSectionResults([series], {'series', 'anime'}).length, 2);
-      expect(mergeSectionResults([series], {'anime'}).map((r) => r.name), ['Cowboy Bebop']);
-    });
-
-    test('interleaves kinds by a sort the rows can actually be compared on', () {
-      final series = [res('B-show', year: 2020), res('C-show', year: 2000)];
-      final movies = [res('A-movie', kind: 'movie', year: 2010)];
-      final merged = mergeSectionResults([series, movies], {'series', 'movie'}, sort: 'year');
-      expect(merged.map((r) => r.year), [2020, 2010, 2000], reason: 'newest first across both kinds');
-
-      final asc = mergeSectionResults([series, movies], {'series', 'movie'}, sort: 'name', desc: false);
-      expect(asc.map((r) => r.name), ['A-movie', 'B-show', 'C-show']);
-    });
-
-    test('keeps per-kind blocks for sorts the rows cannot express', () {
-      // 'popularity' isn't carried on a search row, so inventing an order would be
-      // worse than leaving the server's per-kind ordering intact.
-      final series = [res('S1'), res('S2')];
-      final movies = [res('M1', kind: 'movie')];
-      final merged = mergeSectionResults([series, movies], {'series', 'movie'}, sort: 'popularity');
-      expect(merged.map((r) => r.name), ['S1', 'S2', 'M1']);
-    });
-  });
-
-  group('LibrarySection.kinds', () {
-    test('parses a comma list, defaulting to series', () {
-      expect(const LibrarySection(title: 'x', filters: {'type': 'series,movie'}).kinds, {'series', 'movie'});
-      expect(const LibrarySection(title: 'x', filters: {'type': 'movie'}).kinds, {'movie'});
-      // A section saved before multi-kind support, or with no type at all.
-      expect(const LibrarySection(title: 'x', filters: {}).kinds, {'series'});
-    });
-  });
-}
-
-
 
 /// The watch-history facets must survive the save/reopen cycle, since a saved
 /// category is stored as a query map and reopened in the filter sheet.
@@ -290,51 +155,21 @@ void _watchHistoryFacetTests() {
       expect(f.activeCount, 2);
     });
 
-    test('the "seen recently" view is expressible as a saved section', () {
+    test('a "seen recently" view composes into one query the endpoint speaks', () {
+      // Several facets at once, which is what the filter sheet emits when the user
+      // narrows the Library — each has to survive into the query map.
       final f = AdvancedFilters(defaultSort: 'my_rating')
+        ..type = 'series'
         ..watchedDaysMax = 30
         ..sort = 'remaining'
         ..sortDesc = true;
       f.statuses.add('Continuing');
 
-      final section = LibrarySection(title: 'Seen recently', filters: {...f.toQuery(), 'type': 'series'});
-      expect(section.filters['watched_days_max'], '30');
-      expect(section.filters['statuses'], 'Continuing');
-      expect(section.filters['sort'], 'remaining');
-      expect(section.kinds, {'series'});
-    });
-  });
-}
-
-/// Custom rails draw the same cards as the built-in ones, progress bar included —
-/// which needs the counts on the search row, not just on `LibraryShow`.
-void _progressTests() {
-  group('SearchResult.progress', () {
-    test('matches LibraryShow.progress for the same counts', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series', totalEpisodes: 10, seenEpisodes: 4);
-      expect(r.progress, closeTo(0.4, 1e-9));
-    });
-
-    test('is null when the query did not compute it', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series');
-      expect(r.progress, isNull, reason: 'not computed is not the same as 0%');
-    });
-
-    test('a show with no aired episodes is 0, not a divide by zero', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series', totalEpisodes: 0, seenEpisodes: 0);
-      expect(r.progress, 0.0);
-    });
-
-    test('clamps when watch rows outnumber the catalog (dead episode ids)', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series', totalEpisodes: 5, seenEpisodes: 8);
-      expect(r.progress, 1.0);
-    });
-
-    test('parses the counts the batch endpoint sends', () {
-      final r = SearchResult.fromJson(const {
-        'tvdb_id': 1, 'kind': 'series', 'total_episodes': 12, 'seen_episodes': 3,
-      });
-      expect(r.progress, closeTo(0.25, 1e-9));
+      final q = f.toQuery();
+      expect(q['watched_days_max'], '30');
+      expect(q['statuses'], 'Continuing');
+      expect(q['sort'], 'remaining');
+      expect(q['type'], 'series');
     });
   });
 }
@@ -629,39 +464,5 @@ void _presetSyncTests() {
       '',
       reason: 'a stale 42 would show a filter that is no longer applied',
     );
-  });
-}
-
-/// A custom rail's card must never end up with neither a year nor a progress bar.
-/// `ProgressStripe` hides itself at zero, so an unstarted show (0 of N watched,
-/// which the server now reports as 0 rather than NULL) has no bar — and the caption
-/// has to survive, or the card shows nothing but the poster.
-void _cardCaptionTests() {
-  group('rail card caption vs progress bar', () {
-    test('an unstarted show keeps its year, because it gets no stripe', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series', name: 'Unstarted', year: 1999, totalEpisodes: 12, seenEpisodes: 0);
-      expect(r.progress, 0.0);
-      // What `_resultCard` decides: caption shown only when no stripe will render.
-      expect((r.progress ?? 0) > 0, isFalse, reason: 'no stripe, so the year must show');
-    });
-
-    test('a partly-watched show yields the caption to its stripe', () {
-      const r = SearchResult(tvdbId: 1, kind: 'series', name: 'Half', year: 1999, totalEpisodes: 12, seenEpisodes: 6);
-      expect((r.progress ?? 0) > 0, isTrue);
-    });
-
-    test('a row without computed progress keeps its year', () {
-      const r = SearchResult(tvdbId: 1, kind: 'movie', name: 'Film', year: 1999);
-      expect(r.progress, isNull);
-      expect((r.progress ?? 0) > 0, isFalse, reason: 'movies never carry progress and must show the year');
-    });
-
-    test('series and movies in one rail agree on when the caption shows', () {
-      // The inconsistency this guards: a mixed rail where movies showed a year and
-      // unstarted series showed nothing at all.
-      const unstartedSeries = SearchResult(tvdbId: 1, kind: 'series', year: 2001, totalEpisodes: 8, seenEpisodes: 0);
-      const movie = SearchResult(tvdbId: 2, kind: 'movie', year: 2001);
-      expect((unstartedSeries.progress ?? 0) > 0, (movie.progress ?? 0) > 0);
-    });
   });
 }

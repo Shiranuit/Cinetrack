@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api/filters.dart';
-import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../l10n/app_localizations.dart';
 
@@ -27,93 +25,4 @@ final builtinCats = <String, LibCat>{
   'stopped': LibCat((t) => t.catStopped, Icons.pause_circle_rounded, (c) => c.scheme.onSurfaceVariant),
   'for_later': LibCat((t) => t.watchLater, Icons.schedule_rounded, (c) => c.scheme.tertiary),
 };
-
-
-/// A custom section's saved filter with the Library's live filter state layered on
-/// top: the section defines its own set, the screen's filter narrows it.
-///
-/// Two things are deliberately NOT taken from the global state:
-///
-/// * `type` — the section pins its own kind, and the screen's type toggles hide a
-///   section whole rather than filtering inside it.
-/// * the sort, unless the user actually chose one. The Library's default sort would
-///   otherwise permanently override the sort saved with the section, making
-///   per-section sort pointless; once you pick a sort in the filter sheet, the
-///   whole Library follows it, rails included.
-Map<String, String> mergedSectionFilters(LibrarySection section, AdvancedFilters f) {
-  final global = f.toQuery()..remove('type');
-  if (f.sort == f.defaultSort && f.sortDesc) {
-    global.remove('sort');
-    global.remove('dir');
-  }
-  return {...section.filters, ...global};
-}
-
-/// The filter for one kind of a section's fan-out: the section's own filter, the
-/// kind being queried, and — when it covers series but NOT anime — the flag that
-/// makes the server exclude anime before applying the limit.
-Map<String, String> sectionQueryFilters(Map<String, String> filters, String kind, Set<String> kinds) => {
-      ...filters,
-      'type': kind,
-      if (kind == 'series' && !kinds.contains('anime')) 'exclude_anime': 'true',
-    };
-
-/// Backend queries needed to cover a section's kinds. `search_db` takes exactly one
-/// kind, so a multi-kind section fans out — but "series" ALREADY includes anime
-/// (anime is Japanese-language series, same table), so asking for both would return
-/// every anime twice. Series therefore absorbs anime, exactly as the Library's own
-/// type toggles do in `_backendKinds`.
-List<String> sectionQueryKinds(Set<String> kinds) => [
-      if (kinds.contains('series')) 'series' else if (kinds.contains('anime')) 'anime',
-      if (kinds.contains('movie')) 'movie',
-    ];
-
-/// Fold the per-kind responses of a multi-kind section into one rail.
-///
-/// Anime exclusion is the SERVER's job (`exclude_anime`, see [sectionQueryFilters]):
-/// doing it here would run after `LIMIT`, so a rail whose top results are all anime
-/// would come back empty. The check below is a no-op against a current server and
-/// only guards against an older one.
-///
-/// The real job here is restoring the ordering. Each response is sorted server-side, but
-/// concatenating them would group all series ahead of all movies. Where the sort key
-/// is one the rows actually carry (name, year, your rating) they're re-sorted into a
-/// single sequence; for keys the DTO doesn't expose — popularity, runtime, season and
-/// episode counts — the per-kind blocks are kept in order, since inventing a
-/// comparison would order them wrongly rather than not at all.
-List<SearchResult> mergeSectionResults(
-  List<List<SearchResult>> perKind,
-  Set<String> kinds, {
-  String? sort,
-  bool desc = true,
-}) {
-  final wantAnime = kinds.contains('anime');
-  final wantSeries = kinds.contains('series');
-  final merged = [
-    for (final list in perKind)
-      for (final r in list)
-        if (r.kind == 'movie' || (r.isAnime ? wantAnime : wantSeries)) r,
-  ];
-  if (perKind.length < 2) return merged;
-
-  final Comparable<Object>? Function(SearchResult)? key = switch (sort) {
-    'name' => (r) => (r.name ?? '').toLowerCase() as Comparable<Object>,
-    'year' => (r) => (r.year ?? 0) as Comparable<Object>,
-    'my_rating' => (r) => (r.rating ?? 0) as Comparable<Object>,
-    _ => null,
-  };
-  if (key == null) return merged;
-
-  merged.sort((a, b) {
-    final ka = key(a), kb = key(b);
-    if (ka == null || kb == null) return 0;
-    return desc ? kb.compareTo(ka) : ka.compareTo(kb);
-  });
-  return merged;
-}
-
-/// Key for one (section, kind) pair in a batched library-filter request. The
-/// server echoes it back verbatim, so it only has to be unique within a batch and
-/// splittable by the client that made it.
-String sectionBatchKey(String sectionId, String kind) => '$sectionId|$kind';
 

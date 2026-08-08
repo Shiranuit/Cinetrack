@@ -1912,30 +1912,6 @@ abstract class AppLocalizations {
   /// **'Customize library'**
   String get customizeLibrary;
 
-  /// No description provided for @addCategory.
-  ///
-  /// In en, this message translates to:
-  /// **'New category'**
-  String get addCategory;
-
-  /// No description provided for @editCategory.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit category'**
-  String get editCategory;
-
-  /// No description provided for @categoryName.
-  ///
-  /// In en, this message translates to:
-  /// **'Category name'**
-  String get categoryName;
-
-  /// No description provided for @deleteCategory.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete category'**
-  String get deleteCategory;
-
   /// No description provided for @sortLastWatched.
   ///
   /// In en, this message translates to:
@@ -1948,18 +1924,6 @@ abstract class AppLocalizations {
   /// **'Latest episode aired'**
   String get sortLastAired;
 
-  /// No description provided for @categoryCopy.
-  ///
-  /// In en, this message translates to:
-  /// **'{name} (copy)'**
-  String categoryCopy(String name);
-
-  /// No description provided for @duplicateCategory.
-  ///
-  /// In en, this message translates to:
-  /// **'Duplicate'**
-  String get duplicateCategory;
-
   /// No description provided for @libraryStatus.
   ///
   /// In en, this message translates to:
@@ -1971,12 +1935,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No categories are shown. Customize your library to turn some back on.'**
   String get libNoSections;
-
-  /// No description provided for @libSectionsHiddenByType.
-  ///
-  /// In en, this message translates to:
-  /// **'Your categories are hidden by the type filter above — turn on the matching type, or edit the category.'**
-  String get libSectionsHiddenByType;
 
   /// No description provided for @filterWatchedDays.
   ///

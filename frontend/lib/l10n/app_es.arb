@@ -397,34 +397,14 @@
   },
   "customizeLibrary": "Personalizar biblioteca",
   "@customizeLibrary": {},
-  "addCategory": "Nueva categoría",
-  "@addCategory": {},
-  "editCategory": "Editar categoría",
-  "@editCategory": {},
-  "categoryName": "Nombre de la categoría",
-  "@categoryName": {},
-  "deleteCategory": "Eliminar categoría",
-  "@deleteCategory": {},
   "sortLastWatched": "Visto recientemente",
   "@sortLastWatched": {},
   "sortLastAired": "Último episodio emitido",
   "@sortLastAired": {},
-  "categoryCopy": "{name} (copia)",
-  "@categoryCopy": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "duplicateCategory": "Duplicar",
-  "@duplicateCategory": {},
   "libraryStatus": "Categoría de biblioteca",
   "@libraryStatus": {},
   "libNoSections": "No se muestra ninguna categoría. Personaliza tu biblioteca para volver a activarlas.",
   "@libNoSections": {},
-  "libSectionsHiddenByType": "El filtro de tipo de arriba oculta tus categorías: activa el tipo correspondiente o edita la categoría.",
-  "@libSectionsHiddenByType": {},
   "filterWatchedDays": "Visto (hace … días)",
   "@filterWatchedDays": {},
   "filterAiredDays": "Último episodio (hace … días)",

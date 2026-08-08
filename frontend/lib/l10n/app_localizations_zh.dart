@@ -978,39 +978,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get customizeLibrary => '自定义媒体库';
 
   @override
-  String get addCategory => '新建分类';
-
-  @override
-  String get editCategory => '编辑分类';
-
-  @override
-  String get categoryName => '分类名称';
-
-  @override
-  String get deleteCategory => '删除分类';
-
-  @override
   String get sortLastWatched => '最近观看';
 
   @override
   String get sortLastAired => '最新剧集播出';
 
   @override
-  String categoryCopy(String name) {
-    return '$name（副本）';
-  }
-
-  @override
-  String get duplicateCategory => '复制';
-
-  @override
   String get libraryStatus => '媒体库分类';
 
   @override
   String get libNoSections => '未显示任何分类。自定义媒体库以重新启用。';
-
-  @override
-  String get libSectionsHiddenByType => '上方的类型筛选隐藏了你的分类——请启用对应类型，或编辑该分类。';
 
   @override
   String get filterWatchedDays => '观看于（几天前）';

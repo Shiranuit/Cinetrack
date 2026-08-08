@@ -22,77 +22,35 @@ const kBuiltinLibrarySections = [
   'movies',
 ];
 
-/// One entry in the user's Library layout: either a built-in category or a
-/// user-defined section with its own saved filter. The server stores the order, so
-/// the layout follows the user across devices.
+/// One entry in the user's Library layout — a built-in category, shown or hidden.
+/// The server stores the order, so the layout follows the user across devices.
 class LibrarySection {
-  /// Server-assigned. Null for a default the user hasn't saved yet, and for a
-  /// section just created on this device (the server fills it in on save).
+  /// Server-assigned. Null for a default the user hasn't saved yet; the server
+  /// fills it in on save.
   final String? id;
 
-  /// A key from [kBuiltinLibrarySections], or null for a custom section.
-  final String? builtin;
-
-  /// Custom sections only: the user's label for the rail.
-  final String? title;
-
-  /// Custom sections only: the saved filter, as the same flat query-param map
-  /// `AdvancedFilters.toQuery()` produces — it's replayed against
-  /// `/api/library/filter` verbatim.
-  final Map<String, String> filters;
+  /// A key from [kBuiltinLibrarySections].
+  final String builtin;
 
   /// Hidden sections keep their place in the order, so switching one back on
   /// restores it where the user had put it.
   final bool enabled;
 
-  const LibrarySection({
-    this.id,
-    this.builtin,
-    this.title,
-    this.filters = const {},
-    this.enabled = true,
-  });
+  const LibrarySection({this.id, required this.builtin, this.enabled = true});
 
-  bool get isCustom => builtin == null;
+  /// Stable identity for list keys — a built-in appears at most once per layout.
+  String get key => builtin;
 
-  /// The kinds this section spans, from the comma list in its saved `type` filter.
-  /// A section written before multi-kind support carries a single value, and one
-  /// with no `type` at all means series — matching the filter endpoint's default.
-  Set<String> get kinds {
-    final raw = (filters['type'] ?? '').split(',').map((k) => k.trim()).where((k) => k.isNotEmpty).toSet();
-    return raw.isEmpty ? const {'series'} : raw;
-  }
-
-  /// Stable identity for list keys: built-ins are unique by key, custom sections by
-  /// id — and a brand-new custom section has neither, so callers fall back to its
-  /// position (see the customize sheet).
-  String? get key => builtin ?? id;
-
-  LibrarySection copyWith({String? title, Map<String, String>? filters, bool? enabled}) => LibrarySection(
-        id: id,
-        builtin: builtin,
-        title: title ?? this.title,
-        filters: filters ?? this.filters,
-        enabled: enabled ?? this.enabled,
-      );
+  LibrarySection copyWith({bool? enabled}) =>
+      LibrarySection(id: id, builtin: builtin, enabled: enabled ?? this.enabled);
 
   factory LibrarySection.fromJson(Map<String, dynamic> j) => LibrarySection(
         id: j['id'] as String?,
-        builtin: j['builtin'] as String?,
-        title: j['title'] as String?,
-        filters: (j['filters'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
+        builtin: j['builtin'] as String? ?? '',
         enabled: j['enabled'] as bool? ?? true,
       );
 
-  /// Sent back on save. Built-ins carry no title/filters and custom sections carry
-  /// no builtin — the server rejects any other shape.
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'builtin': builtin,
-        'title': isCustom ? title : null,
-        'filters': isCustom ? filters : null,
-        'enabled': enabled,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'builtin': builtin, 'enabled': enabled};
 }
 
 /// The layout shown before the user customizes anything (mirrors
@@ -421,17 +379,6 @@ class SearchResult {
   final int? rating;
   final bool isFavorited;
 
-  /// Japanese-language series. Anime lives in the same table as series, so a
-  /// `type=series` query always returns it — a custom Library section spanning
-  /// several kinds uses this to drop anime the user didn't ask for. False for
-  /// movies and for the Discover/popular paths, which don't split by anime.
-  final bool isAnime;
-
-  /// Watch progress, when the caller asked for it (the Library's rails do; a paged
-  /// search doesn't). Null means "not computed" — distinct from a show with no
-  /// episodes, which is why [progress] returns null rather than 0 for it.
-  final int? totalEpisodes;
-  final int? seenEpisodes;
   const SearchResult({
     this.tvdbId,
     this.kind,
@@ -441,18 +388,7 @@ class SearchResult {
     this.inLibrary = false,
     this.rating,
     this.isFavorited = false,
-    this.isAnime = false,
-    this.totalEpisodes,
-    this.seenEpisodes,
   });
-
-  /// Fraction of aired episodes seen (0..1), or null when progress wasn't
-  /// requested — matching `LibraryShow.progress` so both card types agree.
-  double? get progress {
-    final total = totalEpisodes, seen = seenEpisodes;
-    if (total == null || seen == null) return null;
-    return total > 0 ? (seen / total).clamp(0.0, 1.0) : 0.0;
-  }
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
         tvdbId: j['tvdb_id'] as int?,
@@ -463,9 +399,6 @@ class SearchResult {
         inLibrary: j['in_library'] as bool? ?? false,
         rating: (j['rating'] as num?)?.toInt(),
         isFavorited: j['is_favorited'] as bool? ?? false,
-        isAnime: j['is_anime'] as bool? ?? false,
-        totalEpisodes: (j['total_episodes'] as num?)?.toInt(),
-        seenEpisodes: (j['seen_episodes'] as num?)?.toInt(),
       );
 }
 

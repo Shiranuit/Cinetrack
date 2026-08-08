@@ -997,30 +997,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customizeLibrary => 'Customize library';
 
   @override
-  String get addCategory => 'New category';
-
-  @override
-  String get editCategory => 'Edit category';
-
-  @override
-  String get categoryName => 'Category name';
-
-  @override
-  String get deleteCategory => 'Delete category';
-
-  @override
   String get sortLastWatched => 'Last watched';
 
   @override
   String get sortLastAired => 'Latest episode aired';
-
-  @override
-  String categoryCopy(String name) {
-    return '$name (copy)';
-  }
-
-  @override
-  String get duplicateCategory => 'Duplicate';
 
   @override
   String get libraryStatus => 'Library category';
@@ -1028,10 +1008,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get libNoSections =>
       'No categories are shown. Customize your library to turn some back on.';
-
-  @override
-  String get libSectionsHiddenByType =>
-      'Your categories are hidden by the type filter above — turn on the matching type, or edit the category.';
 
   @override
   String get filterWatchedDays => 'Watched (days ago)';

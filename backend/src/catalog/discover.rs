@@ -97,42 +97,6 @@ pub struct Filters {
     /// Library-only, series-only: has a future-dated episode on the schedule. The
     /// complement of "everything released" for a show that is still running.
     pub has_upcoming: Option<bool>,
-    /// Ask for watch progress on each row (`total_episodes` / `seen_episodes`).
-    /// Costs the watch-history aggregates, so it's opt-in: the Library's rails want
-    /// it, a paged search doesn't.
-    pub with_progress: bool,
-    /// Drop anime from a `series` query. Anime shares the series table, so
-    /// `kind = "series"` returns it either way — and filtering it off client-side
-    /// would happen AFTER `LIMIT`, which silently empties a rail whose top results
-    /// all happen to be anime. Excluding it here keeps the limit meaningful.
-    pub exclude_anime: bool,
-}
-
-impl Filters {
-    /// Whether this query needs the per-user watch aggregates — a state filter, a
-    /// watch-history facet, a recency sort, or progress on the rows. Callers that
-    /// run several queries together use it to decide whether a shared snapshot is
-    /// worth building at all.
-    pub fn needs_watch_state(&self) -> bool {
-        // Movies have no episodes, so no movie query can use the snapshot. Counting
-        // them toward the threshold made a batch of movie-only rails build a full
-        // pass over the watch history that nothing then reads.
-        self.kind != "movie"
-            && self.library_user.is_some()
-            && (!self.states.is_empty()
-                || self.with_progress
-                || matches!(self.sort.as_str(), "last_watched" | "last_aired" | "remaining" | "progress")
-                || self.watched_days_min.is_some()
-                || self.watched_days_max.is_some()
-                || self.aired_days_min.is_some()
-                || self.aired_days_max.is_some()
-                || self.remaining_min.is_some()
-                || self.remaining_max.is_some()
-                || self.progress_min.is_some()
-                || self.progress_max.is_some()
-                || self.caught_up.is_some()
-                || self.has_upcoming.is_some())
-    }
 }
 
 /// "In the library" predicate for a `user_show` alias. A show counts as tracked
@@ -152,38 +116,7 @@ fn movie_membership_sql(alias: &str) -> String {
     format!("({alias}.watched OR {alias}.is_favorited OR {alias}.watchlist)")
 }
 
-/// Where a query gets its per-user watch aggregates from.
-pub enum WatchState<'a> {
-    /// Compute them inline as CTEs — one full pass over the user's watch history.
-    /// Right for a one-off query.
-    Compute,
-    /// Project them from a snapshot table already materialized by the caller. The
-    /// Library's batch builds one per request and runs every rail against it, so
-    /// the aggregate is paid once instead of once per rail.
-    ///
-    /// Carries the user it was built FOR. A snapshot is one user's watch history;
-    /// running it against a query scoped to somebody else returns the right rows
-    /// with the WRONG counts — no error, just quietly incorrect numbers. Pairing
-    /// the id with the table name makes that mismatch impossible to write by
-    /// accident.
-    Snapshot { table: &'a str, user: Uuid },
-}
-
 pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppResult<Vec<SearchResult>> {
-    search_db_on(&state.db, f, langs, WatchState::Compute).await
-}
-
-/// [`search_db`] against an explicit executor, so a batch can run several queries
-/// inside one transaction alongside a shared snapshot.
-pub async fn search_db_on<'e, E>(
-    exec: E,
-    f: &Filters,
-    langs: &[String],
-    watch_state: WatchState<'_>,
-) -> AppResult<Vec<SearchResult>>
-where
-    E: sqlx::Executor<'e, Database = Postgres>,
-{
     let is_movie = f.kind == "movie";
     let is_anime = f.kind == "anime";
     let (table, etype, result_kind) =
@@ -210,35 +143,20 @@ where
         || f.progress_max.is_some()
         || f.caught_up.is_some()
         || f.has_upcoming.is_some();
-    // Progress needs the same aggregates, so asking for it pulls them in too.
-    let with_state = (watch_state_facets || watch_state_sort || f.with_progress) && f.library_user.is_some();
-    let mut qb: QueryBuilder<Postgres> = match (&watch_state, with_state && !is_movie) {
-        // Projected from a snapshot the caller already built: no user bind here, so
-        // the first bind is whatever the SELECT list pushes.
-        (WatchState::Snapshot { table, user }, true) => {
-            debug_assert_eq!(
-                Some(*user),
-                f.library_user,
-                "watch-state snapshot belongs to a different user than this query is scoped to"
-            );
-            QueryBuilder::new(format!(
-                "WITH {} SELECT x.id, ",
-                crate::tracking::state::watch_state_ctes_from_snapshot(table)
-            ))
-        }
-        (WatchState::Compute, true) => {
-            // The user bind lands first, so it is `$1` for `watch_state_ctes`.
-            let mut b = QueryBuilder::new("WITH lib AS (SELECT us.series_id \
-                 FROM app.user_show us WHERE us.user_id = ");
-            b.push_bind(f.library_user.expect("with_state implies library_user"));
-            b.push(format!(
-                " AND {}), {} SELECT x.id, ",
-                show_membership_sql("us"),
-                crate::tracking::state::watch_state_ctes("$1")
-            ));
-            b
-        }
-        _ => QueryBuilder::new("SELECT x.id, "),
+    let with_state = (watch_state_facets || watch_state_sort) && f.library_user.is_some();
+    let mut qb: QueryBuilder<Postgres> = if with_state && !is_movie {
+        // The user bind lands first, so it is `$1` for `watch_state_ctes`.
+        let mut b = QueryBuilder::new("WITH lib AS (SELECT us.series_id \
+             FROM app.user_show us WHERE us.user_id = ");
+        b.push_bind(f.library_user.expect("with_state implies library_user"));
+        b.push(format!(
+            " AND {}), {} SELECT x.id, ",
+            show_membership_sql("us"),
+            crate::tracking::state::watch_state_ctes("$1")
+        ));
+        b
+    } else {
+        QueryBuilder::new("SELECT x.id, ")
     };
     qb.push("COALESCE((SELECT tr.name FROM catalog.translation tr WHERE tr.entity_type = ");
     qb.push_bind(etype);
@@ -287,29 +205,6 @@ where
         None => {
             qb.push(", NULL::smallint AS rating, false AS is_favorited");
         }
-    }
-    // Anime is Japanese-language SERIES, not a separate table — so a "series" query
-    // necessarily contains it. Flagging each row lets a caller that asked for both
-    // kinds at once (a custom Library section spanning Series + Movies, say) drop
-    // anime when the user didn't ask for it, the same way the Library's own type
-    // toggles do. Always false for movies, which have no anime notion.
-    if is_movie {
-        qb.push(", false AS is_anime");
-    } else {
-        // COALESCE: an unknown original language is not anime. Without it the
-        // expression is NULL for those rows and decoding into `bool` fails, taking
-        // the whole query down.
-        qb.push(", COALESCE(x.original_language IN ('jpn','ja'), false) AS is_anime");
-    }
-    // Progress columns, when asked for and available (movies have no episodes).
-    if with_state && !is_movie {
-        // COALESCEd like the rails do (`tracking::library`): a never-watched show
-        // has no `seen` row, and a raw NULL here means the client can't tell
-        // "0 of 12 watched" from "progress wasn't computed" — so it drew no
-        // progress bar at all for every unstarted show.
-        qb.push(", COALESCE(ep.total_episodes, 0)::bigint, COALESCE(seen.seen_episodes, 0)::bigint");
-    } else {
-        qb.push(", NULL::bigint AS total_episodes, NULL::bigint AS seen_episodes");
     }
     qb.push(format!(" FROM {table} x"));
 
@@ -428,11 +323,6 @@ where
     if !is_movie {
         if is_anime {
             qb.push(" AND x.original_language IN ('jpn','ja')");
-        }
-        // COALESCE, not a bare NOT: an unknown original language is not anime, and
-        // `NULL IN (...)` would otherwise drop those rows too.
-        if f.exclude_anime {
-            qb.push(" AND NOT COALESCE(x.original_language IN ('jpn','ja'), false)");
         }
         // genres: must have ALL included, NONE excluded.
         if !f.genres_include.is_empty() {
@@ -604,13 +494,13 @@ where
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, bool, Option<i16>, bool, bool, Option<i64>, Option<i64>)>()
-        .fetch_all(exec)
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, bool, Option<i16>, bool)>()
+        .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, in_library, rating, is_favorited, is_anime, total_episodes, seen_episodes)| SearchResult {
+        .map(|(id, name, year, image_url, in_library, rating, is_favorited)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
@@ -619,9 +509,6 @@ where
             in_library,
             rating,
             is_favorited,
-            is_anime,
-            total_episodes,
-            seen_episodes,
         })
         .collect())
 }
@@ -841,11 +728,6 @@ async fn popular_local(
             in_library: false,
             rating: None,
             is_favorited: false,
-            // The popular path selects no language column; anime callers use the
-            // filter endpoint, which does.
-            is_anime: false,
-            total_episodes: None,
-            seen_episodes: None,
         })
         .collect())
 }
@@ -896,11 +778,6 @@ async fn popular_remote(
             in_library: false,
             rating: None,
             is_favorited: false,
-            // Remote (TheTVDB) rows: originalLanguage is stored on the stub, but
-            // this DTO is only used for browse cards, which don't split by anime.
-            is_anime: false,
-            total_episodes: None,
-            seen_episodes: None,
         });
     }
     Ok(out)

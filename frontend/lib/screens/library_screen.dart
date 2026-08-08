@@ -55,11 +55,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   // follows them across devices; the built-in defaults render until it arrives.
   List<LibrarySection> _sections = defaultLibrarySections();
 
-  // Items for each enabled CUSTOM section, keyed by section id. Filled in as the
-  // per-section requests resolve, so one slow saved filter doesn't hold up the
-  // whole library — a section simply appears once its rail has content.
-  final Map<String, List<SearchResult>> _customItems = {};
-
   late Future<List<LibraryMovie>> _moviesFuture;
   // Series + movies fetched together so the two can be shown in one combined
   // scroll when both type toggles are on.
@@ -90,88 +85,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _loadSections();
   }
 
-  /// Fetch the saved layout, then the contents of its custom sections. Failure is
-  /// silent by design: the built-in defaults are already on screen, so a layout
-  /// that won't load costs the user their customization, not their library.
+  /// Fetch the saved layout. Failure is silent by design: the built-in defaults
+  /// are already on screen, so a layout that won't load costs the user their
+  /// customization, not their library.
   Future<void> _loadSections() async {
     try {
       final sections = await _api.librarySections();
       if (!mounted) return;
       setState(() => _sections = sections);
-      await _loadCustomSections();
     } catch (_) {
       /* keep the defaults */
-    }
-  }
-
-  /// Whether one kind is currently shown by the type toggles.
-  bool _kindSelected(String kind) => switch (kind) {
-        'movie' => _filter.contains(_Filter.movies),
-        'anime' => _filter.contains(_Filter.anime),
-        _ => _filter.contains(_Filter.series),
-      };
-
-  /// Whether any of a section's kinds is on. A section spanning Series + Movies
-  /// stays visible while either is selected; its contents are narrowed to the
-  /// selected kinds by [_loadCustomSections].
-  bool _customTypeVisible(LibrarySection s) => s.kinds.any(_kindSelected);
-
-  /// Load every custom rail in ONE request.
-  ///
-  /// A section can span several kinds and the filter endpoint takes one at a time,
-  /// so this flattens to one batch entry per (section, kind) — keyed so the
-  /// responses can be regrouped — and merges each section's kinds back together.
-  /// The kinds are intersected with the screen's type toggles first, so toggling
-  /// Movies off empties the movie half of a mixed section rather than leaving it
-  /// stale.
-  Future<void> _loadCustomSections() async {
-    final custom = _sections.where((s) => s.enabled && s.isCustom && s.id != null).toList();
-    if (custom.isEmpty) return;
-
-    // Resolved once and reused below, so the request and the regrouping can't
-    // disagree about which kinds a section covers.
-    final plan = {
-      for (final s in custom)
-        s.id!: (filters: mergedSectionFilters(s, _f), kinds: s.kinds.where(_kindSelected).toSet()),
-    };
-    final entries = [
-      for (final s in custom)
-        for (final kind in sectionQueryKinds(plan[s.id!]!.kinds))
-          (
-            key: sectionBatchKey(s.id!, kind),
-            filters: sectionQueryFilters(plan[s.id!]!.filters, kind, plan[s.id!]!.kinds),
-          ),
-    ];
-
-    try {
-      final byKey = entries.isEmpty
-          ? const <String, List<SearchResult>>{}
-          : await _api.librarySectionsItems(entries, langs: _langs);
-      if (!mounted) return;
-      setState(() {
-        for (final s in custom) {
-          final p = plan[s.id!]!;
-          _customItems[s.id!] = mergeSectionResults(
-            [
-              for (final kind in sectionQueryKinds(p.kinds))
-                byKey[sectionBatchKey(s.id!, kind)] ?? const <SearchResult>[],
-            ],
-            p.kinds,
-            sort: p.filters['sort'],
-            desc: (p.filters['dir'] ?? 'desc') != 'asc',
-          );
-        }
-      });
-    } catch (_) {
-      // One request now, so a failure takes every rail with it — show them empty
-      // rather than leaving stale contents from a previous filter.
-      if (mounted) {
-        setState(() {
-          for (final s in custom) {
-            _customItems[s.id!] = const [];
-          }
-        });
-      }
     }
   }
 
@@ -253,9 +176,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _content = _combine(lf, mf);
     });
     await _content;
-    // Custom sections are separate queries, so they need refreshing too — a bulk
-    // watch/favorite can move titles in or out of a saved filter.
-    await _loadCustomSections();
   }
 
   /// Open the layout editor. It saves itself, reporting each stored layout through
@@ -267,26 +187,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
       showDragHandle: true,
       builder: (_) => LibraryCustomizeSheet(
         sections: _sections,
-        options: _filterOptions,
         save: _api.setLibrarySections,
         onSaved: _adoptSections,
       ),
     );
   }
 
-  /// Take on a layout the customize sheet just persisted. Custom rails are only
-  /// re-queried when a section that needs one actually changed — hiding a built-in
-  /// or dragging a row shouldn't refetch every saved filter.
+  /// Take on a layout the customize sheet just persisted. Nothing is re-fetched:
+  /// the rails all render from content that's already loaded, so a reorder or a
+  /// hide is a pure re-render.
   void _adoptSections(List<LibrarySection> saved) {
     if (!mounted) return;
-    String signature(List<LibrarySection> l) =>
-        l.where((s) => s.isCustom && s.enabled).map((s) => '${s.id}:${s.filters}').join('|');
-    final refetch = signature(saved) != signature(_sections);
-    setState(() {
-      _sections = saved;
-      _customItems.removeWhere((id, _) => !saved.any((s) => s.id == id));
-    });
-    if (refetch) _loadCustomSections();
+    setState(() => _sections = saved);
   }
 
   // Search within the user's library by name. Writes the query into `_f` (so it
@@ -398,15 +310,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ButtonSegment(value: _Filter.movies, label: lbl(t.typeMovies)),
               ],
               selected: _filter,
-              onSelectionChanged: (s) {
-                setState(() {
-                  _filter = s;
-                  _filterToken++; // also re-runs the filtered/searched view
-                });
-                // A mixed custom section's contents depend on the toggles, so its
-                // rail has to be re-queried, not just re-rendered.
-                _loadCustomSections();
-              },
+              onSelectionChanged: (s) => setState(() {
+                _filter = s;
+                _filterToken++; // also re-runs the filtered/searched view
+              }),
             ),
           ),
           const SizedBox(width: Insets.sm),
@@ -552,17 +459,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
               wantMovies ? movies.where((m) => !(m.watchlist && m.watchedCount == 0)).toList() : const <LibraryMovie>[];
 
           for (final section in _sections.where((s) => s.enabled)) {
-            if (section.isCustom) {
-              // A custom section pins one kind, so the type toggles hide it whole
-              // rather than filtering inside it.
-              if (!_customTypeVisible(section)) continue;
-              final items = _customItems[section.id] ?? const <SearchResult>[];
-              if (items.isNotEmpty) {
-                sections.add((section.title ?? '', Icons.bookmark_rounded, context.scheme.tertiary, items.length,
-                    (j) => _resultCard(items[j])));
-              }
-              continue;
-            }
             switch (section.builtin) {
               case 'watching':
                 addShows(builtinCats['watching']!, pick(lib.watching));
@@ -589,16 +485,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
           }
 
           if (sections.isEmpty) {
-            // "Empty" has three very different causes, and saying "your library is
-            // empty" when it holds hundreds of shows sends the user looking for the
-            // wrong problem. Name the actual reason, and offer the way out.
-            final enabled = _sections.where((s) => s.enabled).toList();
-            final hiddenByType = enabled.isNotEmpty && enabled.every((s) => s.isCustom && !_customTypeVisible(s));
-            if (enabled.isEmpty || hiddenByType) {
+            // Saying "your library is empty" when it holds hundreds of shows sends
+            // the user looking for the wrong problem — if they've simply hidden
+            // every category, name that instead, and offer the way out.
+            if (!_sections.any((s) => s.enabled)) {
               return _Scroll(
                 child: MessageView(
-                  icon: hiddenByType ? Icons.filter_list_rounded : Icons.dashboard_customize_rounded,
-                  message: hiddenByType ? t.libSectionsHiddenByType : t.libNoSections,
+                  icon: Icons.dashboard_customize_rounded,
+                  message: t.libNoSections,
                   action: FilledButton.icon(
                     icon: const Icon(Icons.dashboard_customize_rounded),
                     label: Text(t.customizeLibrary),
@@ -684,34 +578,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
         heroTag: 'series-${s.seriesId}',
         selection: SelItem(SelKind.series, s.seriesId, s.name ?? ''),
         onTap: () => _openShow(s.seriesId),
-      );
-
-  /// A card in a custom section. These come from the filter endpoint, so they
-  /// arrive as [SearchResult]s covering both series and movies — the section's own
-  /// `type` decides which, and `kind` says where a tap should go.
-  ShowCard _resultCard(SearchResult r) => ShowCard(
-        title: r.name ?? '—',
-        imageUrl: r.imageUrl,
-        // The caption yields to the progress bar, but only when there IS one:
-        // `ProgressStripe` hides itself at zero, so keying this on "progress was
-        // computed" left an unstarted show with no bar AND no year — an emptier
-        // card than before progress was added at all.
-        subtitle: (r.progress ?? 0) > 0 ? null : r.year?.toString(),
-        // ShowCard treats 0 as "no stripe", which is also the right rendering for
-        // a result whose progress was never computed.
-        progress: r.progress ?? 0,
-        rating: r.rating,
-        favorite: r.isFavorited,
-        heroTag: '${r.kind}-${r.tvdbId}',
-        selection: r.tvdbId == null
-            ? null
-            : SelItem(r.kind == 'movie' ? SelKind.movie : SelKind.series, r.tvdbId!, r.name ?? ''),
-        onTap: r.tvdbId == null
-            ? null
-            : () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => r.kind == 'movie'
-                    ? MovieDetailScreen(movieId: r.tvdbId!)
-                    : ShowDetailScreen(seriesId: r.tvdbId!))),
       );
 
   ShowCard _movieCard(LibraryMovie m) => ShowCard(

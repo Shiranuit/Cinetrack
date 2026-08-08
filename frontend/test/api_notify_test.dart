@@ -4,13 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:frontend/api/api_client.dart';
+import 'package:frontend/api/models.dart';
 
 /// `ApiClient` is also the app's "something changed, reload" signal: screens listen
 /// to it and refetch. That makes the notification rule load-bearing — a READ that
-/// notifies causes a screen to reload, which issues the read again, forever.
-///
-/// The Library hit exactly that: its custom rails are fetched with a POST (a batch
-/// of filters), and every authenticated POST used to notify.
+/// notifies causes a screen to reload, which issues the read again, forever. So
+/// only genuine writes may notify.
 void main() {
   late HttpServer server;
   late ApiClient api;
@@ -24,8 +23,7 @@ void main() {
       req.response
         ..statusCode = 200
         ..headers.contentType = ContentType.json
-        // Shapes both endpoints under test accept.
-        ..write(req.uri.path.contains('batch') ? '[]' : jsonEncode({'blocks': []}));
+        ..write(req.uri.path.endsWith('library-sections') ? '[]' : jsonEncode({'blocks': []}));
       await req.response.close();
     });
     api = ApiClient(base: 'http://127.0.0.1:${server.port}');
@@ -33,34 +31,26 @@ void main() {
 
   tearDown(() async => server.close(force: true));
 
-  test('the batched library filter does not fire the change signal', () async {
-    var notifications = 0;
-    api.addListener(() => notifications++);
-
-    await api.librarySectionsItems([
-      (key: 'section-1|series', filters: const {'type': 'series', 'state': 'watching'}),
-    ]);
-
-    expect(hits, ['POST /api/library/filter/batch'], reason: 'one request, not a storm');
-    expect(
-      notifications,
-      0,
-      reason: 'notifying here makes the Library reload, which re-issues this very request',
-    );
-  });
-
   test('a real write still fires it', () async {
     var notifications = 0;
     api.addListener(() => notifications++);
 
     await api.setProfileBlocks(['stats']);
 
+    expect(hits, ['PUT /api/me/profile-blocks']);
     expect(notifications, 1, reason: 'writes must still tell open screens to refresh');
   });
 
-  test('an empty batch does not reach the network at all', () async {
-    final result = await api.librarySectionsItems(const []);
-    expect(result, isEmpty);
-    expect(hits, isEmpty, reason: 'nothing to ask for');
+  test('saving the Library layout does not fire it', () async {
+    // The layout says which categories are DRAWN, not what is in them. Notifying
+    // would make every switch flip in the customize sheet refetch the whole
+    // library and movie list — and the sheet auto-saves, so that is per gesture.
+    var notifications = 0;
+    api.addListener(() => notifications++);
+
+    await api.setLibrarySections(const [LibrarySection(builtin: 'watching')]);
+
+    expect(hits, ['PUT /api/me/library-sections'], reason: 'the write still happens');
+    expect(notifications, 0);
   });
 }

@@ -247,22 +247,6 @@ pub async fn set_library_sections(
     State(state): State<AppState>,
     Json(req): Json<LibrarySectionsReq>,
 ) -> AppResult<Json<Vec<tracking::sections::LibrarySection>>> {
-    // Reject anything the read path couldn't execute, using the SAME parser the
-    // batch endpoint runs at load time. Structural rules live in
-    // `tracking::sections::validate`; this is the parse half, and it lives here
-    // because `DiscoverQuery` is a transport type the tracking layer doesn't see.
-    // Without it a filter can save with a 200 and then 500 the whole Library on
-    // every load, with no way to tell which section is at fault.
-    for section in &req.sections {
-        if let Some(filters) = &section.filters {
-            let map: std::collections::HashMap<String, String> =
-                serde_json::from_value(filters.clone()).unwrap_or_default();
-            if let Err(e) = super::discover::parse_filter_map(&map) {
-                let name = section.title.as_deref().unwrap_or("category");
-                return Err(crate::error::AppError::BadRequest(format!("'{name}': {e}")));
-            }
-        }
-    }
     Ok(Json(tracking::sections::set_library_sections(&state, me, &req.sections).await?))
 }
 
