@@ -386,6 +386,31 @@ class ApiClient extends ChangeNotifier {
   Future<void> setActivityVisibility(String value) =>
       _send('PUT', '/api/me/activity-visibility', body: {'activity_visibility': value});
   Future<void> setProfileBlocks(List<String> blocks) => _send('PUT', '/api/me/profile-blocks', body: {'blocks': blocks});
+
+  /// The user's Library layout (built-in defaults when they've never customized).
+  Future<List<LibrarySection>> librarySections() async =>
+      _list(await _get('/api/me/library-sections'), LibrarySection.fromJson);
+
+  /// Replace the Library layout. Returns the stored list, which carries the ids the
+  /// server assigned to newly-created sections.
+  Future<List<LibrarySection>> setLibrarySections(List<LibrarySection> sections) async => _list(
+        await _send('PUT', '/api/me/library-sections',
+            body: {'sections': [for (final s in sections) s.toJson()]}),
+        LibrarySection.fromJson,
+      );
+
+  /// One custom section's rail: its saved filter replayed against the library
+  /// filter endpoint. The filter map is already in query-param form, so it passes
+  /// straight through.
+  Future<List<SearchResult>> librarySectionItems(
+    Map<String, String> filters, {
+    String? langs,
+    int limit = 30,
+  }) async =>
+      _list(
+        await _get('/api/library/filter', {...filters, 'limit': '$limit', 'langs': ?langs}),
+        SearchResult.fromJson,
+      );
   Future<void> setLanguages(List<String> languages) => _send('PUT', '/api/me/languages', body: {'languages': languages});
 
   Future<UserShow> showRelation(int seriesId, {String? langs}) async =>

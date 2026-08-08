@@ -973,4 +973,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String daysAgo(int n) {
     return '$n 天前';
   }
+
+  @override
+  String get customizeLibrary => '自定义媒体库';
+
+  @override
+  String get addCategory => '新建分类';
+
+  @override
+  String get editCategory => '编辑分类';
+
+  @override
+  String get categoryName => '分类名称';
+
+  @override
+  String get deleteCategory => '删除分类';
 }

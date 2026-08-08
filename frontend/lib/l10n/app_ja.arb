@@ -394,5 +394,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "customizeLibrary": "ライブラリをカスタマイズ",
+  "@customizeLibrary": {},
+  "addCategory": "新しいカテゴリ",
+  "@addCategory": {},
+  "editCategory": "カテゴリを編集",
+  "@editCategory": {},
+  "categoryName": "カテゴリ名",
+  "@categoryName": {},
+  "deleteCategory": "カテゴリを削除",
+  "@deleteCategory": {}
 }

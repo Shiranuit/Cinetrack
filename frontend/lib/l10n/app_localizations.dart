@@ -1905,6 +1905,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{n}d ago'**
   String daysAgo(int n);
+
+  /// No description provided for @customizeLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Customize library'**
+  String get customizeLibrary;
+
+  /// No description provided for @addCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'New category'**
+  String get addCategory;
+
+  /// No description provided for @editCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit category'**
+  String get editCategory;
+
+  /// No description provided for @categoryName.
+  ///
+  /// In en, this message translates to:
+  /// **'Category name'**
+  String get categoryName;
+
+  /// No description provided for @deleteCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete category'**
+  String get deleteCategory;
 }
 
 class _AppLocalizationsDelegate

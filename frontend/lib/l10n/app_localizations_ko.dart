@@ -975,4 +975,19 @@ class AppLocalizationsKo extends AppLocalizations {
   String daysAgo(int n) {
     return '$n일 전';
   }
+
+  @override
+  String get customizeLibrary => '라이브러리 사용자 지정';
+
+  @override
+  String get addCategory => '새 카테고리';
+
+  @override
+  String get editCategory => '카테고리 편집';
+
+  @override
+  String get categoryName => '카테고리 이름';
+
+  @override
+  String get deleteCategory => '카테고리 삭제';
 }

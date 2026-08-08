@@ -225,6 +225,31 @@ pub async fn set_profile_blocks(
     Ok(Json(json!({ "blocks": req.blocks })))
 }
 
+/// The current user's Library layout, in display order (the built-in defaults if
+/// they've never customized it).
+pub async fn library_sections(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+) -> AppResult<Json<Vec<tracking::sections::LibrarySection>>> {
+    Ok(Json(tracking::sections::library_sections(&state, me).await?))
+}
+
+#[derive(Deserialize)]
+pub struct LibrarySectionsReq {
+    pub sections: Vec<tracking::sections::LibrarySection>,
+}
+
+/// Replace the current user's Library layout. The whole list is sent at once (order
+/// is the payload), and the stored layout is returned so the client picks up any
+/// ids the server assigned to newly-created sections.
+pub async fn set_library_sections(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<LibrarySectionsReq>,
+) -> AppResult<Json<Vec<tracking::sections::LibrarySection>>> {
+    Ok(Json(tracking::sections::set_library_sections(&state, me, &req.sections).await?))
+}
+
 #[derive(Deserialize)]
 pub struct LanguagesReq {
     pub languages: Vec<String>,

@@ -394,5 +394,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "customizeLibrary": "自定义媒体库",
+  "@customizeLibrary": {},
+  "addCategory": "新建分类",
+  "@addCategory": {},
+  "editCategory": "编辑分类",
+  "@editCategory": {},
+  "categoryName": "分类名称",
+  "@categoryName": {},
+  "deleteCategory": "删除分类",
+  "@deleteCategory": {}
 }

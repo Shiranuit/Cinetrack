@@ -975,4 +975,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String daysAgo(int n) {
     return '$n日前';
   }
+
+  @override
+  String get customizeLibrary => 'ライブラリをカスタマイズ';
+
+  @override
+  String get addCategory => '新しいカテゴリ';
+
+  @override
+  String get editCategory => 'カテゴリを編集';
+
+  @override
+  String get categoryName => 'カテゴリ名';
+
+  @override
+  String get deleteCategory => 'カテゴリを削除';
 }

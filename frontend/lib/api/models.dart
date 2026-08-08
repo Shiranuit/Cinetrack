@@ -9,6 +9,97 @@
 /// default in migration 0043).
 const kDefaultProfileBlocks = ['stats', 'favorites', 'shows', 'movies', 'activity'];
 
+/// The Library's built-in categories, in the order a fresh account sees them.
+/// Mirrors `BUILTIN_SECTIONS` in `backend/src/tracking/sections.rs` and the CHECK
+/// constraint in migration 0044.
+const kBuiltinLibrarySections = [
+  'watching',
+  'stale',
+  'not_started',
+  'for_later',
+  'up_to_date',
+  'stopped',
+  'movies',
+];
+
+/// One entry in the user's Library layout: either a built-in category or a
+/// user-defined section with its own saved filter. The server stores the order, so
+/// the layout follows the user across devices.
+class LibrarySection {
+  /// Server-assigned. Null for a default the user hasn't saved yet, and for a
+  /// section just created on this device (the server fills it in on save).
+  final String? id;
+
+  /// A key from [kBuiltinLibrarySections], or null for a custom section.
+  final String? builtin;
+
+  /// Custom sections only: the user's label for the rail.
+  final String? title;
+
+  /// Custom sections only: the saved filter, as the same flat query-param map
+  /// `AdvancedFilters.toQuery()` produces — it's replayed against
+  /// `/api/library/filter` verbatim.
+  final Map<String, String> filters;
+
+  /// Hidden sections keep their place in the order, so switching one back on
+  /// restores it where the user had put it.
+  final bool enabled;
+
+  const LibrarySection({
+    this.id,
+    this.builtin,
+    this.title,
+    this.filters = const {},
+    this.enabled = true,
+  });
+
+  bool get isCustom => builtin == null;
+
+  /// The kinds this section spans, from the comma list in its saved `type` filter.
+  /// A section written before multi-kind support carries a single value, and one
+  /// with no `type` at all means series — matching the filter endpoint's default.
+  Set<String> get kinds {
+    final raw = (filters['type'] ?? '').split(',').map((k) => k.trim()).where((k) => k.isNotEmpty).toSet();
+    return raw.isEmpty ? const {'series'} : raw;
+  }
+
+  /// Stable identity for list keys: built-ins are unique by key, custom sections by
+  /// id — and a brand-new custom section has neither, so callers fall back to its
+  /// position (see the customize sheet).
+  String? get key => builtin ?? id;
+
+  LibrarySection copyWith({String? title, Map<String, String>? filters, bool? enabled}) => LibrarySection(
+        id: id,
+        builtin: builtin,
+        title: title ?? this.title,
+        filters: filters ?? this.filters,
+        enabled: enabled ?? this.enabled,
+      );
+
+  factory LibrarySection.fromJson(Map<String, dynamic> j) => LibrarySection(
+        id: j['id'] as String?,
+        builtin: j['builtin'] as String?,
+        title: j['title'] as String?,
+        filters: (j['filters'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
+        enabled: j['enabled'] as bool? ?? true,
+      );
+
+  /// Sent back on save. Built-ins carry no title/filters and custom sections carry
+  /// no builtin — the server rejects any other shape.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'builtin': builtin,
+        'title': isCustom ? title : null,
+        'filters': isCustom ? filters : null,
+        'enabled': enabled,
+      };
+}
+
+/// The layout shown before the user customizes anything (mirrors
+/// `default_sections()` on the server).
+List<LibrarySection> defaultLibrarySections() =>
+    [for (final b in kBuiltinLibrarySections) LibrarySection(builtin: b)];
+
 /// Who may see a user's activity timeline — mirrors `app.users.activity_visibility`.
 const kActivityEveryone = 'everyone';
 const kActivityFriends = 'friends';
@@ -329,6 +420,12 @@ class SearchResult {
   /// filtered/search view (shown on cards there; unused in Discover).
   final int? rating;
   final bool isFavorited;
+
+  /// Japanese-language series. Anime lives in the same table as series, so a
+  /// `type=series` query always returns it — a custom Library section spanning
+  /// several kinds uses this to drop anime the user didn't ask for. False for
+  /// movies and for the Discover/popular paths, which don't split by anime.
+  final bool isAnime;
   const SearchResult({
     this.tvdbId,
     this.kind,
@@ -338,6 +435,7 @@ class SearchResult {
     this.inLibrary = false,
     this.rating,
     this.isFavorited = false,
+    this.isAnime = false,
   });
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
@@ -349,6 +447,7 @@ class SearchResult {
         inLibrary: j['in_library'] as bool? ?? false,
         rating: (j['rating'] as num?)?.toInt(),
         isFavorited: j['is_favorited'] as bool? ?? false,
+        isAnime: j['is_anime'] as bool? ?? false,
       );
 }
 

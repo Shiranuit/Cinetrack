@@ -105,6 +105,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/me/privacy", put(handlers::users::set_privacy))
         .route("/api/me/activity-visibility", put(handlers::users::set_activity_visibility))
         .route("/api/me/profile-blocks", put(handlers::users::set_profile_blocks))
+        .route(
+            "/api/me/library-sections",
+            get(handlers::users::library_sections).put(handlers::users::set_library_sections),
+        )
         .route("/api/me/languages", put(handlers::users::set_languages))
         .route("/api/feed", get(handlers::users::feed))
         .route("/api/users/{id}", get(handlers::users::profile))

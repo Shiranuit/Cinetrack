@@ -394,5 +394,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "customizeLibrary": "라이브러리 사용자 지정",
+  "@customizeLibrary": {},
+  "addCategory": "새 카테고리",
+  "@addCategory": {},
+  "editCategory": "카테고리 편집",
+  "@editCategory": {},
+  "categoryName": "카테고리 이름",
+  "@categoryName": {},
+  "deleteCategory": "카테고리 삭제",
+  "@deleteCategory": {}
 }

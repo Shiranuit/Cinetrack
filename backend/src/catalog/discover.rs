@@ -149,6 +149,16 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             qb.push(", NULL::smallint AS rating, false AS is_favorited");
         }
     }
+    // Anime is Japanese-language SERIES, not a separate table — so a "series" query
+    // necessarily contains it. Flagging each row lets a caller that asked for both
+    // kinds at once (a custom Library section spanning Series + Movies, say) drop
+    // anime when the user didn't ask for it, the same way the Library's own type
+    // toggles do. Always false for movies, which have no anime notion.
+    if is_movie {
+        qb.push(", false AS is_anime");
+    } else {
+        qb.push(", (x.original_language IN ('jpn','ja')) AS is_anime");
+    }
     qb.push(format!(" FROM {table} x"));
 
     // Library scope: only shows this user tracks.
@@ -344,13 +354,13 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool, bool)>()
         .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited)| SearchResult {
+        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited, is_anime)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
@@ -360,6 +370,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             in_library,
             rating,
             is_favorited,
+            is_anime,
         })
         .collect())
 }
@@ -580,6 +591,9 @@ async fn popular_local(
             in_library: false,
             rating: None,
             is_favorited: false,
+            // The popular path selects no language column; anime callers use the
+            // filter endpoint, which does.
+            is_anime: false,
         })
         .collect())
 }
@@ -631,6 +645,9 @@ async fn popular_remote(
             in_library: false,
             rating: None,
             is_favorited: false,
+            // Remote (TheTVDB) rows: originalLanguage is stored on the stub, but
+            // this DTO is only used for browse cards, which don't split by anime.
+            is_anime: false,
         });
     }
     Ok(out)

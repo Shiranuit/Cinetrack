@@ -48,6 +48,11 @@ pub struct SearchResult {
     /// Whether the viewer has favorited this title (Library filtered/search view).
     #[serde(default)]
     pub is_favorited: bool,
+    /// Japanese-language series. Anime lives in `catalog.series`, so a "series"
+    /// query always includes it; this lets a caller that queried several kinds at
+    /// once separate the two. Always false for movies.
+    #[serde(default)]
+    pub is_anime: bool,
 }
 
 /// Insert a minimal, deliberately-stale catalog stub for a series/movie we saw

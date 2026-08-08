@@ -523,3 +523,76 @@ async fn new_episode_keeps_show_in_watching_not_stale() {
     let lib2 = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
     assert_eq!(lib2.stale.iter().filter(|s| s.series_id == 20).count(), 1, "old backlog -> Stale");
 }
+
+/// The Library layout: a user who has never customized gets the built-in defaults,
+/// a saved layout round-trips (order, hidden sections, custom filters), and a
+/// built-in introduced after they customized is appended disabled rather than
+/// silently reappearing in the middle of their Library.
+#[tokio::test]
+async fn library_sections_round_trip_and_default() {
+    use backend::tracking::sections::{self, LibrarySection};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "layout@test.local").await;
+    let me = common::uid(1);
+
+    // Never customized -> every built-in, enabled, in default order.
+    let defaults = sections::library_sections(&state, me).await.unwrap();
+    assert_eq!(defaults.len(), sections::BUILTIN_SECTIONS.len());
+    assert!(defaults.iter().all(|s| s.enabled && s.builtin.is_some()));
+    assert_eq!(defaults[0].builtin.as_deref(), Some("watching"));
+
+    // Save a reordered layout: one built-in hidden, one dropped entirely, and a
+    // custom section carrying its own filter.
+    let custom = LibrarySection {
+        id: None,
+        builtin: None,
+        title: Some("Comfort anime".into()),
+        filters: Some(serde_json::json!({"type": "anime", "sort": "my_rating", "favorites": "true"})),
+        enabled: true,
+    };
+    let saved = sections::set_library_sections(
+        &state,
+        me,
+        &[
+            custom.clone(),
+            LibrarySection { id: None, builtin: Some("watching".into()), title: None, filters: None, enabled: true },
+            LibrarySection { id: None, builtin: Some("stopped".into()), title: None, filters: None, enabled: false },
+        ],
+    )
+    .await
+    .unwrap();
+
+    // Order is the payload: the custom rail comes first, as sent.
+    assert_eq!(saved[0].title.as_deref(), Some("Comfort anime"));
+    assert_eq!(saved[0].filters.as_ref().unwrap()["type"], "anime");
+    assert!(saved[0].id.is_some(), "the server assigns an id to a new section");
+    assert_eq!(saved[1].builtin.as_deref(), Some("watching"));
+    assert_eq!(saved[2].builtin.as_deref(), Some("stopped"));
+    assert!(!saved[2].enabled, "a hidden section keeps its place in the order");
+
+    // Built-ins the saved layout never mentioned are appended DISABLED, so they
+    // surface in the customize sheet without rearranging the user's Library.
+    let appended: Vec<_> = saved[3..].iter().map(|s| s.builtin.clone().unwrap()).collect();
+    assert!(appended.contains(&"movies".to_string()));
+    assert!(saved[3..].iter().all(|s| !s.enabled), "newly-surfaced built-ins stay off");
+
+    // Reading it back gives the same thing (ids preserved, no duplicate rows).
+    let reread = sections::library_sections(&state, me).await.unwrap();
+    assert_eq!(reread.len(), saved.len());
+    assert_eq!(reread[0].id, saved[0].id, "ids are stable across reads");
+
+    // Re-saving with the assigned id keeps that id rather than minting a new row.
+    let edited = LibrarySection { title: Some("Comfort shows".into()), ..saved[0].clone() };
+    let resaved = sections::set_library_sections(&state, me, &[edited]).await.unwrap();
+    assert_eq!(resaved[0].id, saved[0].id, "editing preserves the section id");
+    assert_eq!(resaved[0].title.as_deref(), Some("Comfort shows"));
+
+    // A rejected save leaves the stored layout untouched.
+    let bad = vec![LibrarySection { id: None, builtin: Some("not_a_category".into()), title: None, filters: None, enabled: true }];
+    assert!(sections::set_library_sections(&state, me, &bad).await.is_err());
+    let after = sections::library_sections(&state, me).await.unwrap();
+    assert_eq!(after[0].title.as_deref(), Some("Comfort shows"), "a rejected save must not clobber the layout");
+}

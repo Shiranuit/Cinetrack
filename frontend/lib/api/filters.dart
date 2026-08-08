@@ -109,4 +109,54 @@ class AdvancedFilters {
     m.removeWhere((_, v) => v == null);
     return m.cast<String, String>();
   }
+
+  /// Rebuild filter state from a [toQuery] map — used to reopen a saved Library
+  /// section in the filter sheet. Unknown keys and unparseable values are ignored
+  /// rather than throwing: a section saved by a newer client must still be
+  /// editable on an older one, just without the parts it doesn't understand.
+  factory AdvancedFilters.fromQuery(Map<String, String> q, {String defaultSort = 'popularity'}) {
+    final f = AdvancedFilters(defaultSort: defaultSort);
+    void ids(String key, Set<int> into) {
+      for (final part in (q[key] ?? '').split(',')) {
+        final n = int.tryParse(part.trim());
+        if (n != null) into.add(n);
+      }
+    }
+
+    void names(String key, Set<String> into) {
+      for (final part in (q[key] ?? '').split(',')) {
+        if (part.trim().isNotEmpty) into.add(part.trim());
+      }
+    }
+
+    // A range survives a round trip only if both ends are present — half a range
+    // isn't representable in RangeValues, so drop it rather than invent a bound.
+    RangeValues? range(String minKey, String maxKey) {
+      final lo = double.tryParse(q[minKey] ?? ''), hi = double.tryParse(q[maxKey] ?? '');
+      return (lo != null && hi != null) ? RangeValues(lo, hi) : null;
+    }
+
+    f.query = q['q'] ?? '';
+    f.type = q['type'] ?? 'series';
+    f.sort = q['sort'] ?? defaultSort;
+    f.sortDesc = (q['dir'] ?? 'desc') != 'asc';
+    f.includeLibrary = q['include_library'] != 'false';
+    ids('genres', f.genresInc);
+    ids('exclude_genres', f.genresExc);
+    ids('tags', f.tagsInc);
+    ids('exclude_tags', f.tagsExc);
+    ids('networks', f.networks);
+    ids('studios', f.studios);
+    names('statuses', f.statuses);
+    names('orig_langs', f.originalLanguages);
+    names('orig_countries', f.originalCountries);
+    f.years = range('year_min', 'year_max');
+    f.runtimeMin = int.tryParse(q['runtime_min'] ?? '');
+    f.runtimeMax = int.tryParse(q['runtime_max'] ?? '');
+    f.seasons = range('seasons_min', 'seasons_max');
+    f.episodes = range('episodes_min', 'episodes_max');
+    f.scoreMin = double.tryParse(q['score_min'] ?? '');
+    f.favoritesOnly = q['favorites'] == 'true';
+    return f;
+  }
 }

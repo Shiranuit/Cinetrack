@@ -541,5 +541,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "customizeLibrary": "Customize library",
+  "@customizeLibrary": {},
+  "addCategory": "New category",
+  "@addCategory": {},
+  "editCategory": "Edit category",
+  "@editCategory": {},
+  "categoryName": "Category name",
+  "@categoryName": {},
+  "deleteCategory": "Delete category",
+  "@deleteCategory": {}
 }

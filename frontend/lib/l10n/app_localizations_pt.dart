@@ -992,4 +992,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String daysAgo(int n) {
     return 'há $n d';
   }
+
+  @override
+  String get customizeLibrary => 'Personalizar biblioteca';
+
+  @override
+  String get addCategory => 'Nova categoria';
+
+  @override
+  String get editCategory => 'Editar categoria';
+
+  @override
+  String get categoryName => 'Nome da categoria';
+
+  @override
+  String get deleteCategory => 'Excluir categoria';
 }

@@ -394,5 +394,15 @@
         "type": "int"
       }
     }
-  }
+  },
+  "customizeLibrary": "Personalizza libreria",
+  "@customizeLibrary": {},
+  "addCategory": "Nuova categoria",
+  "@addCategory": {},
+  "editCategory": "Modifica categoria",
+  "@editCategory": {},
+  "categoryName": "Nome della categoria",
+  "@categoryName": {},
+  "deleteCategory": "Elimina categoria",
+  "@deleteCategory": {}
 }
