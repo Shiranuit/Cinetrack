@@ -1007,4 +1007,119 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deleteCategory => 'Excluir categoria';
+
+  @override
+  String get sortLastWatched => 'Visto recentemente';
+
+  @override
+  String get sortLastAired => 'Último episódio exibido';
+
+  @override
+  String categoryCopy(String name) {
+    return '$name (cópia)';
+  }
+
+  @override
+  String get duplicateCategory => 'Duplicar';
+
+  @override
+  String get libraryStatus => 'Categoria da biblioteca';
+
+  @override
+  String get libNoSections =>
+      'Nenhuma categoria está visível. Personalize a sua biblioteca para reativar algumas.';
+
+  @override
+  String get libSectionsHiddenByType =>
+      'As suas categorias estão ocultas pelo filtro de tipo acima — ative o tipo correspondente ou edite a categoria.';
+
+  @override
+  String get filterWatchedDays => 'Visto (há … dias)';
+
+  @override
+  String get filterAiredDays => 'Último episódio (há … dias)';
+
+  @override
+  String get filterRemaining => 'Episódios restantes';
+
+  @override
+  String get filterProgress => 'Progresso (%)';
+
+  @override
+  String get filterCaughtUp => 'Em dia';
+
+  @override
+  String get filterHasUpcoming => 'Tem episódios futuros';
+
+  @override
+  String get sortRemaining => 'Episódios restantes';
+
+  @override
+  String get sortProgress => 'Progresso';
+
+  @override
+  String get yes => 'Sim';
+
+  @override
+  String get no => 'Não';
+
+  @override
+  String get sortHelpPopular => 'Pontuação de popularidade geral do catálogo';
+
+  @override
+  String get sortHelpTopRated => 'Avaliação média de todos os utilizadores';
+
+  @override
+  String get sortHelpMyRating => 'A avaliação de 1 a 5 que lhe deu';
+
+  @override
+  String get sortHelpOwnerRating =>
+      'A avaliação de 1 a 5 que este utilizador lhe deu';
+
+  @override
+  String get sortHelpReleaseDate => 'O ano da primeira exibição';
+
+  @override
+  String get sortHelpLastUpdated =>
+      'Quando a ficha do catálogo mudou — não quando a viu';
+
+  @override
+  String get sortHelpSeasons => 'Número de temporadas';
+
+  @override
+  String get sortHelpEpisodes => 'Número total de episódios';
+
+  @override
+  String get sortHelpLongest => 'Duração de um episódio';
+
+  @override
+  String get sortHelpName => 'Alfabética, de A a Z';
+
+  @override
+  String get sortHelpLastWatched => 'Quando viu um episódio pela última vez';
+
+  @override
+  String get sortHelpLastAired =>
+      'Quando saiu o episódio mais recente — tenha-o visto ou não';
+
+  @override
+  String get sortHelpRemaining =>
+      'Quantos episódios já exibidos lhe faltam ver (uma contagem)';
+
+  @override
+  String get sortHelpProgress =>
+      'Que parte dos episódios exibidos já viu (uma percentagem)';
+
+  @override
+  String get filterMin => 'Mín';
+
+  @override
+  String get filterMax => 'Máx';
+
+  @override
+  String get resetLayout => 'Repor esquema';
+
+  @override
+  String get resetLayoutConfirm =>
+      'As categorias nativas voltam à ordem original e são mostradas novamente. As suas categorias personalizadas ficam ocultas, não são eliminadas — pode reativá-las.';
 }

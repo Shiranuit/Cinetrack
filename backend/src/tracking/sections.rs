@@ -18,8 +18,8 @@ pub const BUILTIN_SECTIONS: [&str; 7] =
     ["watching", "stale", "not_started", "for_later", "up_to_date", "stopped", "movies"];
 
 /// Ceiling on how many sections one user can have. Every enabled custom section is
-/// a separate query when the Library loads, so this bounds that fan-out.
-const MAX_SECTIONS: usize = 40;
+/// at least one query when the Library loads, so this bounds that fan-out.
+pub const MAX_SECTIONS: usize = 30;
 
 /// Ceiling on a custom section's title, in characters.
 const MAX_TITLE_CHARS: usize = 40;
@@ -30,11 +30,14 @@ const MAX_TITLE_CHARS: usize = 40;
 /// language preference, not the section author's), and `include_library` is a
 /// Discover-only flag that means nothing inside your own library.
 /// `q` IS included — a name-scoped rail is a legitimate saved filter.
-const ALLOWED_FILTER_KEYS: [&str; 23] = [
+const ALLOWED_FILTER_KEYS: [&str; 34] = [
     "q", "type", "sort", "dir", "genres", "exclude_genres", "tags", "exclude_tags", "networks",
     "studios", "statuses", "orig_langs", "orig_countries", "year_min", "year_max", "runtime_min",
     "runtime_max", "seasons_min", "seasons_max", "episodes_min", "episodes_max", "score_min",
-    "favorites",
+    "favorites", "state",
+    // Watch-history facets (library scope).
+    "watched_days_min", "watched_days_max", "aired_days_min", "aired_days_max", "remaining_min",
+    "remaining_max", "progress_min", "progress_max", "caught_up", "has_upcoming",
 ];
 
 /// Ceiling on one filter value (the longest legitimate one is a comma-joined id
@@ -221,6 +224,15 @@ fn validate_filters(filters: &serde_json::Value) -> AppResult<()> {
                 }
             }
         }
+        // Likewise `state`: a bucket the classification never emits would be a rail
+        // that always renders empty, with nothing to explain why.
+        if key == "state" {
+            for st in text.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+                if !crate::tracking::state::is_valid(st) {
+                    return Err(AppError::BadRequest(format!("unknown library state '{st}'")));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -279,6 +291,15 @@ mod tests {
         assert!(validate(&[custom("bad", json!({"q": "x".repeat(MAX_FILTER_VALUE_CHARS + 1)}))]).is_err());
         // An empty filter is fine: "everything in my library, sorted this way".
         assert!(validate(&[custom("all", json!({}))]).is_ok());
+    }
+
+    #[test]
+    fn a_section_may_filter_on_library_buckets() {
+        // The whole point of the duplicate action: a saved section can pin the same
+        // buckets the Library rails use.
+        assert!(validate(&[custom("watching", json!({"type": "series", "state": "watching"}))]).is_ok());
+        assert!(validate(&[custom("busy", json!({"state": "watching,stale"}))]).is_ok());
+        assert!(validate(&[custom("bad", json!({"state": "in_progress"}))]).is_err());
     }
 
     #[test]

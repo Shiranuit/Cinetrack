@@ -77,7 +77,10 @@ class ApiClient extends ChangeNotifier {
   Future<dynamic> _get(String path, [Map<String, dynamic>? query]) =>
       _request(() => _client.get(_uri(path, query), headers: _headers()));
 
-  Future<dynamic> _send(String method, String path, {Object? body, bool auth = true}) async {
+  /// `notify: false` for POST-shaped READS. The listener signal means "data
+  /// changed, reload" — a screen that reloads by POSTing would otherwise notify
+  /// itself and spin forever.
+  Future<dynamic> _send(String method, String path, {Object? body, bool auth = true, bool notify = true}) async {
     final result = await _request(() async {
       final req = http.Request(method, _uri(path))..headers.addAll(_headers(json: body != null));
       if (body != null) req.body = jsonEncode(body);
@@ -87,7 +90,7 @@ class ApiClient extends ChangeNotifier {
     // change what tracking screens show. Notify listeners so an open screen (e.g.
     // the Library) refreshes itself instead of needing a manual pull-to-refresh.
     // Auth-flow calls use auth:false and are skipped, so login/logout don't fire.
-    if (auth) notifyListeners();
+    if (auth && notify) notifyListeners();
     return result;
   }
 
@@ -405,15 +408,19 @@ class ApiClient extends ChangeNotifier {
   /// sends one entry per kind and regroups the responses itself. One round trip
   /// instead of one per rail, and the server gets the chance to share work across
   /// the whole batch.
+  /// `limit` is omitted by default: a custom rail shows every matching title, the
+  /// way the built-in rails do. Pass one only for a genuinely paged caller.
   Future<Map<String, List<SearchResult>>> librarySectionsItems(
     List<({String key, Map<String, String> filters})> entries, {
     String? langs,
-    int limit = 30,
+    int? limit,
   }) async {
     if (entries.isEmpty) return {};
-    final data = await _send('POST', '/api/library/filter/batch', body: {
+    // A read, despite the verb: it must not trip the change signal that screens
+    // reload on (see `_send`).
+    final data = await _send('POST', '/api/library/filter/batch', notify: false, body: {
       'sections': [for (final e in entries) {'key': e.key, 'filters': e.filters}],
-      'limit': limit,
+      'limit': ?limit,
       'langs': ?langs,
     });
     return {

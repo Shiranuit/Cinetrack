@@ -17,6 +17,8 @@ Widget host(Widget child, {String locale = 'en'}) => MaterialApp(
     );
 
 void main() {
+  _duplicateTests();
+  _resetLayoutTests();
   _autoSaveTests();
   _kindRoundTrip();
   testWidgets('the category editor lays out on a narrow screen', (tester) async {
@@ -231,5 +233,132 @@ void _autoSaveTests() {
     // The user's change is still shown — reverting under them would be worse.
     final firstSwitch = tester.widget<Switch>(find.byType(Switch).first);
     expect(firstSwitch.value, isFalse);
+  });
+}
+
+/// Duplicate belongs to custom categories, not built-ins: a built-in is computed
+/// rather than configured, so there's nothing to copy that the filter sheet can't
+/// already express.
+void _duplicateTests() {
+  Future<void> pumpSheet(WidgetTester tester, List<LibrarySection> sections) async {
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(host(LibraryCustomizeSheet(
+      sections: sections,
+      options: const FilterOptions(),
+      save: (l) async => l,
+    )));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('built-in rows offer neither copy nor delete', (tester) async {
+    await pumpSheet(tester, defaultLibrarySections());
+    expect(find.byIcon(Icons.copy_rounded), findsNothing);
+    expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
+    // They can still be reordered and hidden.
+    expect(find.byType(Switch), findsNWidgets(kBuiltinLibrarySections.length));
+  });
+
+  testWidgets('a custom row offers both, and copying keeps the filter', (tester) async {
+    final sections = [
+      const LibrarySection(builtin: 'watching'),
+      const LibrarySection(id: 'c1', title: 'Comfort anime', filters: {'type': 'anime', 'state': 'stale'}),
+    ];
+    List<LibrarySection>? saved;
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(host(LibraryCustomizeSheet(
+      sections: sections,
+      options: const FilterOptions(),
+      save: (l) async {
+        saved = List.of(l);
+        return l;
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.copy_rounded), findsOneWidget, reason: 'only the custom row');
+    await tester.tap(find.byIcon(Icons.copy_rounded));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull, reason: 'duplicating is a change, so it auto-saves');
+    final copies = saved!.where((s) => s.isCustom).toList();
+    expect(copies, hasLength(2));
+    expect(copies[1].filters, copies[0].filters, reason: 'the copy carries the same filter');
+    expect(copies[1].id, isNull, reason: 'a copy is a NEW section, not an edit of the original');
+    expect(copies[1].title, contains('Comfort anime'));
+    expect(saved!.indexOf(copies[1]), saved!.indexOf(copies[0]) + 1, reason: 'inserted right after');
+  });
+}
+
+/// "Reset layout" restores the stock arrangement. It HIDES custom categories
+/// rather than deleting them — a custom category can hold a lot of tuning, and the
+/// sheet saves immediately, so an irreversible reset would be a trap.
+void _resetLayoutTests() {
+  final scrambled = [
+    const LibrarySection(id: 'b1', builtin: 'movies', enabled: false),
+    const LibrarySection(id: 'c1', title: 'Comfort anime', filters: {'type': 'anime'}),
+    const LibrarySection(id: 'b2', builtin: 'watching', enabled: false),
+    const LibrarySection(id: 'b3', builtin: 'stale'),
+  ];
+
+  Future<List<LibrarySection>?> tapReset(WidgetTester tester, {required bool confirm}) async {
+    tester.view.physicalSize = const Size(500, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    List<LibrarySection>? saved;
+    await tester.pumpWidget(host(LibraryCustomizeSheet(
+      sections: [...scrambled],
+      options: const FilterOptions(),
+      save: (l) async {
+        saved = List.of(l);
+        return l;
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, 'Reset layout'));
+    await tester.pumpAndSettle();
+    // The confirm action is the outlined one; cancel is the filled one.
+    await tester.tap(find.widgetWithText(confirm ? OutlinedButton : FilledButton, confirm ? 'Reset layout' : 'Cancel'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    return saved;
+  }
+
+  testWidgets('restores every built-in, in order and shown', (tester) async {
+    final saved = await tapReset(tester, confirm: true);
+    expect(saved, isNotNull);
+
+    final builtins = saved!.where((s) => !s.isCustom).toList();
+    expect(builtins.map((s) => s.builtin), kBuiltinLibrarySections,
+        reason: 'default order restored, including the ones that were missing');
+    expect(builtins.every((s) => s.enabled), isTrue, reason: 'and all shown again');
+  });
+
+  testWidgets('hides custom categories without deleting them', (tester) async {
+    final saved = await tapReset(tester, confirm: true);
+    final custom = saved!.where((s) => s.isCustom).toList();
+    expect(custom, hasLength(1), reason: 'still there');
+    expect(custom.single.title, 'Comfort anime');
+    expect(custom.single.filters, {'type': 'anime'}, reason: 'its filter is intact');
+    expect(custom.single.enabled, isFalse, reason: 'hidden, so it can be switched back on');
+    expect(custom.single.id, 'c1', reason: 'same section, not a replacement');
+  });
+
+  testWidgets('keeps built-in ids so the reset is an edit, not a rebuild', (tester) async {
+    final saved = await tapReset(tester, confirm: true);
+    final byKey = {for (final s in saved!.where((s) => !s.isCustom)) s.builtin: s.id};
+    expect(byKey['movies'], 'b1');
+    expect(byKey['watching'], 'b2');
+    expect(byKey['stale'], 'b3');
+  });
+
+  testWidgets('cancelling changes nothing', (tester) async {
+    final saved = await tapReset(tester, confirm: false);
+    expect(saved, isNull, reason: 'no save, so nothing was touched');
   });
 }

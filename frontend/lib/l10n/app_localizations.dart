@@ -1935,6 +1935,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete category'**
   String get deleteCategory;
+
+  /// No description provided for @sortLastWatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Last watched'**
+  String get sortLastWatched;
+
+  /// No description provided for @sortLastAired.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest episode aired'**
+  String get sortLastAired;
+
+  /// No description provided for @categoryCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (copy)'**
+  String categoryCopy(String name);
+
+  /// No description provided for @duplicateCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get duplicateCategory;
+
+  /// No description provided for @libraryStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Library category'**
+  String get libraryStatus;
+
+  /// No description provided for @libNoSections.
+  ///
+  /// In en, this message translates to:
+  /// **'No categories are shown. Customize your library to turn some back on.'**
+  String get libNoSections;
+
+  /// No description provided for @libSectionsHiddenByType.
+  ///
+  /// In en, this message translates to:
+  /// **'Your categories are hidden by the type filter above — turn on the matching type, or edit the category.'**
+  String get libSectionsHiddenByType;
+
+  /// No description provided for @filterWatchedDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Watched (days ago)'**
+  String get filterWatchedDays;
+
+  /// No description provided for @filterAiredDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest episode (days ago)'**
+  String get filterAiredDays;
+
+  /// No description provided for @filterRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Episodes left'**
+  String get filterRemaining;
+
+  /// No description provided for @filterProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress (%)'**
+  String get filterProgress;
+
+  /// No description provided for @filterCaughtUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Caught up'**
+  String get filterCaughtUp;
+
+  /// No description provided for @filterHasUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Has upcoming episodes'**
+  String get filterHasUpcoming;
+
+  /// No description provided for @sortRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Episodes left'**
+  String get sortRemaining;
+
+  /// No description provided for @sortProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get sortProgress;
+
+  /// No description provided for @yes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get yes;
+
+  /// No description provided for @no.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get no;
+
+  /// No description provided for @sortHelpPopular.
+  ///
+  /// In en, this message translates to:
+  /// **'The catalog\'s overall popularity score'**
+  String get sortHelpPopular;
+
+  /// No description provided for @sortHelpTopRated.
+  ///
+  /// In en, this message translates to:
+  /// **'Average rating from all users'**
+  String get sortHelpTopRated;
+
+  /// No description provided for @sortHelpMyRating.
+  ///
+  /// In en, this message translates to:
+  /// **'The 1–5 rating you gave it'**
+  String get sortHelpMyRating;
+
+  /// No description provided for @sortHelpOwnerRating.
+  ///
+  /// In en, this message translates to:
+  /// **'The 1–5 rating this user gave it'**
+  String get sortHelpOwnerRating;
+
+  /// No description provided for @sortHelpReleaseDate.
+  ///
+  /// In en, this message translates to:
+  /// **'The year it first aired'**
+  String get sortHelpReleaseDate;
+
+  /// No description provided for @sortHelpLastUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'When the catalog record last changed — not when you watched it'**
+  String get sortHelpLastUpdated;
+
+  /// No description provided for @sortHelpSeasons.
+  ///
+  /// In en, this message translates to:
+  /// **'Number of seasons'**
+  String get sortHelpSeasons;
+
+  /// No description provided for @sortHelpEpisodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Total number of episodes'**
+  String get sortHelpEpisodes;
+
+  /// No description provided for @sortHelpLongest.
+  ///
+  /// In en, this message translates to:
+  /// **'Episode length'**
+  String get sortHelpLongest;
+
+  /// No description provided for @sortHelpName.
+  ///
+  /// In en, this message translates to:
+  /// **'Alphabetical, A to Z'**
+  String get sortHelpName;
+
+  /// No description provided for @sortHelpLastWatched.
+  ///
+  /// In en, this message translates to:
+  /// **'When you last watched an episode of it'**
+  String get sortHelpLastWatched;
+
+  /// No description provided for @sortHelpLastAired.
+  ///
+  /// In en, this message translates to:
+  /// **'When its most recent episode aired — regardless of whether you watched it'**
+  String get sortHelpLastAired;
+
+  /// No description provided for @sortHelpRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'How many aired episodes you haven\'t watched yet (a count)'**
+  String get sortHelpRemaining;
+
+  /// No description provided for @sortHelpProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'What share of the aired episodes you\'ve watched (a percentage)'**
+  String get sortHelpProgress;
+
+  /// No description provided for @filterMin.
+  ///
+  /// In en, this message translates to:
+  /// **'Min'**
+  String get filterMin;
+
+  /// No description provided for @filterMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Max'**
+  String get filterMax;
+
+  /// No description provided for @resetLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset layout'**
+  String get resetLayout;
+
+  /// No description provided for @resetLayoutConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in categories go back to their original order and are shown again. Your custom categories are hidden, not deleted — you can switch them back on.'**
+  String get resetLayoutConfirm;
 }
 
 class _AppLocalizationsDelegate

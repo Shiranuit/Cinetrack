@@ -3,16 +3,12 @@
 //! All functions operate on an already-authenticated `user_id`.
 
 use uuid::Uuid;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{catalog, error::AppResult, state::AppState};
 
 pub mod movies;
 pub mod sections;
-
-fn now_unix() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
-}
+pub mod state;
 
 /// SQL expression that resolves a series' name in the caller's preferred language
 /// order, falling back to the base `s.name`. `langs` is a bound `text[]` param
@@ -162,6 +158,9 @@ pub struct LibraryShow {
     pub seen_episodes: i64,        // distinct watched, non-special
     pub is_anime: bool,            // original language is Japanese
     pub rating: Option<i16>,       // the viewer's own labeled 1..5 rating (INT2 column)
+    /// Which Library bucket this row belongs to, decided by `state::state_case`.
+    /// Serialized so a client can tell without re-deriving it; the rails group on it.
+    pub state: String,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -173,9 +172,6 @@ pub struct Library {
     pub for_later: Vec<LibraryShow>,
     pub stopped: Vec<LibraryShow>,
 }
-
-/// A show is "stale" if not watched in this many days.
-const STALE_DAYS: i64 = 30;
 
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
 /// `sort` orders shows WITHIN each category (default = recency), so the categorized
@@ -211,36 +207,7 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
             LEFT JOIN catalog.series s ON s.id = us.series_id \
             WHERE us.user_id = $1 AND NOT us.unavailable \
                   AND (us.is_followed OR us.is_favorited OR us.archived OR us.status IS NOT NULL) \
-        ), \
-        ep AS ( \
-            SELECT e.series_id, count(*) AS total_episodes, max(e.aired) AS max_aired \
-            FROM catalog.episode e \
-            WHERE e.series_id IN (SELECT series_id FROM lib) \
-              AND NOT e.deleted AND e.season_number > 0 \
-              AND (e.aired IS NULL OR e.aired <= current_date) \
-            GROUP BY e.series_id \
-        ), \
-        latest_eps AS ( \
-            SELECT e.series_id, e.id AS episode_id FROM catalog.episode e \
-            JOIN ep ON ep.series_id = e.series_id AND e.aired = ep.max_aired \
-            WHERE NOT e.deleted AND e.season_number > 0 \
-        ), \
-        lw AS ( \
-            SELECT w.series_id, max(w.watched_at) AS last_watched FROM app.watch_event w \
-            WHERE w.user_id = $1 AND w.series_id IN (SELECT series_id FROM lib) \
-            GROUP BY w.series_id \
-        ), \
-        seen AS ( \
-            SELECT w.series_id, count(DISTINCT w.episode_id) AS seen_episodes \
-            FROM app.watch_event w \
-            JOIN catalog.episode ce ON ce.id = w.episode_id AND ce.season_number > 0 \
-            WHERE w.user_id = $1 AND w.series_id IN (SELECT series_id FROM lib) \
-            GROUP BY w.series_id \
-        ), \
-        caught AS ( \
-            SELECT DISTINCT le.series_id FROM latest_eps le \
-            JOIN app.watch_event w ON w.user_id = $1 AND w.episode_id = le.episode_id \
-        ) \
+        ), {ctes} \
         SELECT lib.series_id, \
                COALESCE((SELECT tr.name FROM catalog.translation tr \
                          WHERE tr.entity_type = 'series' AND tr.entity_id = lib.series_id AND tr.name IS NOT NULL \
@@ -253,13 +220,15 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
                COALESCE(ep.total_episodes, 0)::bigint AS total_episodes, \
                COALESCE(seen.seen_episodes, 0)::bigint AS seen_episodes, \
                COALESCE(lib.original_language IN ('jpn','ja'), false) AS is_anime, \
-               lib.rating \
+               lib.rating, {state_case} AS state \
         FROM lib \
         LEFT JOIN ep ON ep.series_id = lib.series_id \
         LEFT JOIN lw ON lw.series_id = lib.series_id \
         LEFT JOIN seen ON seen.series_id = lib.series_id \
         LEFT JOIN caught ON caught.series_id = lib.series_id \
-        ORDER BY {order}");
+        ORDER BY {order}",
+        ctes = state::watch_state_ctes("$1"),
+        state_case = state::state_case("lib"));
     let started = std::time::Instant::now();
     let rows = sqlx::query_as::<_, LibraryShow>(sql)
         .bind(user_id)
@@ -274,38 +243,19 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
         crate::profile::explain(&state.db, "tracking::library", eq).await;
     }
 
-    let stale_cutoff = now_unix() - STALE_DAYS * 86400;
+    // The bucket comes from SQL (`state::state_case`) so the rails and the `state`
+    // filter can never disagree about what "stale" means; this only routes each row
+    // into its list. An unrecognized value would mean the CASE and `STATES` drifted
+    // apart, which the unit tests in `state` guard against.
     let mut lib = Library::default();
     for r in rows {
-        // "Started" = any real watch activity, not the (sometimes-zero) import
-        // aggregate: a show with watch history must never be "Haven't started".
-        let started = r.last_watched.is_some() || r.seen_episodes > 0 || r.nb_episodes_seen > 0;
-        // Caught up = seen the latest-aired episode, OR (fallback for shows whose
-        // episodes have no mirrored air date, so there is no "latest aired") seen
-        // every counted episode.
-        let caught_up = r.caught_up || (r.total_episodes > 0 && r.seen_episodes >= r.total_episodes);
-        if r.archived || r.status.as_deref() == Some("stopped") {
-            lib.stopped.push(r);
-        } else if r.status.as_deref() == Some("for_later") {
-            // Explicit "watch later" wins over the progress-based buckets.
-            lib.for_later.push(r);
-        } else if !started {
-            lib.not_started.push(r);
-        } else if caught_up {
-            // Seen the latest-aired episode → caught up, regardless of how long ago.
-            lib.up_to_date.push(r);
-        } else {
-            // Behind on a started show. "Stale" only if you haven't watched recently
-            // AND no new episode aired recently — otherwise it's actively "watching".
-            // This keeps a caught-up show in Watching when a fresh episode drops,
-            // even if your last watch was long ago.
-            let watched_recently = r.last_watched.is_some_and(|t| t >= stale_cutoff);
-            let aired_recently = r.last_aired.is_some_and(|t| t >= stale_cutoff);
-            if watched_recently || aired_recently {
-                lib.watching.push(r);
-            } else {
-                lib.stale.push(r);
-            }
+        match r.state.as_str() {
+            "stopped" => lib.stopped.push(r),
+            "for_later" => lib.for_later.push(r),
+            "not_started" => lib.not_started.push(r),
+            "up_to_date" => lib.up_to_date.push(r),
+            "stale" => lib.stale.push(r),
+            _ => lib.watching.push(r),
         }
     }
     Ok(lib)

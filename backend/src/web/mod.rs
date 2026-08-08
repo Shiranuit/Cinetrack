@@ -1,6 +1,6 @@
 //! HTTP transport layer: router wiring. Handler logic lives in `handlers`.
 
-mod handlers;
+pub mod handlers;
 mod query;
 
 #[cfg(test)]

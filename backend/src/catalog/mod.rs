@@ -53,6 +53,14 @@ pub struct SearchResult {
     /// once separate the two. Always false for movies.
     #[serde(default)]
     pub is_anime: bool,
+    /// Watch progress, for callers that asked for it (`Filters::with_progress`) —
+    /// aired non-special episodes and how many of them the viewer has seen, so a
+    /// card can draw the same progress bar the Library rails do. `None` when the
+    /// query didn't compute it, which is different from "no episodes".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_episodes: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen_episodes: Option<i64>,
 }
 
 /// Insert a minimal, deliberately-stale catalog stub for a series/movie we saw

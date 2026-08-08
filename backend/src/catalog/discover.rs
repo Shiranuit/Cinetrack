@@ -75,6 +75,37 @@ pub struct Filters {
     pub viewer: Option<Uuid>,
     /// Library-only: restrict to favorited shows.
     pub favorites_only: bool,
+    /// Library-only: restrict to these Library buckets (any-of). Values come from
+    /// `tracking::state::STATES`; empty means no constraint.
+    pub states: Vec<String>,
+    /// Library-only, series-only: days since YOU last watched it. `max` = watched
+    /// within that many days; `min` = untouched for at least that many.
+    pub watched_days_min: Option<i32>,
+    pub watched_days_max: Option<i32>,
+    /// Library-only, series-only: days since its LATEST EPISODE AIRED. A different
+    /// clock from `watched_days` and from the catalog's `last_updated`.
+    pub aired_days_min: Option<i32>,
+    pub aired_days_max: Option<i32>,
+    /// Library-only, series-only: aired episodes you haven't watched.
+    pub remaining_min: Option<i32>,
+    pub remaining_max: Option<i32>,
+    /// Library-only, series-only: percent of aired episodes watched (0..100).
+    pub progress_min: Option<f64>,
+    pub progress_max: Option<f64>,
+    /// Library-only, series-only: seen the latest aired episode.
+    pub caught_up: Option<bool>,
+    /// Library-only, series-only: has a future-dated episode on the schedule. The
+    /// complement of "everything released" for a show that is still running.
+    pub has_upcoming: Option<bool>,
+    /// Ask for watch progress on each row (`total_episodes` / `seen_episodes`).
+    /// Costs the watch-history aggregates, so it's opt-in: the Library's rails want
+    /// it, a paged search doesn't.
+    pub with_progress: bool,
+    /// Drop anime from a `series` query. Anime shares the series table, so
+    /// `kind = "series"` returns it either way — and filtering it off client-side
+    /// would happen AFTER `LIMIT`, which silently empties a rail whose top results
+    /// all happen to be anime. Excluding it here keeps the limit meaningful.
+    pub exclude_anime: bool,
 }
 
 /// "In the library" predicate for a `user_show` alias. A show counts as tracked
@@ -100,7 +131,43 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     let (table, etype, result_kind) =
         if is_movie { ("catalog.movie", "movie", "movie") } else { ("catalog.series", "series", "series") };
 
-    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT x.id, ");
+    // A state filter needs the same per-series watch aggregates the Library rails
+    // use, so the query is prefixed with the shared CTEs. Only then — an ordinary
+    // facet filter must not pay for a pass over the watch history.
+    // Sorting by watch recency needs the same aggregates a state filter does, so
+    // either one pulls the CTEs in — this is what lets a duplicated category match
+    // the rail's ORDER as well as its contents.
+    let watch_state_sort = matches!(f.sort.as_str(), "last_watched" | "last_aired" | "remaining" | "progress");
+    // Any facet derived from watch history needs the same CTEs. Kept as one list so
+    // adding a facet without wiring its trigger can't silently produce a query that
+    // references `lw`/`ep` without joining them.
+    let watch_state_facets = !f.states.is_empty()
+        || f.watched_days_min.is_some()
+        || f.watched_days_max.is_some()
+        || f.aired_days_min.is_some()
+        || f.aired_days_max.is_some()
+        || f.remaining_min.is_some()
+        || f.remaining_max.is_some()
+        || f.progress_min.is_some()
+        || f.progress_max.is_some()
+        || f.caught_up.is_some()
+        || f.has_upcoming.is_some();
+    // Progress needs the same aggregates, so asking for it pulls them in too.
+    let with_state = (watch_state_facets || watch_state_sort || f.with_progress) && f.library_user.is_some();
+    let mut qb: QueryBuilder<Postgres> = if with_state && !is_movie {
+        // The user bind lands first, so it is `$1` for `watch_state_ctes`.
+        let mut b = QueryBuilder::new("WITH lib AS (SELECT us.series_id, us.nb_episodes_seen, us.status, us.archived \
+             FROM app.user_show us WHERE us.user_id = ");
+        b.push_bind(f.library_user.expect("with_state implies library_user"));
+        b.push(format!(
+            " AND {}), {} SELECT x.id, ",
+            show_membership_sql("us"),
+            crate::tracking::state::watch_state_ctes("$1")
+        ));
+        b
+    } else {
+        QueryBuilder::new("SELECT x.id, ")
+    };
     qb.push("COALESCE((SELECT tr.name FROM catalog.translation tr WHERE tr.entity_type = ");
     qb.push_bind(etype);
     qb.push(" AND tr.entity_id = x.id AND tr.name IS NOT NULL AND tr.language = ANY(");
@@ -157,20 +224,112 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     if is_movie {
         qb.push(", false AS is_anime");
     } else {
-        qb.push(", (x.original_language IN ('jpn','ja')) AS is_anime");
+        // COALESCE: an unknown original language is not anime. Without it the
+        // expression is NULL for those rows and decoding into `bool` fails, taking
+        // the whole query down.
+        qb.push(", COALESCE(x.original_language IN ('jpn','ja'), false) AS is_anime");
+    }
+    // Progress columns, when asked for and available (movies have no episodes).
+    if with_state && !is_movie {
+        qb.push(", ep.total_episodes, seen.seen_episodes");
+    } else {
+        qb.push(", NULL::bigint AS total_episodes, NULL::bigint AS seen_episodes");
     }
     qb.push(format!(" FROM {table} x"));
 
-    // Library scope: only shows this user tracks.
+    // Library scope: only titles this user tracks. Movies join `user_movie` — they
+    // have their own id space, and TheTVDB's series and movie ids overlap heavily,
+    // so joining `user_show` on a movie id matches unrelated titles.
     if let Some(uid) = f.library_user {
-        qb.push(" JOIN app.user_show us ON us.series_id = x.id AND NOT us.unavailable AND us.user_id = ");
-        qb.push_bind(uid);
+        if is_movie {
+            qb.push(" JOIN app.user_movie um ON um.movie_id = x.id AND um.user_id = ");
+            qb.push_bind(uid);
+            qb.push(format!(" AND {}", movie_membership_sql("um")));
+        } else {
+            // Same membership rule as the Library rails and Discover's "in library"
+            // marker: a row whose flags were all cleared (unfollowed) is not in the
+            // library, even though the row survives.
+            qb.push(" JOIN app.user_show us ON us.series_id = x.id AND us.user_id = ");
+            qb.push_bind(uid);
+            qb.push(format!(" AND {}", show_membership_sql("us")));
+        }
+    }
+    // The watch-state aggregates, when a state filter asked for them.
+    if with_state && !is_movie {
+        qb.push(format!(" {}", crate::tracking::state::watch_state_joins("x.id")));
     }
     qb.push(" WHERE NOT x.deleted");
 
     // Library-only: favorites.
     if f.library_user.is_some() && f.favorites_only {
-        qb.push(" AND us.is_favorited");
+        qb.push(if is_movie { " AND um.is_favorited" } else { " AND us.is_favorited" });
+    }
+
+    // Library-only: restrict to Library buckets. Series classify from the watch
+    // aggregates; movies from their own three-way state (see `movie_state_case`).
+    // Gated on the states themselves, NOT on `with_state`: a watch-recency SORT also
+    // pulls the CTEs in, and emitting `= ANY('{}')` for it matches nothing at all.
+    if !f.states.is_empty() && f.library_user.is_some() {
+        let case = if is_movie {
+            crate::tracking::state::movie_state_case("um")
+        } else {
+            crate::tracking::state::state_case("us")
+        };
+        qb.push(format!(" AND {case} = ANY("));
+        qb.push_bind(f.states.clone());
+        qb.push(")");
+    }
+
+    // Watch-history facets. Series only: movies have no episodes, so progress and
+    // "remaining" are meaningless there and a mixed section leaves its movie half
+    // unfiltered rather than empty.
+    if with_state && !is_movie {
+        use crate::tracking::state::{CAUGHT_UP_EXPR, HAS_UPCOMING_EXPR, PROGRESS_EXPR, REMAINING_EXPR};
+        // "within the last N days" vs "untouched for at least N days".
+        if let Some(d) = f.watched_days_max {
+            qb.push(" AND lw.last_watched >= now() - make_interval(days => ");
+            qb.push_bind(d);
+            qb.push(")");
+        }
+        if let Some(d) = f.watched_days_min {
+            qb.push(" AND lw.last_watched <= now() - make_interval(days => ");
+            qb.push_bind(d);
+            qb.push(")");
+        }
+        if let Some(d) = f.aired_days_max {
+            qb.push(" AND ep.max_aired >= current_date - ");
+            qb.push_bind(d);
+            qb.push("::int");
+        }
+        if let Some(d) = f.aired_days_min {
+            qb.push(" AND ep.max_aired <= current_date - ");
+            qb.push_bind(d);
+            qb.push("::int");
+        }
+        if let Some(n) = f.remaining_min {
+            qb.push(format!(" AND {REMAINING_EXPR} >= "));
+            qb.push_bind(n as i64);
+        }
+        if let Some(n) = f.remaining_max {
+            qb.push(format!(" AND {REMAINING_EXPR} <= "));
+            qb.push_bind(n as i64);
+        }
+        if let Some(p) = f.progress_min {
+            qb.push(format!(" AND {PROGRESS_EXPR} >= "));
+            qb.push_bind(p);
+        }
+        if let Some(p) = f.progress_max {
+            qb.push(format!(" AND {PROGRESS_EXPR} <= "));
+            qb.push_bind(p);
+        }
+        if let Some(want) = f.caught_up {
+            qb.push(format!(" AND {CAUGHT_UP_EXPR} = "));
+            qb.push_bind(want);
+        }
+        if let Some(want) = f.has_upcoming {
+            qb.push(format!(" AND {HAS_UPCOMING_EXPR} = "));
+            qb.push_bind(want);
+        }
     }
 
     // Discover: hide shows the user already tracks (the "In my library" toggle off).
@@ -193,6 +352,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     if !is_movie {
         if is_anime {
             qb.push(" AND x.original_language IN ('jpn','ja')");
+        }
+        // COALESCE, not a bare NOT: an unknown original language is not anime, and
+        // `NULL IN (...)` would otherwise drop those rows too.
+        if f.exclude_anime {
+            qb.push(" AND NOT COALESCE(x.original_language IN ('jpn','ja'), false)");
         }
         // genres: must have ALL included, NONE excluded.
         if !f.genres_include.is_empty() {
@@ -335,6 +499,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             "name" => "x.name",
             "runtime" => "x.runtime",
             "updated" => "x.last_updated",
+            // Only available with the watch-state CTEs joined, and only for series.
+            "last_watched" if with_state && !is_movie => "lw.last_watched",
+            "last_aired" if with_state && !is_movie => "ep.max_aired",
+            "remaining" if with_state && !is_movie => crate::tracking::state::REMAINING_EXPR,
+            "progress" if with_state && !is_movie => crate::tracking::state::PROGRESS_EXPR,
             "seasons" if !is_movie => "x.season_count",
             "episodes" if !is_movie => "x.episode_count",
             // "rating" is the cross-user average everywhere ("my_rating" is yours).
@@ -348,19 +517,24 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // `id` as a final tiebreaker → a total, stable order so offset paging can't
     // repeat or skip rows across pages.
     qb.push(", x.id DESC");
-    qb.push(" LIMIT ").push_bind(f.limit.clamp(1, 200));
+    // Discover browses the whole catalog, so it stays capped tightly. A
+    // library-scoped query can't return more than the user's own library, and the
+    // Library's rails show every match rather than a page, so it gets headroom —
+    // this is a runaway guard, not a product limit.
+    let max_limit = if f.library_user.is_some() { 2000 } else { 200 };
+    qb.push(" LIMIT ").push_bind(f.limit.clamp(1, max_limit));
     if f.offset > 0 {
         qb.push(" OFFSET ").push_bind(f.offset);
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool, bool)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, Option<String>, bool, Option<i16>, bool, bool, Option<i64>, Option<i64>)>()
         .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited, is_anime)| SearchResult {
+        .map(|(id, name, year, image_url, overview, in_library, rating, is_favorited, is_anime, total_episodes, seen_episodes)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
@@ -371,6 +545,8 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             rating,
             is_favorited,
             is_anime,
+            total_episodes,
+            seen_episodes,
         })
         .collect())
 }
@@ -594,6 +770,8 @@ async fn popular_local(
             // The popular path selects no language column; anime callers use the
             // filter endpoint, which does.
             is_anime: false,
+            total_episodes: None,
+            seen_episodes: None,
         })
         .collect())
 }
@@ -648,6 +826,8 @@ async fn popular_remote(
             // Remote (TheTVDB) rows: originalLanguage is stored on the stub, but
             // this DTO is only used for browse cards, which don't split by anime.
             is_anime: false,
+            total_episodes: None,
+            seen_episodes: None,
         });
     }
     Ok(out)

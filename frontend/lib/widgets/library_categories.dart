@@ -49,6 +49,15 @@ Map<String, String> mergedSectionFilters(LibrarySection section, AdvancedFilters
   return {...section.filters, ...global};
 }
 
+/// The filter for one kind of a section's fan-out: the section's own filter, the
+/// kind being queried, and — when it covers series but NOT anime — the flag that
+/// makes the server exclude anime before applying the limit.
+Map<String, String> sectionQueryFilters(Map<String, String> filters, String kind, Set<String> kinds) => {
+      ...filters,
+      'type': kind,
+      if (kind == 'series' && !kinds.contains('anime')) 'exclude_anime': 'true',
+    };
+
 /// Backend queries needed to cover a section's kinds. `search_db` takes exactly one
 /// kind, so a multi-kind section fans out — but "series" ALREADY includes anime
 /// (anime is Japanese-language series, same table), so asking for both would return
@@ -61,10 +70,12 @@ List<String> sectionQueryKinds(Set<String> kinds) => [
 
 /// Fold the per-kind responses of a multi-kind section into one rail.
 ///
-/// Two jobs. First, drop anime the section didn't ask for: a `series` query carries
-/// it regardless, so "Series + Movies" would otherwise quietly include anime.
+/// Anime exclusion is the SERVER's job (`exclude_anime`, see [sectionQueryFilters]):
+/// doing it here would run after `LIMIT`, so a rail whose top results are all anime
+/// would come back empty. The check below is a no-op against a current server and
+/// only guards against an older one.
 ///
-/// Second, restore the ordering. Each response is sorted server-side, but
+/// The real job here is restoring the ordering. Each response is sorted server-side, but
 /// concatenating them would group all series ahead of all movies. Where the sort key
 /// is one the rows actually carry (name, year, your rating) they're re-sorted into a
 /// single sequence; for keys the DTO doesn't expose — popularity, runtime, season and
@@ -105,3 +116,4 @@ List<SearchResult> mergeSectionResults(
 /// server echoes it back verbatim, so it only has to be unique within a batch and
 /// splittable by the client that made it.
 String sectionBatchKey(String sectionId, String kind) => '$sectionId|$kind';
+

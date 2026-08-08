@@ -988,4 +988,112 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deleteCategory => '删除分类';
+
+  @override
+  String get sortLastWatched => '最近观看';
+
+  @override
+  String get sortLastAired => '最新剧集播出';
+
+  @override
+  String categoryCopy(String name) {
+    return '$name（副本）';
+  }
+
+  @override
+  String get duplicateCategory => '复制';
+
+  @override
+  String get libraryStatus => '媒体库分类';
+
+  @override
+  String get libNoSections => '未显示任何分类。自定义媒体库以重新启用。';
+
+  @override
+  String get libSectionsHiddenByType => '上方的类型筛选隐藏了你的分类——请启用对应类型，或编辑该分类。';
+
+  @override
+  String get filterWatchedDays => '观看于（几天前）';
+
+  @override
+  String get filterAiredDays => '最新剧集（几天前）';
+
+  @override
+  String get filterRemaining => '剩余集数';
+
+  @override
+  String get filterProgress => '进度（%）';
+
+  @override
+  String get filterCaughtUp => '已追平';
+
+  @override
+  String get filterHasUpcoming => '有待播剧集';
+
+  @override
+  String get sortRemaining => '剩余集数';
+
+  @override
+  String get sortProgress => '进度';
+
+  @override
+  String get yes => '是';
+
+  @override
+  String get no => '否';
+
+  @override
+  String get sortHelpPopular => '目录的整体热度评分';
+
+  @override
+  String get sortHelpTopRated => '所有用户的平均评分';
+
+  @override
+  String get sortHelpMyRating => '你给出的 1–5 分评分';
+
+  @override
+  String get sortHelpOwnerRating => '该用户给出的 1–5 分评分';
+
+  @override
+  String get sortHelpReleaseDate => '首播年份';
+
+  @override
+  String get sortHelpLastUpdated => '目录条目的更新时间——不是你的观看时间';
+
+  @override
+  String get sortHelpSeasons => '季数';
+
+  @override
+  String get sortHelpEpisodes => '剧集总数';
+
+  @override
+  String get sortHelpLongest => '单集时长';
+
+  @override
+  String get sortHelpName => '按字母顺序 A 到 Z';
+
+  @override
+  String get sortHelpLastWatched => '你最后一次观看其剧集的时间';
+
+  @override
+  String get sortHelpLastAired => '最新一集的播出时间——无论你是否看过';
+
+  @override
+  String get sortHelpRemaining => '还有多少已播出剧集没看（数量）';
+
+  @override
+  String get sortHelpProgress => '已播出剧集中你看过的比例（百分比）';
+
+  @override
+  String get filterMin => '最小';
+
+  @override
+  String get filterMax => '最大';
+
+  @override
+  String get resetLayout => '重置布局';
+
+  @override
+  String get resetLayoutConfirm =>
+      '内置分类恢复原始顺序并重新显示。你的自定义分类会被隐藏而不是删除——可以随时重新启用。';
 }

@@ -990,4 +990,113 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get deleteCategory => 'カテゴリを削除';
+
+  @override
+  String get sortLastWatched => '最近視聴した順';
+
+  @override
+  String get sortLastAired => '最新話の放送日';
+
+  @override
+  String categoryCopy(String name) {
+    return '$name（コピー）';
+  }
+
+  @override
+  String get duplicateCategory => '複製';
+
+  @override
+  String get libraryStatus => 'ライブラリのカテゴリ';
+
+  @override
+  String get libNoSections => '表示中のカテゴリがありません。ライブラリをカスタマイズして有効にしてください。';
+
+  @override
+  String get libSectionsHiddenByType =>
+      '上のタイプフィルターでカテゴリが非表示になっています。該当のタイプを有効にするか、カテゴリを編集してください。';
+
+  @override
+  String get filterWatchedDays => '視聴（何日前）';
+
+  @override
+  String get filterAiredDays => '最新話（何日前）';
+
+  @override
+  String get filterRemaining => '残りエピソード';
+
+  @override
+  String get filterProgress => '進捗（％）';
+
+  @override
+  String get filterCaughtUp => '視聴済み';
+
+  @override
+  String get filterHasUpcoming => '今後の配信あり';
+
+  @override
+  String get sortRemaining => '残りエピソード';
+
+  @override
+  String get sortProgress => '進捗';
+
+  @override
+  String get yes => 'はい';
+
+  @override
+  String get no => 'いいえ';
+
+  @override
+  String get sortHelpPopular => 'カタログ全体の人気スコア';
+
+  @override
+  String get sortHelpTopRated => '全ユーザーの平均評価';
+
+  @override
+  String get sortHelpMyRating => 'あなたが付けた1〜5の評価';
+
+  @override
+  String get sortHelpOwnerRating => 'このユーザーが付けた1〜5の評価';
+
+  @override
+  String get sortHelpReleaseDate => '最初に放送された年';
+
+  @override
+  String get sortHelpLastUpdated => 'カタログ情報が更新された日時（視聴日ではありません）';
+
+  @override
+  String get sortHelpSeasons => 'シーズン数';
+
+  @override
+  String get sortHelpEpisodes => 'エピソードの総数';
+
+  @override
+  String get sortHelpLongest => '1話の長さ';
+
+  @override
+  String get sortHelpName => 'アルファベット順（A→Z）';
+
+  @override
+  String get sortHelpLastWatched => '最後にエピソードを視聴した日時';
+
+  @override
+  String get sortHelpLastAired => '最新話が放送された日（視聴の有無は問いません）';
+
+  @override
+  String get sortHelpRemaining => '未視聴の放送済みエピソード数（件数）';
+
+  @override
+  String get sortHelpProgress => '放送済みエピソードのうち視聴した割合（パーセント）';
+
+  @override
+  String get filterMin => '最小';
+
+  @override
+  String get filterMax => '最大';
+
+  @override
+  String get resetLayout => 'レイアウトをリセット';
+
+  @override
+  String get resetLayoutConfirm =>
+      '標準のカテゴリが元の順序に戻り、再び表示されます。カスタムカテゴリは削除されず非表示になります（あとで再表示できます）。';
 }

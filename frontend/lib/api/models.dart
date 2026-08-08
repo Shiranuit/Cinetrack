@@ -426,6 +426,12 @@ class SearchResult {
   /// several kinds uses this to drop anime the user didn't ask for. False for
   /// movies and for the Discover/popular paths, which don't split by anime.
   final bool isAnime;
+
+  /// Watch progress, when the caller asked for it (the Library's rails do; a paged
+  /// search doesn't). Null means "not computed" — distinct from a show with no
+  /// episodes, which is why [progress] returns null rather than 0 for it.
+  final int? totalEpisodes;
+  final int? seenEpisodes;
   const SearchResult({
     this.tvdbId,
     this.kind,
@@ -436,7 +442,17 @@ class SearchResult {
     this.rating,
     this.isFavorited = false,
     this.isAnime = false,
+    this.totalEpisodes,
+    this.seenEpisodes,
   });
+
+  /// Fraction of aired episodes seen (0..1), or null when progress wasn't
+  /// requested — matching `LibraryShow.progress` so both card types agree.
+  double? get progress {
+    final total = totalEpisodes, seen = seenEpisodes;
+    if (total == null || seen == null) return null;
+    return total > 0 ? (seen / total).clamp(0.0, 1.0) : 0.0;
+  }
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
         tvdbId: j['tvdb_id'] as int?,
@@ -448,6 +464,8 @@ class SearchResult {
         rating: (j['rating'] as num?)?.toInt(),
         isFavorited: j['is_favorited'] as bool? ?? false,
         isAnime: j['is_anime'] as bool? ?? false,
+        totalEpisodes: (j['total_episodes'] as num?)?.toInt(),
+        seenEpisodes: (j['seen_episodes'] as num?)?.toInt(),
       );
 }
 

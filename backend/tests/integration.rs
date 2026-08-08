@@ -651,3 +651,527 @@ async fn library_filter_batch_matches_individual_queries() {
         series.iter().map(|r| r.tvdb_id).collect::<Vec<_>>(),
     );
 }
+
+/// The property the shared SQL classification exists to guarantee: the bucket a
+/// show lands in on the Library rails is EXACTLY what `state=<bucket>` returns from
+/// the filter endpoint. If these ever disagree, a duplicated category silently
+/// stops matching the category it was copied from.
+#[tokio::test]
+async fn library_rails_and_state_filter_agree() {
+    use backend::catalog::discover::{search_db, Filters};
+    use backend::tracking::state::STATES;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "states@test.local").await;
+    let me = common::uid(1);
+
+    // One show per bucket, built the way each bucket actually arises.
+    let mk = async |id: i64, name: &str| {
+        common::insert_series(&state.db, id, name, Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    };
+
+    // watching: behind, with a recent watch.
+    mk(800, "Watching").await;
+    common::insert_episode_in_days(&state.db, 8001, 800, 1, 1, -20, "E1").await;
+    common::insert_episode_in_days(&state.db, 8002, 800, 1, 2, -10, "E2").await;
+    common::watch_ago(&state.db, 1, 800, 8001, "w-800", 2).await;
+
+    // stale: behind, nothing watched or aired for months.
+    mk(801, "Stale").await;
+    common::insert_episode_in_days(&state.db, 8011, 801, 1, 1, -300, "E1").await;
+    common::insert_episode_in_days(&state.db, 8012, 801, 1, 2, -290, "E2").await;
+    common::watch_ago(&state.db, 1, 801, 8011, "w-801", 200).await;
+
+    // up_to_date: seen the latest aired episode.
+    mk(802, "UpToDate").await;
+    common::insert_episode_in_days(&state.db, 8021, 802, 1, 1, -40, "E1").await;
+    common::watch_ago(&state.db, 1, 802, 8021, "w-802", 5).await;
+
+    // not_started: tracked, nothing watched.
+    mk(803, "NotStarted").await;
+    common::insert_episode_in_days(&state.db, 8031, 803, 1, 1, -40, "E1").await;
+
+    // for_later and stopped are set by status/archived, whatever the progress.
+    mk(804, "ForLater").await;
+    common::set_user_show(&state.db, 1, 804, "status", "'for_later'").await;
+    mk(805, "Stopped").await;
+    common::set_user_show(&state.db, 1, 805, "archived", "true").await;
+
+    let lib = tracking::library(&state, me, &langs(), "name", false).await.unwrap();
+    let rails: Vec<(&str, Vec<i64>)> = vec![
+        ("watching", lib.watching.iter().map(|s| s.series_id).collect()),
+        ("stale", lib.stale.iter().map(|s| s.series_id).collect()),
+        ("up_to_date", lib.up_to_date.iter().map(|s| s.series_id).collect()),
+        ("not_started", lib.not_started.iter().map(|s| s.series_id).collect()),
+        ("for_later", lib.for_later.iter().map(|s| s.series_id).collect()),
+        ("stopped", lib.stopped.iter().map(|s| s.series_id).collect()),
+    ];
+    // The fixtures are meant to cover every bucket — a plan change that empties one
+    // would otherwise make this test pass vacuously.
+    for (name, ids) in &rails {
+        assert!(!ids.is_empty(), "fixture for '{name}' produced no rows");
+    }
+
+    for (bucket, mut rail_ids) in rails {
+        let mut filtered: Vec<i64> = search_db(
+            &state,
+            &Filters {
+                kind: "series".into(),
+                library_user: Some(me),
+                viewer: Some(me),
+                states: vec![bucket.to_string()],
+                sort: "name".into(),
+                limit: 200,
+                ..Default::default()
+            },
+            &langs(),
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .filter_map(|r| r.tvdb_id)
+        .collect();
+        rail_ids.sort();
+        filtered.sort();
+        assert_eq!(filtered, rail_ids, "rail and state filter disagree for '{bucket}'");
+    }
+
+    // Any-of: asking for two buckets returns their union, and every bucket name the
+    // classification can emit is accepted by the filter.
+    let both = search_db(
+        &state,
+        &Filters {
+            kind: "series".into(),
+            library_user: Some(me),
+            viewer: Some(me),
+            states: vec!["for_later".into(), "stopped".into()],
+            limit: 200,
+            ..Default::default()
+        },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(both.len(), 2, "state is any-of");
+    assert_eq!(STATES.len(), 6, "every bucket above is covered");
+}
+
+/// The Library filter must scope movies through `user_movie`. Series and movie ids
+/// overlap in TheTVDB, so joining `user_show` on a movie id matched unrelated
+/// titles — a library of 17 movies returned 171.
+#[tokio::test]
+async fn library_filter_scopes_movies_by_movie_membership() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "movscope@test.local").await;
+    let me = common::uid(1);
+
+    // A movie the user does NOT track, whose id collides with a series they DO.
+    let colliding_id = 900_i64;
+    common::insert_series(&state.db, colliding_id, "Tracked Series", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, colliding_id, true, false).await;
+    common::insert_movie(&state.db, colliding_id, "Untracked Movie", Some(2019), Some(100)).await;
+
+    let movies = search_db(
+        &state,
+        &Filters { kind: "movie".into(), library_user: Some(me), viewer: Some(me), limit: 50, ..Default::default() },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        movies.is_empty(),
+        "a movie sharing an id with a tracked SERIES must not appear in the movie library"
+    );
+}
+
+/// Anime shares the series table, so `type=series` returns it. A section that wants
+/// series but NOT anime must have it excluded IN SQL — filtering client-side runs
+/// after LIMIT, which empties a rail whose top results all happen to be anime.
+#[tokio::test]
+async fn exclude_anime_applies_before_the_limit() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "noanime@test.local").await;
+    let me = common::uid(1);
+
+    // Three anime sort ahead of the one live-action show (by name), so a limit of 3
+    // would return only anime if the exclusion happened afterwards.
+    for (id, name) in [(910, "AAA Anime"), (911, "BBB Anime"), (912, "CCC Anime")] {
+        common::insert_series(&state.db, id, name, Some(2020), Some(24), Some(1.0), Some("jpn"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+    common::insert_series(&state.db, 913, "ZZZ Drama", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 913, true, false).await;
+    // An unknown original language is NOT anime and must survive the exclusion.
+    common::insert_series(&state.db, 914, "ZZZ Unknown", Some(2020), Some(45), Some(1.0), None, serde_json::json!({})).await;
+    common::follow(&state.db, 1, 914, true, false).await;
+
+    let run = async |exclude_anime: bool, limit: i64| {
+        search_db(
+            &state,
+            &Filters {
+                kind: "series".into(),
+                library_user: Some(me),
+                viewer: Some(me),
+                sort: "name".into(),
+                sort_desc: false,
+                limit,
+                exclude_anime,
+                ..Default::default()
+            },
+            &langs(),
+        )
+        .await
+        .unwrap()
+    };
+
+    // Without the flag, a series query carries anime — that's the trap.
+    assert_eq!(run(false, 3).await.len(), 3);
+    assert!(run(false, 3).await.iter().all(|r| r.is_anime), "the top 3 by name are all anime");
+
+    // With it, the limit applies to the shows that actually qualify.
+    let kept = run(true, 3).await;
+    assert_eq!(kept.len(), 2, "only the non-anime shows remain");
+    assert!(kept.iter().all(|r| !r.is_anime));
+    let names: Vec<_> = kept.iter().filter_map(|r| r.name.as_deref()).collect();
+    assert!(names.contains(&"ZZZ Drama"));
+    assert!(names.contains(&"ZZZ Unknown"), "unknown original language is not anime");
+}
+
+/// A custom rail shows every matching title, like the built-in rails — not a page
+/// of 30. The old default silently truncated a rail whose match count exceeded it.
+#[tokio::test]
+async fn a_library_rail_is_not_capped_at_a_page() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "nocap@test.local").await;
+    let me = common::uid(1);
+
+    // More shows than the old per-rail default.
+    for i in 0..45_i64 {
+        let id = 3000 + i;
+        common::insert_series(&state.db, id, &format!("Show {i:02}"), Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+
+    let all = search_db(
+        &state,
+        &Filters {
+            kind: "series".into(),
+            library_user: Some(me),
+            viewer: Some(me),
+            // What the batch handler passes when the client sends no limit.
+            limit: 2000,
+            ..Default::default()
+        },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(all.len(), 45, "the rail returns the whole match set");
+
+    // Discover stays capped: it browses the entire catalog, where an unbounded
+    // limit would be a very different proposition.
+    let discovered = search_db(
+        &state,
+        &Filters { kind: "series".into(), viewer: Some(me), limit: 2000, ..Default::default() },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert!(discovered.len() <= 200, "catalog-wide queries keep the tight ceiling");
+}
+
+/// The exact filter map the client stores for an anime rail, driven through the
+/// batch endpoint's parsing path (query-map -> DiscoverQuery -> Filters) and then
+/// the query — reproducing a rail that came back empty in the app.
+#[tokio::test]
+async fn anime_rail_filter_map_round_trips_and_returns_rows() {
+    use backend::catalog::discover::search_db;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "animerail@test.local").await;
+    let me = common::uid(1);
+
+    common::insert_series(&state.db, 950, "Anime One", Some(2021), Some(24), Some(8.0), Some("jpn"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 950, true, false).await;
+    common::insert_episode_in_days(&state.db, 9501, 950, 1, 1, -30, "E1").await;
+    common::watch_ago(&state.db, 1, 950, 9501, "w-950", 3).await;
+
+    // Exactly what `app.library_section.filters` holds for the failing rail.
+    let stored = "dir=desc&sort=last_watched&type=anime";
+    let q: backend::web::handlers::discover::DiscoverQuery =
+        serde_urlencoded::from_str(stored).expect("the stored map must parse as a DiscoverQuery");
+    assert_eq!(q.kind.as_deref(), Some("anime"), "`type` must map onto `kind`");
+    assert_eq!(q.sort.as_deref(), Some("last_watched"));
+
+    let filters = backend::web::handlers::discover::build_filters(&q, Some(me), None, Some(me));
+    assert_eq!(filters.kind, "anime");
+    assert_eq!(filters.sort, "last_watched");
+    assert_eq!(filters.limit, 120, "an unset limit falls back to the default");
+
+    let rows = search_db(&state, &filters, &langs()).await.unwrap();
+    assert_eq!(rows.len(), 1, "the anime rail must return the tracked anime");
+}
+
+/// A watch-recency SORT pulls in the same CTEs a state filter needs — but it must
+/// not also apply the state predicate. Emitting `= ANY('{}')` for a sort-only rail
+/// matched nothing, so a category sorted by "last watched" rendered empty.
+#[tokio::test]
+async fn a_watch_recency_sort_alone_does_not_filter_by_state() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "sortonly@test.local").await;
+    let me = common::uid(1);
+
+    // Deliberately spread across buckets: never-watched, recently watched, stopped.
+    for (id, name) in [(960, "Never"), (961, "Recent"), (962, "Stopped")] {
+        common::insert_series(&state.db, id, name, Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+        common::insert_episode_in_days(&state.db, id * 10, id, 1, 1, -40, "E1").await;
+    }
+    common::watch_ago(&state.db, 1, 961, 9610, "w-961", 2).await;
+    common::set_user_show(&state.db, 1, 962, "archived", "true").await;
+
+    let by_recency = search_db(
+        &state,
+        &Filters {
+            kind: "series".into(),
+            library_user: Some(me),
+            viewer: Some(me),
+            sort: "last_watched".into(),
+            limit: 100,
+            ..Default::default() // states is EMPTY
+        },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(by_recency.len(), 3, "no state filter was asked for, so nothing is filtered out");
+    assert_eq!(by_recency[0].name.as_deref(), Some("Recent"), "and it is actually sorted by recency");
+
+    // Combining the two still narrows properly.
+    let stopped_only = search_db(
+        &state,
+        &Filters {
+            kind: "series".into(),
+            library_user: Some(me),
+            viewer: Some(me),
+            sort: "last_watched".into(),
+            states: vec!["stopped".into()],
+            limit: 100,
+            ..Default::default()
+        },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(stopped_only.len(), 1);
+    assert_eq!(stopped_only[0].name.as_deref(), Some("Stopped"));
+}
+
+/// The watch-history facets, and the view they exist for: "shows I've watched in
+/// the last N days, still running, most left to watch first".
+#[tokio::test]
+async fn watch_history_facets_and_the_seen_recently_view() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "facets@test.local").await;
+    let me = common::uid(1);
+
+    // A running show watched recently, 3 of 5 aired episodes left.
+    common::insert_series(&state.db, 970, "Running Behind", Some(2024), Some(24), Some(8.0), Some("eng"), serde_json::json!({"status": "Continuing"})).await;
+    sqlx::query("UPDATE catalog.series SET status='Continuing' WHERE id=970").execute(&state.db).await.unwrap();
+    common::follow(&state.db, 1, 970, true, false).await;
+    for (n, days) in [(1, -50), (2, -40), (3, -30), (4, -20), (5, -10)] {
+        common::insert_episode_in_days(&state.db, 9700 + n, 970, 1, n as i32, days, &format!("E{n}")).await;
+    }
+    common::watch_ago(&state.db, 1, 970, 9701, "w-970-1", 4).await;
+    common::watch_ago(&state.db, 1, 970, 9702, "w-970-2", 3).await;
+    // ...and one future episode, so it also has something upcoming.
+    common::insert_episode_in_days(&state.db, 9709, 970, 1, 6, 14, "E6").await;
+
+    // A running show watched recently with only 1 left.
+    sqlx::query("UPDATE catalog.series SET status='Continuing' WHERE id=971").execute(&state.db).await.ok();
+    common::insert_series(&state.db, 971, "Nearly Caught Up", Some(2024), Some(24), Some(8.0), Some("eng"), serde_json::json!({})).await;
+    sqlx::query("UPDATE catalog.series SET status='Continuing' WHERE id=971").execute(&state.db).await.unwrap();
+    common::follow(&state.db, 1, 971, true, false).await;
+    common::insert_episode_in_days(&state.db, 9711, 971, 1, 1, -30, "E1").await;
+    common::insert_episode_in_days(&state.db, 9712, 971, 1, 2, -20, "E2").await;
+    common::watch_ago(&state.db, 1, 971, 9711, "w-971-1", 2).await;
+
+    // An ENDED show, watched recently — must be excluded by the status facet.
+    common::insert_series(&state.db, 972, "Finished Long Ago", Some(2010), Some(24), Some(8.0), Some("eng"), serde_json::json!({})).await;
+    sqlx::query("UPDATE catalog.series SET status='Ended' WHERE id=972").execute(&state.db).await.unwrap();
+    common::follow(&state.db, 1, 972, true, false).await;
+    common::insert_episode_in_days(&state.db, 9721, 972, 1, 1, -900, "E1").await;
+    common::watch_ago(&state.db, 1, 972, 9721, "w-972-1", 1).await;
+
+    // A running show NOT watched for a year — excluded by the recency facet.
+    common::insert_series(&state.db, 973, "Long Abandoned", Some(2015), Some(24), Some(8.0), Some("eng"), serde_json::json!({})).await;
+    sqlx::query("UPDATE catalog.series SET status='Continuing' WHERE id=973").execute(&state.db).await.unwrap();
+    common::follow(&state.db, 1, 973, true, false).await;
+    common::insert_episode_in_days(&state.db, 9731, 973, 1, 1, -800, "E1").await;
+    common::insert_episode_in_days(&state.db, 9732, 973, 1, 2, -700, "E2").await;
+    common::watch_ago(&state.db, 1, 973, 9731, "w-973-1", 365).await;
+
+    let base = || Filters {
+        kind: "series".into(),
+        library_user: Some(me),
+        viewer: Some(me),
+        limit: 100,
+        ..Default::default()
+    };
+    let names = |rows: Vec<backend::catalog::SearchResult>| {
+        rows.into_iter().filter_map(|r| r.name).collect::<Vec<_>>()
+    };
+
+    // THE VIEW: watched in the last 30 days + still running + most remaining first.
+    let view = search_db(
+        &state,
+        &Filters {
+            watched_days_max: Some(30),
+            statuses: vec!["Continuing".into()],
+            sort: "remaining".into(),
+            sort_desc: true,
+            ..base()
+        },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        names(view),
+        vec!["Running Behind", "Nearly Caught Up"],
+        "recent + running, ordered by how much is left"
+    );
+
+    // Each facet on its own.
+    let stale_side = search_db(&state, &Filters { watched_days_min: Some(90), ..base() }, &langs()).await.unwrap();
+    assert_eq!(names(stale_side), vec!["Long Abandoned"], "untouched for at least 90 days");
+
+    let leftovers = search_db(&state, &Filters { remaining_min: Some(2), ..base() }, &langs()).await.unwrap();
+    assert!(names(leftovers).contains(&"Running Behind".to_string()));
+
+    let half_done = search_db(&state, &Filters { progress_max: Some(50.0), ..base() }, &langs()).await.unwrap();
+    assert!(names(half_done).contains(&"Running Behind".to_string()), "2 of 5 seen is 40%");
+
+    let upcoming = search_db(&state, &Filters { has_upcoming: Some(true), ..base() }, &langs()).await.unwrap();
+    assert_eq!(names(upcoming), vec!["Running Behind"], "only that one has a future episode");
+
+    let everything_released = search_db(&state, &Filters { has_upcoming: Some(false), ..base() }, &langs()).await.unwrap();
+    assert!(!names(everything_released).contains(&"Running Behind".to_string()));
+
+    let done = search_db(&state, &Filters { caught_up: Some(true), ..base() }, &langs()).await.unwrap();
+    assert!(names(done).contains(&"Finished Long Ago".to_string()), "seen its only episode");
+
+    // Ascending order = fewest left first, the other reading of the same view.
+    let fewest = search_db(
+        &state,
+        &Filters { watched_days_max: Some(30), statuses: vec!["Continuing".into()], sort: "remaining".into(), sort_desc: false, ..base() },
+        &langs(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(names(fewest), vec!["Nearly Caught Up", "Running Behind"]);
+}
+
+/// Each bound of a watch-history range applies independently, so a filter can be
+/// half-open. A range that always sent both bounds silently excluded everything
+/// past the slider's ceiling — "not watched in over 90 days" would have dropped a
+/// show last watched two years ago, because it also asserted "within 365 days".
+#[tokio::test]
+async fn watch_history_ranges_are_half_open() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "halfopen@test.local").await;
+    let me = common::uid(1);
+
+    // Watched two years ago — well beyond any slider ceiling.
+    common::insert_series(&state.db, 980, "Ancient History", Some(2005), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 980, true, false).await;
+    common::insert_episode_in_days(&state.db, 9801, 980, 1, 1, -1000, "E1").await;
+    common::watch_ago(&state.db, 1, 980, 9801, "w-980", 730).await;
+
+    // Watched last week.
+    common::insert_series(&state.db, 981, "Just Watched", Some(2024), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 981, true, false).await;
+    common::insert_episode_in_days(&state.db, 9811, 981, 1, 1, -30, "E1").await;
+    common::watch_ago(&state.db, 1, 981, 9811, "w-981", 7).await;
+
+    let base = || Filters { kind: "series".into(), library_user: Some(me), viewer: Some(me), limit: 100, ..Default::default() };
+    let names = |rows: Vec<backend::catalog::SearchResult>| rows.into_iter().filter_map(|r| r.name).collect::<Vec<_>>();
+
+    // Min only: "untouched for at least 90 days" — must reach back indefinitely.
+    let old = search_db(&state, &Filters { watched_days_min: Some(90), ..base() }, &langs()).await.unwrap();
+    assert_eq!(names(old), vec!["Ancient History"], "a two-year-old watch is still 'over 90 days ago'");
+
+    // Max only: "within the last 30 days".
+    let recent = search_db(&state, &Filters { watched_days_max: Some(30), ..base() }, &langs()).await.unwrap();
+    assert_eq!(names(recent), vec!["Just Watched"]);
+
+    // The same independence for the aired and remaining ranges.
+    let aired_long_ago = search_db(&state, &Filters { aired_days_min: Some(365), ..base() }, &langs()).await.unwrap();
+    assert_eq!(names(aired_long_ago), vec!["Ancient History"]);
+
+    let anything_left = search_db(&state, &Filters { remaining_min: Some(0), ..base() }, &langs()).await.unwrap();
+    assert_eq!(anything_left.len(), 2, "a min of 0 constrains nothing away");
+}
+
+/// A custom rail's cards draw a progress bar, so the search rows need the same
+/// counts `LibraryShow` carries — and only when asked, since computing them costs
+/// the watch-history aggregates.
+#[tokio::test]
+async fn search_rows_carry_progress_only_when_requested() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "progress@test.local").await;
+    let me = common::uid(1);
+
+    common::insert_series(&state.db, 990, "Half Watched", Some(2024), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 990, true, false).await;
+    for n in 1..=4_i64 {
+        common::insert_episode_in_days(&state.db, 9900 + n, 990, 1, n as i32, -30, &format!("E{n}")).await;
+    }
+    common::watch_ago(&state.db, 1, 990, 9901, "w-990-1", 5).await;
+    common::watch_ago(&state.db, 1, 990, 9902, "w-990-2", 4).await;
+
+    let base = || Filters { kind: "series".into(), library_user: Some(me), viewer: Some(me), limit: 10, ..Default::default() };
+
+    // Opt-in: what the batch endpoint asks for.
+    let with = search_db(&state, &Filters { with_progress: true, ..base() }, &langs()).await.unwrap();
+    assert_eq!(with[0].total_episodes, Some(4));
+    assert_eq!(with[0].seen_episodes, Some(2), "2 of 4 aired episodes seen");
+
+    // Off by default, so a paged search doesn't pay for aggregates it won't draw.
+    let without = search_db(&state, &base(), &langs()).await.unwrap();
+    assert_eq!(without[0].total_episodes, None);
+    assert_eq!(without[0].seen_episodes, None, "absent, which the client renders as no bar");
+}

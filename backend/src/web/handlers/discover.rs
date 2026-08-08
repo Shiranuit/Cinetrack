@@ -54,9 +54,32 @@ pub struct DiscoverQuery {
     pub orig_langs: Option<String>,     // comma codes, any-of (e.g. jpn,eng)
     pub orig_countries: Option<String>, // comma codes, any-of (e.g. jpn,usa)
     pub langs: Option<String>,
+    /// Library-only: comma list of Library buckets to keep (any-of), e.g.
+    /// `state=watching,stale`. Values come from `tracking::state::STATES`.
+    pub state: Option<String>,
+    /// Drop anime from a `series` query — for a caller that wants series but not
+    /// anime, which the single `type` value can't express on its own.
+    pub exclude_anime: Option<bool>,
+    /// Include watch progress on each row, for callers that draw a progress bar.
+    pub with_progress: Option<bool>,
+    // Library-only watch-history facets. Three distinct clocks, deliberately named
+    // apart: when YOU watched it, when its latest episode AIRED, and (via `sort=updated`)
+    // when the catalog record changed.
+    pub watched_days_min: Option<i32>,
+    pub watched_days_max: Option<i32>,
+    pub aired_days_min: Option<i32>,
+    pub aired_days_max: Option<i32>,
+    pub remaining_min: Option<i32>,
+    pub remaining_max: Option<i32>,
+    pub progress_min: Option<f64>,
+    pub progress_max: Option<f64>,
+    pub caught_up: Option<bool>,
+    pub has_upcoming: Option<bool>,
 }
 
-fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>, viewer: Option<Uuid>) -> Filters {
+/// Turn a parsed query (or a saved section's stored filter map, which the batch
+/// endpoint deserializes into the same type) into the query layer's [`Filters`].
+pub fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>, viewer: Option<Uuid>) -> Filters {
     Filters {
         // Trimmed; ignored if under 2 chars (a 1-char substring is meaningless and
         // can't use the trigram index on the whole-catalog Discover query).
@@ -93,6 +116,31 @@ fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Op
         exclude_user,
         viewer,
         favorites_only: q.favorites.unwrap_or(false),
+        // Unknown bucket names are dropped rather than erroring: a section saved by
+        // a newer client stays usable, just without the part we don't understand.
+        states: q
+            .state
+            .as_deref()
+            .map(|s| {
+                s.split(',')
+                    .map(str::trim)
+                    .filter(|v| crate::tracking::state::is_valid(v))
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        exclude_anime: q.exclude_anime.unwrap_or(false),
+        with_progress: q.with_progress.unwrap_or(false),
+        watched_days_min: q.watched_days_min,
+        watched_days_max: q.watched_days_max,
+        aired_days_min: q.aired_days_min,
+        aired_days_max: q.aired_days_max,
+        remaining_min: q.remaining_min,
+        remaining_max: q.remaining_max,
+        progress_min: q.progress_min,
+        progress_max: q.progress_max,
+        caught_up: q.caught_up,
+        has_upcoming: q.has_upcoming,
     }
 }
 
@@ -144,9 +192,15 @@ pub struct BatchResult {
     pub items: Vec<SearchResult>,
 }
 
-/// Ceiling on filters per batch, mirroring the per-user section cap — a request is
-/// one connection held for as long as the slowest filter, so this bounds it.
-const MAX_BATCH: usize = 40;
+/// Ceiling on filters per batch. A section spanning kinds sends one entry PER KIND
+/// (at most a series-or-anime query plus a movie one), so this is twice the section
+/// cap — sizing it to `MAX_SECTIONS` would reject a full layout of mixed sections.
+const MAX_BATCH: usize = crate::tracking::sections::MAX_SECTIONS * 2;
+
+/// Rows one rail may return when the caller doesn't say. The Library's built-in
+/// rails show every matching title rather than a page, and custom rails match that;
+/// the real bound is the user's library size, so this is just a runaway guard.
+const RAIL_LIMIT: i64 = 2000;
 
 /// How many of a batch's filters run at once. They're independent queries, so the
 /// wall clock is the slowest rather than the sum; the cap keeps one library load
@@ -182,8 +236,10 @@ pub async fn library_filter_batch(
             let mut q: DiscoverQuery = serde_urlencoded::from_str(&encode_params(&entry.filters))
                 .map_err(|e| crate::error::AppError::BadRequest(format!("bad filter for '{}': {e}", entry.key)))?;
             // Paging is the caller's, not the saved filter's.
-            q.limit = req.limit;
+            q.limit = Some(req.limit.unwrap_or(RAIL_LIMIT));
             q.offset = None;
+            // Rails draw the same cards the built-in ones do, progress bar included.
+            q.with_progress = Some(true);
             let (st, ls, key) = (state.clone(), langs.clone(), entry.key.clone());
             set.spawn(async move {
                 let items = catalog::discover::search_db(&st, &build_filters(&q, Some(uid), None, Some(uid)), &ls).await;

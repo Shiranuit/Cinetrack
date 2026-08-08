@@ -137,7 +137,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final entries = [
       for (final s in custom)
         for (final kind in sectionQueryKinds(plan[s.id!]!.kinds))
-          (key: sectionBatchKey(s.id!, kind), filters: {...plan[s.id!]!.filters, 'type': kind}),
+          (
+            key: sectionBatchKey(s.id!, kind),
+            filters: sectionQueryFilters(plan[s.id!]!.filters, kind, plan[s.id!]!.kinds),
+          ),
     ];
 
     try {
@@ -586,6 +589,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
           }
 
           if (sections.isEmpty) {
+            // "Empty" has three very different causes, and saying "your library is
+            // empty" when it holds hundreds of shows sends the user looking for the
+            // wrong problem. Name the actual reason, and offer the way out.
+            final enabled = _sections.where((s) => s.enabled).toList();
+            final hiddenByType = enabled.isNotEmpty && enabled.every((s) => s.isCustom && !_customTypeVisible(s));
+            if (enabled.isEmpty || hiddenByType) {
+              return _Scroll(
+                child: MessageView(
+                  icon: hiddenByType ? Icons.filter_list_rounded : Icons.dashboard_customize_rounded,
+                  message: hiddenByType ? t.libSectionsHiddenByType : t.libNoSections,
+                  action: FilledButton.icon(
+                    icon: const Icon(Icons.dashboard_customize_rounded),
+                    label: Text(t.customizeLibrary),
+                    onPressed: _openCustomize,
+                  ),
+                ),
+              );
+            }
             return _Scroll(child: MessageView(icon: Icons.video_library_rounded, message: t.libEmpty));
           }
 
@@ -671,7 +692,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
   ShowCard _resultCard(SearchResult r) => ShowCard(
         title: r.name ?? '—',
         imageUrl: r.imageUrl,
-        subtitle: r.year?.toString(),
+        // The progress bar replaces the year caption, exactly as on the built-in
+        // rails — so a duplicated category's cards look like the ones it copied.
+        subtitle: r.progress == null ? r.year?.toString() : null,
+        // ShowCard treats 0 as "no stripe", which is also the right rendering for
+        // a result whose progress was never computed.
+        progress: r.progress ?? 0,
         rating: r.rating,
         favorite: r.isFavorited,
         heroTag: '${r.kind}-${r.tvdbId}',

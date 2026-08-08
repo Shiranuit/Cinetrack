@@ -990,4 +990,113 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get deleteCategory => '카테고리 삭제';
+
+  @override
+  String get sortLastWatched => '최근 시청순';
+
+  @override
+  String get sortLastAired => '최신 에피소드 방영일';
+
+  @override
+  String categoryCopy(String name) {
+    return '$name (사본)';
+  }
+
+  @override
+  String get duplicateCategory => '복제';
+
+  @override
+  String get libraryStatus => '라이브러리 카테고리';
+
+  @override
+  String get libNoSections => '표시된 카테고리가 없습니다. 라이브러리를 사용자 지정해 다시 켜세요.';
+
+  @override
+  String get libSectionsHiddenByType =>
+      '위의 유형 필터가 카테고리를 숨기고 있습니다. 해당 유형을 켜거나 카테고리를 편집하세요.';
+
+  @override
+  String get filterWatchedDays => '시청 (며칠 전)';
+
+  @override
+  String get filterAiredDays => '최신 에피소드 (며칠 전)';
+
+  @override
+  String get filterRemaining => '남은 에피소드';
+
+  @override
+  String get filterProgress => '진행률 (%)';
+
+  @override
+  String get filterCaughtUp => '최신까지 시청';
+
+  @override
+  String get filterHasUpcoming => '예정 에피소드 있음';
+
+  @override
+  String get sortRemaining => '남은 에피소드';
+
+  @override
+  String get sortProgress => '진행률';
+
+  @override
+  String get yes => '예';
+
+  @override
+  String get no => '아니요';
+
+  @override
+  String get sortHelpPopular => '카탈로그 전체 인기 점수';
+
+  @override
+  String get sortHelpTopRated => '모든 사용자의 평균 평점';
+
+  @override
+  String get sortHelpMyRating => '내가 매긴 1~5점 평점';
+
+  @override
+  String get sortHelpOwnerRating => '이 사용자가 매긴 1~5점 평점';
+
+  @override
+  String get sortHelpReleaseDate => '최초 방영 연도';
+
+  @override
+  String get sortHelpLastUpdated => '카탈로그 정보가 바뀐 시점 — 시청 시점이 아닙니다';
+
+  @override
+  String get sortHelpSeasons => '시즌 수';
+
+  @override
+  String get sortHelpEpisodes => '전체 에피소드 수';
+
+  @override
+  String get sortHelpLongest => '에피소드 길이';
+
+  @override
+  String get sortHelpName => '가나다/알파벳 순';
+
+  @override
+  String get sortHelpLastWatched => '마지막으로 에피소드를 본 시점';
+
+  @override
+  String get sortHelpLastAired => '최신 에피소드가 방영된 시점 — 시청 여부와 무관';
+
+  @override
+  String get sortHelpRemaining => '아직 보지 않은 방영된 에피소드 수 (개수)';
+
+  @override
+  String get sortHelpProgress => '방영된 에피소드 중 시청한 비율 (백분율)';
+
+  @override
+  String get filterMin => '최소';
+
+  @override
+  String get filterMax => '최대';
+
+  @override
+  String get resetLayout => '레이아웃 초기화';
+
+  @override
+  String get resetLayoutConfirm =>
+      '기본 카테고리가 원래 순서로 돌아가 다시 표시됩니다. 사용자 지정 카테고리는 삭제되지 않고 숨겨집니다 — 다시 켤 수 있습니다.';
 }

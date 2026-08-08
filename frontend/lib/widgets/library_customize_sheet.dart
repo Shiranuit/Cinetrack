@@ -7,6 +7,7 @@ import '../api/models.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
+import 'confirm_actions.dart';
 import 'filter_sheet.dart';
 import 'library_categories.dart';
 
@@ -118,6 +119,70 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
     super.dispose();
   }
 
+  /// Restore the stock layout: every built-in back in its default order and shown,
+  /// custom categories HIDDEN rather than deleted.
+  ///
+  /// Hiding is the whole point — a custom category can represent a lot of tuning,
+  /// so a reset that threw them away would be unrecoverable. They keep their
+  /// filters and can be switched back on individually.
+  ///
+  /// Confirmed first: the sheet saves on its own, so there's no cancel to fall back
+  /// on once this runs.
+  Future<void> _resetLayout() async {
+    final t = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.resetLayout),
+        content: Text(t.resetLayoutConfirm),
+        actions: confirmActions(
+          ctx,
+          confirmLabel: t.resetLayout,
+          onConfirm: () => Navigator.of(ctx).pop(true),
+          cancelLabel: t.cancel,
+          onCancel: () => Navigator.of(ctx).pop(false),
+          destructive: true,
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    // Reuse each built-in's existing row so its id survives the reset; only the
+    // order and the enabled flag are being restored.
+    final existing = {for (final s in _order) if (!s.isCustom) s.builtin!: s};
+    final builtins = [
+      for (final key in kBuiltinLibrarySections)
+        (existing[key] ?? LibrarySection(builtin: key)).copyWith(enabled: true),
+    ];
+    final hiddenCustom = [
+      for (final s in _order)
+        if (s.isCustom) s.copyWith(enabled: false),
+    ];
+    setState(() => _order
+      ..clear()
+      ..addAll([...builtins, ...hiddenCustom]));
+    _touch();
+  }
+
+  /// Copy a custom category, inserted right after the original.
+  ///
+  /// The copy carries no id, so the server treats it as a new section rather than
+  /// an edit of the one it came from. Useful for variants of a filter you've
+  /// already tuned — "the same, but only anime" — without rebuilding it.
+  void _duplicateCustom(int index) {
+    final t = AppLocalizations.of(context);
+    final source = _order[index];
+    setState(() => _order.insert(
+          index + 1,
+          LibrarySection(
+            title: t.categoryCopy(sectionLabel(t, source)),
+            filters: {...source.filters},
+            enabled: source.enabled,
+          ),
+        ));
+    _touch();
+  }
+
   Future<void> _editCustom({LibrarySection? existing, int? index}) async {
     final edited = await showModalBottomSheet<LibrarySection>(
       context: context,
@@ -150,6 +215,10 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                TextButton(
+                  onPressed: _saving ? null : _resetLayout,
+                  child: Text(t.resetLayout),
+                ),
                 const SizedBox(width: Insets.sm),
               ],
             ),
@@ -182,7 +251,15 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_order[i].isCustom)
+                        // Only custom sections can be copied or removed. A built-in
+                        // is computed, not configured — there's nothing to copy that
+                        // the filter sheet can't already express.
+                        if (_order[i].isCustom) ...[
+                          IconButton(
+                            tooltip: t.duplicateCategory,
+                            icon: const Icon(Icons.copy_rounded),
+                            onPressed: () => _duplicateCustom(i),
+                          ),
                           IconButton(
                             tooltip: t.deleteCategory,
                             icon: const Icon(Icons.delete_outline_rounded),
@@ -191,6 +268,7 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
                               _touch();
                             },
                           ),
+                        ],
                         Switch(
                           value: _order[i].enabled,
                           onChanged: (on) {
