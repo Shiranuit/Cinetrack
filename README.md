@@ -17,6 +17,7 @@ small server, with no external SaaS dependencies. Metadata comes from
 ![Frontend](https://img.shields.io/badge/frontend-Flutter-blue.svg)
 ![Database](https://img.shields.io/badge/db-PostgreSQL-336791.svg)
 
+
 </div>
 
 ---
