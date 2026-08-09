@@ -97,6 +97,15 @@ pub struct Filters {
     /// Library-only, series-only: has a future-dated episode on the schedule. The
     /// complement of "everything released" for a show that is still running.
     pub has_upcoming: Option<bool>,
+    /// The library owner's `keep_upcoming_in_to_watch` preference, which decides
+    /// whether "up to date" also requires that nothing more is coming.
+    ///
+    /// Carried on the filter rather than read here because it must be the SAME
+    /// value the rails were built with — `state=watching` and the "To watch" rail
+    /// answering differently is exactly the drift `tracking::state` exists to
+    /// prevent. Handlers load it for the library owner; see
+    /// `tracking::keep_upcoming_in_to_watch`.
+    pub keep_upcoming_in_to_watch: bool,
 }
 
 /// "In the library" predicate for a `user_show` alias. A show counts as tracked
@@ -244,7 +253,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         let case = if is_movie {
             crate::tracking::state::movie_state_case("um")
         } else {
-            crate::tracking::state::state_case("us")
+            crate::tracking::state::state_case("us", f.keep_upcoming_in_to_watch)
         };
         qb.push(format!(" AND {case} = ANY("));
         qb.push_bind(f.states.clone());

@@ -390,6 +390,13 @@ class ApiClient extends ChangeNotifier {
       _send('PUT', '/api/me/activity-visibility', body: {'activity_visibility': value});
   Future<void> setProfileBlocks(List<String> blocks) => _send('PUT', '/api/me/profile-blocks', body: {'blocks': blocks});
 
+  /// Keep caught-up shows in "To watch" while they still have unaired episodes.
+  ///
+  /// Notifies (unlike the layout save): this moves shows between categories, so
+  /// any open Library is showing the wrong ones until it reloads.
+  Future<void> setKeepUpcomingInToWatch(bool keep) =>
+      _send('PUT', '/api/me/keep-upcoming-in-to-watch', body: {'keep_upcoming_in_to_watch': keep});
+
   /// The user's Library layout (built-in defaults when they've never customized).
   Future<List<LibrarySection>> librarySections() async =>
       _list(await _get('/api/me/library-sections'), LibrarySection.fromJson);

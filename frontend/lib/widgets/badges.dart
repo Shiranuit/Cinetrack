@@ -90,15 +90,18 @@ class ProgressStripe extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (value <= 0) return const SizedBox.shrink();
-    // A thin, subtle bar hugging the poster's bottom edge (clipped to its rounded
-    // corners by the parent), showing how much of the show has been seen.
+    final v = value.clamp(0.0, 1.0);
+    // In progress is the brand amber, finished is the "seen" mint — so "there's
+    // still something to watch" and "you're done" read apart at a glance, without
+    // having to compare bar lengths across a rail.
+    final done = v >= 1.0;
     return Align(
       alignment: Alignment.bottomCenter,
       child: LinearProgressIndicator(
-        value: value.clamp(0, 1),
+        value: v,
         minHeight: 3,
         backgroundColor: Colors.black.withValues(alpha: 0.35),
-        valueColor: AlwaysStoppedAnimation(context.colors.seen),
+        valueColor: AlwaysStoppedAnimation(done ? context.colors.seen : context.scheme.primary),
       ),
     );
   }

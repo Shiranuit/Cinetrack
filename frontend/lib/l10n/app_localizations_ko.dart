@@ -138,6 +138,16 @@ class AppLocalizationsKo extends AppLocalizations {
   String get sectionAppearance => '화면';
 
   @override
+  String get sectionLibrary => '라이브러리';
+
+  @override
+  String get keepUpcomingInToWatch => '아직 방영되지 않은 회차가 있으면 ‘볼 작품’에 유지';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      '모두 따라잡은 작품도 아직 방영되지 않은 회차가 남아 있으면 ‘볼 작품’에 머물러요. 새 회차 없이 한 달이 지나면 지금처럼 ‘한동안 안 본 작품’으로 이동합니다.';
+
+  @override
   String get sectionLanguages => '언어';
 
   @override

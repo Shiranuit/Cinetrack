@@ -138,6 +138,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sectionAppearance => '外观';
 
   @override
+  String get sectionLibrary => '媒库';
+
+  @override
+  String get keepUpcomingInToWatch => '仍有未播出剧集时，保留在“待观看”';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      '已追完的剧集只要还有未播出的剧集，就会留在“待观看”。若一个月没有新剧集，仍会移到“很久没看”。';
+
+  @override
   String get sectionLanguages => '语言';
 
   @override

@@ -183,6 +183,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Keep caught-up shows in "To watch" while they still have unaired episodes.
+  /// Reloads `me` so the switch reflects what was actually stored; the API client
+  /// notifies on its own, which is what makes an open Library re-fetch.
+  Future<void> _setKeepUpcomingInToWatch(bool keep) async {
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthController>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      await api.setKeepUpcomingInToWatch(keep);
+      await auth.reloadMe();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Who can see the shows/movies I mark as watched.
   Future<void> _setActivityVisibility(String value) async {
     final api = context.read<ApiClient>();
@@ -392,6 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = context.watch<SettingsController>();
     final me = context.watch<AuthController>().me;
     final isPrivate = me?.isPrivate ?? false;
+    final keepUpcoming = me?.keepUpcomingInToWatch ?? false;
     // Guard against a value the client doesn't know (older/newer server) so the
     // SegmentedButton always has exactly one valid selection.
     final activityVisibility = kActivityVisibilities.contains(me?.activityVisibility)
@@ -491,6 +510,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               selected: {activityVisibility},
               onSelectionChanged: _busy ? null : (s) => _setActivityVisibility(s.first),
             ),
+          ),
+          SectionHeader(
+            title: t.sectionLibrary,
+            icon: Icons.video_library_rounded,
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.upcoming_rounded),
+            title: Text(t.keepUpcomingInToWatch),
+            subtitle: Text(t.keepUpcomingInToWatchHint),
+            value: keepUpcoming,
+            onChanged: _busy ? null : _setKeepUpcomingInToWatch,
           ),
           SectionHeader(
             title: t.sectionAppearance,

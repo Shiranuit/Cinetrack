@@ -139,6 +139,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sectionAppearance => 'Darstellung';
 
   @override
+  String get sectionLibrary => 'Bibliothek';
+
+  @override
+  String get keepUpcomingInToWatch =>
+      'Serien in „Anzusehen“ behalten, solange noch Folgen kommen';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      'Eine Serie, bei der du auf dem neuesten Stand bist, bleibt in „Anzusehen“, solange es noch nicht ausgestrahlte Folgen gibt. Nach einem Monat ohne neue Folge wandert sie weiterhin zu „Länger nicht gesehen“.';
+
+  @override
   String get sectionLanguages => 'Sprachen';
 
   @override

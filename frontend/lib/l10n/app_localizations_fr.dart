@@ -139,6 +139,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sectionAppearance => 'Apparence';
 
   @override
+  String get sectionLibrary => 'Bibliothèque';
+
+  @override
+  String get keepUpcomingInToWatch =>
+      'Garder les séries dans « À regarder » tant qu’il reste des épisodes à venir';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      'Une série que vous avez rattrapée reste dans « À regarder » tant qu’il lui reste des épisodes non diffusés. Elle passe toujours dans « Pas regardé depuis un moment » après un mois sans nouvel épisode.';
+
+  @override
   String get sectionLanguages => 'Langues';
 
   @override

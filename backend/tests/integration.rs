@@ -588,9 +588,6 @@ async fn library_sections_round_trip_and_default() {
 /// stops matching the category it was copied from.
 #[tokio::test]
 async fn library_rails_and_state_filter_agree() {
-    use backend::catalog::discover::{search_db, Filters};
-    use backend::tracking::state::STATES;
-
     let _g = common::guard().await;
     let Some(state) = common::state().await else { return };
     common::clean(&state.db).await;
@@ -630,7 +627,27 @@ async fn library_rails_and_state_filter_agree() {
     mk(805, "Stopped").await;
     common::set_user_show(&state.db, 1, 805, "archived", "true").await;
 
-    let lib = tracking::library(&state, me, &langs(), "name", false).await.unwrap();
+    // Caught up, but still airing — the one show the `keep_upcoming_in_to_watch`
+    // preference moves. Included here so the agreement below is checked on BOTH
+    // sides of the preference: the rails and the `state` filter each build the
+    // CASE separately, so this is where they would drift.
+    mk(806, "CaughtUpButAiring").await;
+    common::insert_episode_in_days(&state.db, 8061, 806, 1, 1, -7, "E1").await;
+    common::insert_episode_in_days(&state.db, 8062, 806, 1, 2, 7, "E2 (not aired)").await;
+    common::watch_ago(&state.db, 1, 806, 8061, "w-806", 1).await;
+
+    for keep in [false, true] {
+        tracking::set_keep_upcoming_in_to_watch(&state, me, keep).await.unwrap();
+        assert_rails_match_filter(&state, me, keep).await;
+    }
+}
+
+/// Every bucket the rails produce must be exactly what `state=<bucket>` returns.
+async fn assert_rails_match_filter(state: &backend::state::AppState, me: uuid::Uuid, keep: bool) {
+    use backend::catalog::discover::{search_db, Filters};
+    use backend::tracking::state::STATES;
+
+    let lib = tracking::library(state, me, &langs(), "name", false).await.unwrap();
     let rails: Vec<(&str, Vec<i64>)> = vec![
         ("watching", lib.watching.iter().map(|s| s.series_id).collect()),
         ("stale", lib.stale.iter().map(|s| s.series_id).collect()),
@@ -642,12 +659,12 @@ async fn library_rails_and_state_filter_agree() {
     // The fixtures are meant to cover every bucket — a plan change that empties one
     // would otherwise make this test pass vacuously.
     for (name, ids) in &rails {
-        assert!(!ids.is_empty(), "fixture for '{name}' produced no rows");
+        assert!(!ids.is_empty(), "fixture for '{name}' produced no rows (keep={keep})");
     }
 
     for (bucket, mut rail_ids) in rails {
         let mut filtered: Vec<i64> = search_db(
-            &state,
+            state,
             &Filters {
                 kind: "series".into(),
                 library_user: Some(me),
@@ -655,6 +672,7 @@ async fn library_rails_and_state_filter_agree() {
                 states: vec![bucket.to_string()],
                 sort: "name".into(),
                 limit: 200,
+                keep_upcoming_in_to_watch: keep,
                 ..Default::default()
             },
             &langs(),
@@ -666,19 +684,20 @@ async fn library_rails_and_state_filter_agree() {
         .collect();
         rail_ids.sort();
         filtered.sort();
-        assert_eq!(filtered, rail_ids, "rail and state filter disagree for '{bucket}'");
+        assert_eq!(filtered, rail_ids, "rail and state filter disagree for '{bucket}' (keep={keep})");
     }
 
     // Any-of: asking for two buckets returns their union, and every bucket name the
     // classification can emit is accepted by the filter.
     let both = search_db(
-        &state,
+        state,
         &Filters {
             kind: "series".into(),
             library_user: Some(me),
             viewer: Some(me),
             states: vec!["for_later".into(), "stopped".into()],
             limit: 200,
+            keep_upcoming_in_to_watch: keep,
             ..Default::default()
         },
         &langs(),
@@ -746,7 +765,7 @@ async fn anime_rail_filter_map_round_trips_and_returns_rows() {
     assert_eq!(q.kind.as_deref(), Some("anime"), "`type` must map onto `kind`");
     assert_eq!(q.sort.as_deref(), Some("last_watched"));
 
-    let filters = backend::web::handlers::discover::build_filters(&q, Some(me), None, Some(me));
+    let filters = backend::web::handlers::discover::build_filters(&q, Some(me), None, Some(me), false);
     assert_eq!(filters.kind, "anime");
     assert_eq!(filters.sort, "last_watched");
     assert_eq!(filters.limit, 120, "an unset limit falls back to the default");
@@ -1000,22 +1019,22 @@ async fn poison_filter_values_are_rejected_or_clamped() {
     // error, so it must be clamped rather than allowed through.
     for key in ["watched_days_min", "watched_days_max", "aired_days_min", "aired_days_max"] {
         let q: DiscoverQuery = parse_query(&[(key, "2147483647")]).expect("parses as i32");
-        let filters = Filters { library_user: Some(me), viewer: Some(me), limit: 10, ..build_filters(&q, Some(me), None, Some(me)) };
+        let filters = Filters { library_user: Some(me), viewer: Some(me), limit: 10, ..build_filters(&q, Some(me), None, Some(me), false) };
         let rows = search_db(&state, &filters, &langs()).await;
         assert!(rows.is_ok(), "{key}=i32::MAX must not take the query down: {:?}", rows.err());
     }
 
     // Negative day counts silently meant "in the future"; they clamp to 0.
     let q = parse_query(&[("watched_days_max", "-5")]).unwrap();
-    assert_eq!(build_filters(&q, Some(me), None, Some(me)).watched_days_max, Some(0));
+    assert_eq!(build_filters(&q, Some(me), None, Some(me), false).watched_days_max, Some(0));
 
     // NaN made every comparison false — an empty result with no explanation.
     let q = parse_query(&[("progress_min", "NaN")]).unwrap();
-    assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_min, None);
+    assert_eq!(build_filters(&q, Some(me), None, Some(me), false).progress_min, None);
 
     // And progress stays inside its own domain.
     let q = parse_query(&[("progress_max", "1000")]).unwrap();
-    assert_eq!(build_filters(&q, Some(me), None, Some(me)).progress_max, Some(100.0));
+    assert_eq!(build_filters(&q, Some(me), None, Some(me), false).progress_max, Some(100.0));
 }
 
 /// Search behaviour vs `main`, pinned.
@@ -1146,7 +1165,7 @@ async fn an_unknown_state_filter_fails_closed() {
         let f = backend::catalog::discover::Filters {
             kind: "series".into(),
             limit: 100,
-            ..build_filters(&q, Some(me), None, Some(me))
+            ..build_filters(&q, Some(me), None, Some(me), false)
         };
         search_db(&state, &f, &langs()).await.unwrap().len()
     };
@@ -1206,4 +1225,132 @@ async fn a_rejected_layout_save_leaves_the_stored_one_intact() {
             .await
             .unwrap();
     assert_eq!(rows, vec![("watching".to_string(), true), ("stale".to_string(), false)]);
+}
+
+/// The `keep_upcoming_in_to_watch` preference (migration 0045).
+///
+/// The complaint it answers: you watch the latest episode of a show you're actively
+/// following, and it immediately leaves "To watch" for "Up to date" until the next
+/// episode airs — so the category you actually look at empties out mid-season.
+///
+/// What it must NOT do is pin shows there forever. The stale rule still applies, so
+/// a show nobody watches and that airs nothing for a month still drops out.
+#[tokio::test]
+async fn keeping_upcoming_shows_in_to_watch_moves_only_caught_up_shows_still_airing() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "upcoming@test.local").await;
+    let me = common::uid(1);
+
+    let mk = async |id: i64, name: &str| {
+        common::insert_series(&state.db, id, name, Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    };
+
+    // (a) Mid-season: caught up, next episode already scheduled. THE case.
+    mk(900, "Airing").await;
+    common::insert_episode_in_days(&state.db, 9001, 900, 1, 1, -7, "E1").await;
+    common::insert_episode_in_days(&state.db, 9002, 900, 1, 2, 7, "E2").await;
+    common::watch_ago(&state.db, 1, 900, 9001, "w-900", 1).await;
+
+    // (b) Finished: caught up, nothing left to air. Must stay "Up to date" — this is
+    // the show the preference is NOT about.
+    mk(901, "Finished").await;
+    common::insert_episode_in_days(&state.db, 9011, 901, 1, 1, -30, "E1").await;
+    common::watch_ago(&state.db, 1, 901, 9011, "w-901", 2).await;
+
+    // (c) On hiatus: caught up, next season dated months out, and you haven't
+    // watched since. Still airing, so the preference applies — but the stale rule
+    // gets there first, which is what stops "To watch" growing without bound.
+    mk(902, "LongHiatus").await;
+    common::insert_episode_in_days(&state.db, 9021, 902, 1, 1, -300, "E1").await;
+    common::insert_episode_in_days(&state.db, 9022, 902, 2, 1, 90, "S2E1").await;
+    common::watch_ago(&state.db, 1, 902, 9021, "w-902", 200).await;
+
+    // (d) Behind on an airing show: unaffected, "To watch" either way.
+    mk(903, "Behind").await;
+    common::insert_episode_in_days(&state.db, 9031, 903, 1, 1, -20, "E1").await;
+    common::insert_episode_in_days(&state.db, 9032, 903, 1, 2, -3, "E2").await;
+    common::insert_episode_in_days(&state.db, 9033, 903, 1, 3, 4, "E3").await;
+    common::watch_ago(&state.db, 1, 903, 9031, "w-903", 2).await;
+
+    let buckets = async || {
+        let lib = tracking::library(&state, me, &langs(), "name", false).await.unwrap();
+        let mut out: Vec<(i64, String)> =
+            [&lib.watching, &lib.stale, &lib.up_to_date, &lib.not_started, &lib.for_later, &lib.stopped]
+                .iter()
+                .flat_map(|v| v.iter().map(|s| (s.series_id, s.state.clone())))
+                .collect();
+        out.sort();
+        out
+    };
+
+    // Off: today's behaviour. The mid-season show sits in "Up to date".
+    tracking::set_keep_upcoming_in_to_watch(&state, me, false).await.unwrap();
+    assert_eq!(
+        buckets().await,
+        vec![
+            (900, "up_to_date".to_string()),
+            (901, "up_to_date".to_string()),
+            (902, "up_to_date".to_string()),
+            (903, "watching".to_string()),
+        ]
+    );
+
+    // On: only the shows that still have something to air move.
+    tracking::set_keep_upcoming_in_to_watch(&state, me, true).await.unwrap();
+    assert_eq!(
+        buckets().await,
+        vec![
+            (900, "watching".to_string()), // the whole point
+            (901, "up_to_date".to_string()), // finished: nothing more coming
+            (902, "stale".to_string()),      // airing, but untouched for months
+            (903, "watching".to_string()),   // behind: unchanged
+        ]
+    );
+}
+
+/// The preference belongs to the library OWNER, not the viewer.
+///
+/// Browsing a friend's library shows THEIR categories; taking the viewer's setting
+/// would relabel someone else's library according to your preference.
+#[tokio::test]
+async fn the_preference_follows_the_library_owner_not_the_viewer() {
+    use backend::web::handlers::discover::{build_filters, DiscoverQuery};
+    use backend::catalog::discover::search_db;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "owner@test.local").await;
+    common::insert_user(&state.db, 2, "viewer@test.local").await;
+    let owner = common::uid(1);
+    let viewer = common::uid(2);
+
+    common::insert_series(&state.db, 910, "Airing", Some(2020), Some(45), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 910, true, false).await;
+    common::insert_episode_in_days(&state.db, 9101, 910, 1, 1, -7, "E1").await;
+    common::insert_episode_in_days(&state.db, 9102, 910, 1, 2, 7, "E2").await;
+    common::watch_ago(&state.db, 1, 910, 9101, "w-910", 1).await;
+
+    // Owner wants it kept in "To watch"; the viewer does not.
+    tracking::set_keep_upcoming_in_to_watch(&state, owner, true).await.unwrap();
+    tracking::set_keep_upcoming_in_to_watch(&state, viewer, false).await.unwrap();
+
+    let q: DiscoverQuery = parse_query(&[("state", "watching")]).unwrap();
+    let keep = tracking::keep_upcoming_in_to_watch(&state, owner).await.unwrap();
+    assert!(keep, "the owner's preference is what the handler loads");
+
+    let f = backend::catalog::discover::Filters {
+        kind: "series".into(),
+        limit: 100,
+        ..build_filters(&q, Some(owner), None, Some(viewer), keep)
+    };
+    let rows = search_db(&state, &f, &langs()).await.unwrap();
+    assert_eq!(
+        rows.iter().filter_map(|r| r.tvdb_id).collect::<Vec<_>>(),
+        vec![910],
+        "the owner's setting decides, even though the viewer's is off"
+    );
 }

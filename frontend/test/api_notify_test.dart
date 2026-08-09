@@ -24,6 +24,8 @@ void main() {
         ..statusCode = 200
         ..headers.contentType = ContentType.json
         ..write(req.uri.path.endsWith('library-sections') ? '[]' : jsonEncode({'blocks': []}));
+      // (The exact body doesn't matter here; these tests assert on method, path
+      // and whether the change signal fired.)
       await req.response.close();
     });
     api = ApiClient(base: 'http://127.0.0.1:${server.port}');
@@ -52,5 +54,17 @@ void main() {
 
     expect(hits, ['PUT /api/me/library-sections'], reason: 'the write still happens');
     expect(notifications, 0);
+  });
+
+  test('changing which category shows land in DOES fire it', () async {
+    // The counterpart to the layout save: this one moves shows between
+    // categories, so an open Library is showing the wrong ones until it reloads.
+    var notifications = 0;
+    api.addListener(() => notifications++);
+
+    await api.setKeepUpcomingInToWatch(true);
+
+    expect(hits, ['PUT /api/me/keep-upcoming-in-to-watch']);
+    expect(notifications, 1);
   });
 }

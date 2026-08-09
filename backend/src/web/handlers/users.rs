@@ -251,6 +251,24 @@ pub async fn set_library_sections(
 }
 
 #[derive(Deserialize)]
+pub struct KeepUpcomingReq {
+    pub keep_upcoming_in_to_watch: bool,
+}
+
+/// Toggle "keep caught-up shows in To watch while episodes are still unaired".
+///
+/// Changes which category a show appears in, so unlike the layout save this DOES
+/// mean "your library changed" to any open screen.
+pub async fn set_keep_upcoming_in_to_watch(
+    AuthUser(me): AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<KeepUpcomingReq>,
+) -> AppResult<Json<Value>> {
+    tracking::set_keep_upcoming_in_to_watch(&state, me, req.keep_upcoming_in_to_watch).await?;
+    Ok(Json(json!({ "keep_upcoming_in_to_watch": req.keep_upcoming_in_to_watch })))
+}
+
+#[derive(Deserialize)]
 pub struct LanguagesReq {
     pub languages: Vec<String>,
 }

@@ -109,6 +109,10 @@ pub fn router(state: AppState) -> Router {
             "/api/me/library-sections",
             get(handlers::users::library_sections).put(handlers::users::set_library_sections),
         )
+        .route(
+            "/api/me/keep-upcoming-in-to-watch",
+            put(handlers::users::set_keep_upcoming_in_to_watch),
+        )
         .route("/api/me/languages", put(handlers::users::set_languages))
         .route("/api/feed", get(handlers::users::feed))
         .route("/api/users/{id}", get(handlers::users::profile))

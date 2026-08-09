@@ -139,6 +139,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sectionAppearance => 'Appearance';
 
   @override
+  String get sectionLibrary => 'Library';
+
+  @override
+  String get keepUpcomingInToWatch =>
+      'Keep shows in “To watch” while episodes are still coming';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      'A show you\'re caught up on stays in “To watch” as long as it has episodes that haven\'t aired yet. It still moves to “Haven\'t watched in a while” after a month with no new episode.';
+
+  @override
   String get sectionLanguages => 'Languages';
 
   @override

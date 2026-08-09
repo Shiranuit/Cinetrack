@@ -103,6 +103,11 @@ class Me {
   /// Who may see my activity timeline — one of [kActivityVisibilities]. Older
   /// servers omit it; the default matches the backend's ('friends').
   final String activityVisibility;
+
+  /// Keep a caught-up show in "To watch" while it still has unaired episodes.
+  /// Defaults to false, matching the backend, so an older server means stock
+  /// behaviour rather than a rearranged Library.
+  final bool keepUpcomingInToWatch;
   const Me({
     required this.id,
     required this.screenName,
@@ -114,6 +119,7 @@ class Me {
     this.profileBlocks = kDefaultProfileBlocks,
     this.languages = const ['eng'],
     this.activityVisibility = kActivityFriends,
+    this.keepUpcomingInToWatch = false,
   });
 
   factory Me.fromJson(Map<String, dynamic> j) => switch (j) {
@@ -128,6 +134,7 @@ class Me {
             profileBlocks: (j['profile_blocks'] as List?)?.cast<String>() ?? kDefaultProfileBlocks,
             languages: (j['languages'] as List?)?.cast<String>() ?? const ['eng'],
             activityVisibility: j['activity_visibility'] as String? ?? kActivityFriends,
+            keepUpcomingInToWatch: j['keep_upcoming_in_to_watch'] as bool? ?? false,
           ),
         _ => throw FormatException('Me: bad payload $j'),
       };

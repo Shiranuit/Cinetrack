@@ -310,12 +310,14 @@ pub struct Me {
     pub languages: Vec<String>,
     /// Who may see this user's activity timeline ('everyone' | 'friends' | 'only_me').
     pub activity_visibility: String,
+    /// Keep a caught-up show in "To watch" while it still has unaired episodes.
+    pub keep_upcoming_in_to_watch: bool,
 }
 
 pub async fn me(AuthUser(user_id): AuthUser, State(state): State<AppState>) -> AppResult<Json<Me>> {
     sqlx::query_as::<_, Me>(
         "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks, languages, \
-                activity_visibility \
+                activity_visibility, keep_upcoming_in_to_watch \
          FROM app.users WHERE id = $1",
     )
     .bind(user_id)
@@ -525,7 +527,7 @@ pub async fn update_profile(
 
     sqlx::query_as::<_, Me>(
         "SELECT id, email, screen_name, bio, country_code, avatar_url, cover_url, is_private, profile_blocks, languages, \
-                activity_visibility \
+                activity_visibility, keep_upcoming_in_to_watch \
          FROM app.users WHERE id = $1",
     )
     .bind(user_id)

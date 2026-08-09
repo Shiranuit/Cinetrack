@@ -74,7 +74,13 @@ pub struct DiscoverQuery {
 
 /// Turn a parsed query (or a saved section's stored filter map, which the batch
 /// endpoint deserializes into the same type) into the query layer's [`Filters`].
-pub fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user: Option<Uuid>, viewer: Option<Uuid>) -> Filters {
+pub fn build_filters(
+    q: &DiscoverQuery,
+    library_user: Option<Uuid>,
+    exclude_user: Option<Uuid>,
+    viewer: Option<Uuid>,
+    keep_upcoming_in_to_watch: bool,
+) -> Filters {
     Filters {
         // Trimmed; ignored if under 2 chars (a 1-char substring is meaningless and
         // can't use the trigram index on the whole-catalog Discover query).
@@ -141,6 +147,7 @@ pub fn build_filters(q: &DiscoverQuery, library_user: Option<Uuid>, exclude_user
         progress_max: q.progress_max.filter(|p| !p.is_nan()).map(|p| p.clamp(0.0, 100.0)),
         caught_up: q.caught_up,
         has_upcoming: q.has_upcoming,
+        keep_upcoming_in_to_watch,
     }
 }
 
@@ -156,7 +163,9 @@ pub async fn discover(
     // UI can flag them). Pass `include_library=false` to hide tracked shows and see
     // only new ones.
     let exclude = if q.include_library.unwrap_or(true) { None } else { Some(uid) };
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, exclude, Some(uid)), &langs).await?))
+    // Discover is catalog-wide, so no library bucket is classified and the
+    // preference cannot apply.
+    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, exclude, Some(uid), false), &langs).await?))
 }
 
 /// Same advanced filter, scoped to the user's own tracked shows.
@@ -166,7 +175,11 @@ pub async fn library_filter(
     Query(q): Query<DiscoverQuery>,
 ) -> AppResult<Json<Vec<SearchResult>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(uid), None, Some(uid)), &langs).await?))
+    // Loaded, not defaulted: `state=watching` here must select exactly what the
+    // "To watch" rail shows, and the rail is built with this same preference.
+    let keep = tracking::keep_upcoming_in_to_watch(&state, uid).await?;
+    let f = build_filters(&q, Some(uid), None, Some(uid), keep);
+    Ok(Json(catalog::discover::search_db(&state, &f, &langs).await?))
 }
 
 /// A century, past which a "days ago" filter stops meaning anything and starts
@@ -194,7 +207,11 @@ pub async fn user_filter(
         return Ok(Json(vec![]));
     }
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, Some(target), None, Some(me)), &langs).await?))
+    // The TARGET's preference: it's their library being classified, so their
+    // categories are what you're browsing — same reasoning as the rating owner.
+    let keep = tracking::keep_upcoming_in_to_watch(&state, target).await?;
+    let f = build_filters(&q, Some(target), None, Some(me), keep);
+    Ok(Json(catalog::discover::search_db(&state, &f, &langs).await?))
 }
 
 #[derive(Deserialize)]

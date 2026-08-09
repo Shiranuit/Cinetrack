@@ -173,10 +173,27 @@ pub struct Library {
     pub stopped: Vec<LibraryShow>,
 }
 
+/// Does this user keep caught-up shows in "To watch" while episodes are still
+/// unaired? See migration 0045 and [`state::state_case`].
+///
+/// Defaults to false for a user id that doesn't resolve, so a missing row can only
+/// ever mean "stock behaviour", never a rearranged Library.
+pub async fn keep_upcoming_in_to_watch(state: &AppState, user_id: Uuid) -> AppResult<bool> {
+    Ok(sqlx::query_scalar::<_, bool>("SELECT keep_upcoming_in_to_watch FROM app.users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&state.db)
+        .await?
+        .unwrap_or(false))
+}
+
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
 /// `sort` orders shows WITHIN each category (default = recency), so the categorized
 /// view honours the same sort options as the flat filter.
 pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &str, desc: bool) -> AppResult<Library> {
+    // The owner's preference, not the viewer's — this is their library being
+    // classified. One PK lookup, and it has to happen before the SQL is built
+    // because it changes what "Up to date" means.
+    let keep_upcoming = keep_upcoming_in_to_watch(state, user_id).await?;
     // Whitelisted column + direction (never interpolate raw input into SQL). Default
     // and "popularity" keep the familiar most-recently-watched-first ordering.
     let dir = if desc { "DESC" } else { "ASC" };
@@ -228,7 +245,7 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
         LEFT JOIN caught ON caught.series_id = lib.series_id \
         ORDER BY {order}",
         ctes = state::watch_state_ctes("$1"),
-        state_case = state::state_case("lib"));
+        state_case = state::state_case("lib", keep_upcoming));
     let started = std::time::Instant::now();
     let rows = sqlx::query_as::<_, LibraryShow>(sql)
         .bind(user_id)
@@ -1218,6 +1235,18 @@ pub async fn set_private(state: &AppState, user_id: Uuid, is_private: bool) -> A
     sqlx::query("UPDATE app.users SET is_private = $2, updated_at = now() WHERE id = $1")
         .bind(user_id)
         .bind(is_private)
+        .execute(&state.db)
+        .await?;
+    Ok(())
+}
+
+/// Turn "keep caught-up shows in To watch while episodes are still unaired" on or
+/// off. Takes effect on the next Library load — nothing is stored per show, the
+/// preference only changes how [`state::state_case`] classifies.
+pub async fn set_keep_upcoming_in_to_watch(state: &AppState, user_id: Uuid, keep: bool) -> AppResult<()> {
+    sqlx::query("UPDATE app.users SET keep_upcoming_in_to_watch = $2, updated_at = now() WHERE id = $1")
+        .bind(user_id)
+        .bind(keep)
         .execute(&state.db)
         .await?;
     Ok(())

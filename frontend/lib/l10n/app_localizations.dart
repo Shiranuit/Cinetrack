@@ -370,6 +370,24 @@ abstract class AppLocalizations {
   /// **'Appearance'**
   String get sectionAppearance;
 
+  /// No description provided for @sectionLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get sectionLibrary;
+
+  /// No description provided for @keepUpcomingInToWatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep shows in “To watch” while episodes are still coming'**
+  String get keepUpcomingInToWatch;
+
+  /// No description provided for @keepUpcomingInToWatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A show you\'re caught up on stays in “To watch” as long as it has episodes that haven\'t aired yet. It still moves to “Haven\'t watched in a while” after a month with no new episode.'**
+  String get keepUpcomingInToWatchHint;
+
   /// No description provided for @sectionLanguages.
   ///
   /// In en, this message translates to:

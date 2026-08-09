@@ -103,19 +103,34 @@ pub fn watch_state_joins(id_expr: &str) -> String {
 /// `tracking` is the alias holding `archived` / `status` / `nb_episodes_seen`
 /// (the `user_show` columns), so each caller can name its `lib` CTE freely.
 ///
+/// `keep_upcoming` is the user's `keep_upcoming_in_to_watch` preference (migration
+/// 0045). It narrows ONE arm: "Up to date" stops meaning merely *caught up* and
+/// starts meaning *caught up with nothing more coming*. A caught-up show that still
+/// has unaired episodes then falls through to the arms below on its own, so it
+/// lands in "To watch" while it's active and still drops to "Haven't watched in a
+/// while" after [`STALE_DAYS`] with no watching and no new episode — deliberately
+/// NOT pinned to "To watch", which would make the category grow without bound.
+///
 /// The two fallbacks are load-bearing and easy to lose:
 /// * "started" also accepts `nb_episodes_seen`, so an imported show with a counter
 ///   but no watch rows is never called "Haven't started";
 /// * "caught up" also accepts `seen >= total`, for shows whose episodes carry no
 ///   mirrored air date and therefore have no "latest aired" to have seen.
-pub fn state_case(tracking: &str) -> String {
+pub fn state_case(tracking: &str, keep_upcoming: bool) -> String {
+    // Splicing a Rust bool, not a bind: it's a literal `true`/`false`, and the
+    // expression is folded away by the planner when the preference is off.
+    let up_to_date = if keep_upcoming {
+        format!("({CAUGHT_UP_EXPR} AND NOT {HAS_UPCOMING_EXPR})")
+    } else {
+        CAUGHT_UP_EXPR.to_string()
+    };
     format!(
         "CASE \
            WHEN {tracking}.archived OR {tracking}.status = 'stopped' THEN 'stopped' \
            WHEN {tracking}.status = 'for_later' THEN 'for_later' \
            WHEN lw.last_watched IS NULL AND COALESCE(seen.seen_episodes, 0) = 0 \
                 AND COALESCE({tracking}.nb_episodes_seen, 0) = 0 THEN 'not_started' \
-           WHEN {CAUGHT_UP_EXPR} THEN 'up_to_date' \
+           WHEN {up_to_date} THEN 'up_to_date' \
            WHEN lw.last_watched >= now() - interval '{STALE_DAYS} days' \
                 OR ep.max_aired >= current_date - {STALE_DAYS} THEN 'watching' \
            ELSE 'stale' \
@@ -152,9 +167,44 @@ mod tests {
     fn every_state_is_produced_by_the_case_expression() {
         // The filter's vocabulary and the classification must agree: a value the
         // CASE never returns would be a filter that silently matches nothing.
-        let case = state_case("lib");
-        for state in STATES {
-            assert!(case.contains(&format!("'{state}'")), "{state} missing from the CASE");
+        // Both settings of the preference, since it rewrites one of the arms.
+        for keep in [false, true] {
+            let case = state_case("lib", keep);
+            for state in STATES {
+                assert!(case.contains(&format!("'{state}'")), "{state} missing from the CASE (keep={keep})");
+            }
+        }
+    }
+
+    #[test]
+    fn the_preference_narrows_up_to_date_and_touches_nothing_else() {
+        let off = state_case("lib", false);
+        let on = state_case("lib", true);
+        assert_ne!(off, on);
+
+        // Only "up to date" changes: it gains "and nothing more is coming".
+        assert!(on.contains(HAS_UPCOMING_EXPR), "the preference must consult the upcoming flag");
+        assert!(!off.contains(HAS_UPCOMING_EXPR), "and must not when it is off");
+
+        // The stale rule is untouched, so a show still drops out of "To watch"
+        // after a month of no watching and no new episode. Pinning the whole arm
+        // because relaxing it is the tempting way to implement this — and it would
+        // grow "To watch" without bound.
+        let stale_arm = format!(
+            "WHEN lw.last_watched >= now() - interval '{STALE_DAYS} days' \
+             OR ep.max_aired >= current_date - {STALE_DAYS} THEN 'watching'"
+        );
+        for case in [&off, &on] {
+            assert!(case.contains(&stale_arm), "the watching/stale rule must be identical either way");
+        }
+
+        // And the earlier arms keep their precedence: an archived or watch-later
+        // show is never pulled into "To watch" by this.
+        for case in [&off, &on] {
+            let up_to_date = case.find("'up_to_date'").unwrap();
+            assert!(case.find("'stopped'").unwrap() < up_to_date);
+            assert!(case.find("'for_later'").unwrap() < up_to_date);
+            assert!(case.find("'not_started'").unwrap() < up_to_date);
         }
     }
 

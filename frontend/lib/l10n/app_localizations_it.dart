@@ -139,6 +139,17 @@ class AppLocalizationsIt extends AppLocalizations {
   String get sectionAppearance => 'Aspetto';
 
   @override
+  String get sectionLibrary => 'Libreria';
+
+  @override
+  String get keepUpcomingInToWatch =>
+      'Mantieni le serie in «Da vedere» finché mancano episodi';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      'Una serie che hai già recuperato resta in «Da vedere» finché ha episodi non ancora usciti. Passa comunque a «Non guardato da un po\'» dopo un mese senza nuovi episodi.';
+
+  @override
   String get sectionLanguages => 'Lingue';
 
   @override

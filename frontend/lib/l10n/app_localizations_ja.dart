@@ -138,6 +138,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sectionAppearance => '外観';
 
   @override
+  String get sectionLibrary => 'ライブラリ';
+
+  @override
+  String get keepUpcomingInToWatch => '未放送のエピソードがある間は「視聴予定」に残す';
+
+  @override
+  String get keepUpcomingInToWatchHint =>
+      '追いついている作品も、未放送のエピソードがある間は「視聴予定」に留まります。新しいエピソードが1ヶ月なければ、これまで通り「しばらく見ていない」に移ります。';
+
+  @override
   String get sectionLanguages => '言語';
 
   @override
