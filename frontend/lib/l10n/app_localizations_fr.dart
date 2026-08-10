@@ -1110,5 +1110,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      'Les catégories natives retrouvent leur ordre d\'origine et réapparaissent. Vos catégories personnalisées sont masquées, pas supprimées — vous pouvez les réactiver.';
+      'Chaque catégorie retrouve son ordre d’origine, redevient visible et reprend son tri par défaut.';
+
+  @override
+  String get categorySortHint =>
+      'L’ordre de cette catégorie quand aucun tri n’est choisi dans les filtres.';
 }

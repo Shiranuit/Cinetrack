@@ -146,9 +146,11 @@ pub async fn library(
     Query(q): Query<LibraryQuery>,
 ) -> AppResult<Json<tracking::Library>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    let sort = q.sort.as_deref().unwrap_or("popularity");
-    let desc = q.dir.as_deref() != Some("asc");
-    Ok(Json(tracking::library(&state, user_id, &langs, sort, desc).await?))
+    // No `sort` means the caller hasn't picked one, NOT "popularity" — each
+    // category then orders itself. Defaulting here is what used to make an
+    // unspecified sort silently mean last-watched for the whole library.
+    let sort = q.sort.as_deref().map(|s| (s, q.dir.as_deref() != Some("asc")));
+    Ok(Json(tracking::library(&state, user_id, &langs, sort).await?))
 }
 
 #[derive(Deserialize)]

@@ -1084,5 +1084,8 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      '기본 카테고리가 원래 순서로 돌아가 다시 표시됩니다. 사용자 지정 카테고리는 삭제되지 않고 숨겨집니다 — 다시 켤 수 있습니다.';
+      '모든 카테고리가 원래 순서로 돌아가고, 다시 표시되며, 기본 정렬로 되돌아갑니다.';
+
+  @override
+  String get categorySortHint => '필터에서 정렬을 고르지 않았을 때 이 카테고리가 사용하는 순서입니다.';
 }

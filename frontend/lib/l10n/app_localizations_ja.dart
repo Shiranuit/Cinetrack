@@ -1083,6 +1083,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get resetLayout => 'レイアウトをリセット';
 
   @override
-  String get resetLayoutConfirm =>
-      '標準のカテゴリが元の順序に戻り、再び表示されます。カスタムカテゴリは削除されず非表示になります（あとで再表示できます）。';
+  String get resetLayoutConfirm => 'すべてのカテゴリが元の順序に戻り、再び表示され、既定の並び順に戻ります。';
+
+  @override
+  String get categorySortHint => 'フィルターで並び順を選んでいないときの、このカテゴリの並び順です。';
 }

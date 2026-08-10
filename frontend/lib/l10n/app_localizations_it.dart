@@ -1108,5 +1108,9 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      'Le categorie integrate tornano all\'ordine originale e vengono mostrate di nuovo. Le tue categorie personalizzate vengono nascoste, non eliminate: puoi riattivarle.';
+      'Ogni categoria torna al suo ordine originale, viene mostrata di nuovo e riprende il suo ordinamento predefinito.';
+
+  @override
+  String get categorySortHint =>
+      'L\'ordine di questa categoria quando non hai scelto un ordinamento nei filtri.';
 }

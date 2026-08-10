@@ -16,6 +16,38 @@ use crate::{error::{AppError, AppResult}, state::AppState};
 pub const BUILTIN_SECTIONS: [&str; 7] =
     ["watching", "stale", "not_started", "for_later", "up_to_date", "stopped", "movies"];
 
+/// The sort each category starts out with, before anyone customizes it. Mirrors the
+/// backfill in migration 0046.
+///
+/// These are opinions about what each category is FOR: "To watch" wants whatever
+/// just aired, the two caught-up-ish buckets want what you last touched, and the
+/// rest are lists you scan by name.
+pub const SECTION_SORT_SEEDS: [(&str, &str, bool); 7] = [
+    ("watching", "last_aired", true),
+    ("stale", "last_watched", true),
+    ("not_started", "name", false),
+    ("for_later", "name", false),
+    ("up_to_date", "last_watched", true),
+    ("stopped", "name", false),
+    ("movies", "my_rating", true),
+];
+
+/// The seeded sort for a built-in, or the Library's stock ordering if the key is
+/// somehow unknown.
+fn seed_sort(builtin: &str) -> (String, bool) {
+    SECTION_SORT_SEEDS
+        .iter()
+        .find(|(key, _, _)| *key == builtin)
+        .map(|(_, sort, desc)| (sort.to_string(), *desc))
+        .unwrap_or_else(|| ("last_watched".to_string(), true))
+}
+
+/// Sorts this category is allowed to use. Movies carry no episodes, so nothing
+/// derived from watch progress applies to them.
+pub fn allowed_sorts(builtin: &str) -> &'static [&'static str] {
+    if builtin == "movies" { &crate::tracking::MOVIE_SORTS } else { &crate::tracking::LIBRARY_SORTS }
+}
+
 /// One entry in a user's Library layout.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct LibrarySection {
@@ -25,11 +57,16 @@ pub struct LibrarySection {
     /// Which built-in category this row is, from [`BUILTIN_SECTIONS`].
     pub builtin: String,
     pub enabled: bool,
+    /// How this category orders its shows when the user hasn't picked a sort in the
+    /// filter sheet. Validated against [`allowed_sorts`] on write.
+    pub sort: String,
+    pub sort_desc: bool,
 }
 
 impl LibrarySection {
     fn builtin(key: &str) -> Self {
-        Self { id: None, builtin: key.to_string(), enabled: true }
+        let (sort, sort_desc) = seed_sort(key);
+        Self { id: None, builtin: key.to_string(), enabled: true, sort, sort_desc }
     }
 }
 
@@ -49,7 +86,7 @@ pub fn default_sections() -> Vec<LibrarySection> {
 /// done on read so no backfill is needed.
 pub async fn library_sections(state: &AppState, user_id: Uuid) -> AppResult<Vec<LibrarySection>> {
     let mut rows = sqlx::query_as::<_, LibrarySection>(
-        "SELECT id, builtin, enabled \
+        "SELECT id, builtin, enabled, sort, sort_desc \
          FROM app.library_section WHERE user_id = $1 \
          ORDER BY position, id",
     )
@@ -60,12 +97,31 @@ pub async fn library_sections(state: &AppState, user_id: Uuid) -> AppResult<Vec<
     if rows.is_empty() {
         return Ok(default_sections());
     }
+    // A key this build no longer knows falls back to the seed rather than reaching
+    // an ORDER BY, where it would silently sort by nothing in particular.
+    for row in &mut rows {
+        if !allowed_sorts(&row.builtin).contains(&row.sort.as_str()) {
+            (row.sort, row.sort_desc) = seed_sort(&row.builtin);
+        }
+    }
     for key in BUILTIN_SECTIONS {
         if !rows.iter().any(|s| s.builtin == key) {
             rows.push(LibrarySection { enabled: false, ..LibrarySection::builtin(key) });
         }
     }
     Ok(rows)
+}
+
+/// The sort the user's MOVIES category is set to, for the movie list endpoint —
+/// movies come from their own query, so the rails' per-category ORDER BY can't
+/// reach them.
+pub async fn movies_sort(state: &AppState, user_id: Uuid) -> AppResult<(String, bool)> {
+    let sections = library_sections(state, user_id).await?;
+    Ok(sections
+        .into_iter()
+        .find(|s| s.builtin == "movies")
+        .map(|s| (s.sort, s.sort_desc))
+        .unwrap_or_else(|| seed_sort("movies")))
 }
 
 /// Replace a user's whole layout. Validates first so a rejected save leaves the
@@ -89,14 +145,16 @@ pub async fn set_library_sections(
 
     for (position, section) in sections.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO app.library_section (user_id, id, position, builtin, enabled) \
-             VALUES ($1, COALESCE($2, gen_random_uuid()), $3, $4, $5)",
+            "INSERT INTO app.library_section (user_id, id, position, builtin, enabled, sort, sort_desc) \
+             VALUES ($1, COALESCE($2, gen_random_uuid()), $3, $4, $5, $6, $7)",
         )
         .bind(user_id)
         .bind(section.id)
         .bind(position as i32)
         .bind(section.builtin.as_str())
         .bind(section.enabled)
+        .bind(section.sort.as_str())
+        .bind(section.sort_desc)
         .execute(&mut *tx)
         .await?;
     }
@@ -134,6 +192,12 @@ fn validate(sections: &[LibrarySection]) -> AppResult<()> {
         }
         if seen_builtin.contains(&key) {
             return Err(bad(format!("duplicate built-in section '{key}'")));
+        }
+        // A sort the category can't honour would be stored and then quietly ignored.
+        // Movies get the narrower list: they have no episodes, so "episodes left"
+        // and the rest of the watch-history sorts mean nothing there.
+        if !allowed_sorts(key).contains(&section.sort.as_str()) {
+            return Err(bad(format!("sort '{}' is not available for '{key}'", section.sort)));
         }
         seen_builtin.push(key);
     }

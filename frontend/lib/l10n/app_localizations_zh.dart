@@ -1081,6 +1081,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get resetLayout => '重置布局';
 
   @override
-  String get resetLayoutConfirm =>
-      '内置分类恢复原始顺序并重新显示。你的自定义分类会被隐藏而不是删除——可以随时重新启用。';
+  String get resetLayoutConfirm => '所有分类都会恢复原来的顺序、重新显示，并回到默认排序。';
+
+  @override
+  String get categorySortHint => '未在筛选中选择排序时，此分类使用的顺序。';
 }

@@ -1107,5 +1107,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      'Die integrierten Kategorien kehren in ihre ursprüngliche Reihenfolge zurück und werden wieder angezeigt. Deine eigenen Kategorien werden ausgeblendet, nicht gelöscht — du kannst sie wieder aktivieren.';
+      'Jede Kategorie kehrt in ihre ursprüngliche Reihenfolge zurück, wird wieder angezeigt und erhält ihre Standardsortierung.';
+
+  @override
+  String get categorySortHint =>
+      'Die Reihenfolge dieser Kategorie, solange in den Filtern keine Sortierung gewählt ist.';
 }

@@ -186,29 +186,96 @@ pub async fn keep_upcoming_in_to_watch(state: &AppState, user_id: Uuid) -> AppRe
         .unwrap_or(false))
 }
 
+/// Sort keys a Library category may be ordered by.
+///
+/// Deliberately NOT every key the filter sheet offers: "popularity" is a catalog
+/// score the rails have nothing to order by, so it falls through to last-watched.
+/// Fine as a transient choice, dishonest as a saved one.
+pub const LIBRARY_SORTS: [&str; 12] = [
+    "last_watched", "last_aired", "remaining", "progress", "my_rating", "rating",
+    "name", "year", "seasons", "episodes", "runtime", "updated",
+];
+
+/// The subset a MOVIE category can honour. Movies have no episodes, so nothing
+/// derived from watch progress applies, and they carry no season/episode counts or
+/// cross-user rating — see `movies::list`.
+pub const MOVIE_SORTS: [&str; 6] = ["my_rating", "last_watched", "name", "year", "runtime", "updated"];
+
+/// The ordering expression for a sort key, over the outer query's alias `q`.
+///
+/// One mapping for both paths — a single ORDER BY when the caller passes an
+/// explicit sort, and one guarded term per category when it doesn't. Splitting them
+/// is how "To watch" and `state=watching` end up ordered differently.
+fn sort_expr(key: &str) -> &'static str {
+    match key {
+        "name" => "q.name",
+        "rating" => "q.avg_rating",
+        "my_rating" => "q.rating",
+        "year" => "q.year",
+        "seasons" => "q.season_count",
+        "episodes" => "q.episode_count",
+        "runtime" => "q.runtime",
+        "updated" => "q.last_updated",
+        "last_aired" => "q.last_aired",
+        "remaining" => "q.remaining",
+        "progress" => "q.progress",
+        // Includes "last_watched" and anything unrecognized: most-recently-watched
+        // first is the familiar Library order.
+        _ => "q.last_watched",
+    }
+}
+
 /// The user's tracked shows, grouped into UI categories; names resolved to `langs`.
-/// `sort` orders shows WITHIN each category (default = recency), so the categorized
-/// view honours the same sort options as the flat filter.
-pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &str, desc: bool) -> AppResult<Library> {
+///
+/// `sort` is the caller's EXPLICIT choice and overrides everything. `None` means
+/// nobody picked one, so each category is ordered by its own saved sort — see
+/// [`sections::library_sections`].
+pub async fn library(
+    state: &AppState,
+    user_id: Uuid,
+    langs: &[String],
+    sort: Option<(&str, bool)>,
+) -> AppResult<Library> {
     // The owner's preference, not the viewer's — this is their library being
     // classified. One PK lookup, and it has to happen before the SQL is built
     // because it changes what "Up to date" means.
     let keep_upcoming = keep_upcoming_in_to_watch(state, user_id).await?;
-    // Whitelisted column + direction (never interpolate raw input into SQL). Default
-    // and "popularity" keep the familiar most-recently-watched-first ordering.
-    let dir = if desc { "DESC" } else { "ASC" };
-    let col = match sort {
-        "name" => "name",
-        "rating" => "(SELECT avg(rating) FROM app.user_show WHERE series_id = lib.series_id AND rating IS NOT NULL)",
-        "my_rating" => "lib.rating",
-        "year" => "lib.year",
-        "seasons" => "lib.season_count",
-        "episodes" => "lib.episode_count",
-        "runtime" => "lib.runtime",
-        "updated" => "lib.last_updated",
-        _ => "last_watched",
+    // Whitelisted expressions only — a sort key never reaches SQL as text.
+    let dir = |desc: bool| if desc { "DESC" } else { "ASC" };
+    let order = match sort {
+        // An explicit choice orders the whole library, every category alike.
+        Some((key, desc)) => format!("{} {} NULLS LAST, q.name NULLS LAST", sort_expr(key), dir(desc)),
+        // Otherwise each category brings its own. One term per category, each
+        // guarded by the state it belongs to:
+        //
+        //   (CASE WHEN q.state = 'watching' THEN q.last_aired END) DESC NULLS LAST,
+        //   (CASE WHEN q.state = 'stale'    THEN q.last_watched END) DESC NULLS LAST, …
+        //
+        // Two rows of the SAME category are NULL on every other category's term, so
+        // they tie until their own term decides. Order across categories is
+        // meaningless here — the rows are split into buckets immediately below.
+        //
+        // Doing this in SQL rather than re-sorting in Rust is the point: the flat
+        // filter orders with these same expressions, and a second implementation
+        // would be free to drift from it.
+        None => {
+            let sections = sections::library_sections(state, user_id).await?;
+            let mut terms: Vec<String> = sections
+                .iter()
+                .filter(|s| state::is_valid(&s.builtin)) // 'movies' isn't a series bucket
+                .map(|s| {
+                    format!(
+                        "(CASE WHEN q.state = '{}' THEN {} END) {} NULLS LAST",
+                        s.builtin,
+                        sort_expr(&s.sort),
+                        dir(s.sort_desc)
+                    )
+                })
+                .collect();
+            terms.push("q.name NULLS LAST".to_string());
+            terms.join(", ")
+        }
     };
-    let order = format!("{col} {dir} NULLS LAST, name NULLS LAST");
     // Every per-series metric is aggregated ONCE (grouped by series_id) in a CTE
     // instead of as a correlated subquery evaluated per tracked show. The old
     // per-row `caught_up` EXISTS made Postgres re-scan the user's entire watch
@@ -225,7 +292,11 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
             WHERE us.user_id = $1 AND NOT us.unavailable \
                   AND (us.is_followed OR us.is_favorited OR us.archived OR us.status IS NOT NULL) \
         ), {ctes} \
-        SELECT lib.series_id, \
+        SELECT q.series_id, q.name, q.image_url, q.nb_episodes_seen, q.status, q.archived, \
+               q.is_favorited, q.last_watched, q.last_aired, q.caught_up, q.total_episodes, \
+               q.seen_episodes, q.is_anime, q.rating, q.state \
+        FROM ( \
+          SELECT lib.series_id, \
                COALESCE((SELECT tr.name FROM catalog.translation tr \
                          WHERE tr.entity_type = 'series' AND tr.entity_id = lib.series_id AND tr.name IS NOT NULL \
                            AND tr.language = ANY($2) \
@@ -237,15 +308,25 @@ pub async fn library(state: &AppState, user_id: Uuid, langs: &[String], sort: &s
                COALESCE(ep.total_episodes, 0)::bigint AS total_episodes, \
                COALESCE(seen.seen_episodes, 0)::bigint AS seen_episodes, \
                COALESCE(lib.original_language IN ('jpn','ja'), false) AS is_anime, \
-               lib.rating, {state_case} AS state \
-        FROM lib \
-        LEFT JOIN ep ON ep.series_id = lib.series_id \
-        LEFT JOIN lw ON lw.series_id = lib.series_id \
-        LEFT JOIN seen ON seen.series_id = lib.series_id \
-        LEFT JOIN caught ON caught.series_id = lib.series_id \
+               lib.rating, {state_case} AS state, \
+               /* Sort-only columns. Exposed by the inner query so the ORDER BY can \
+                  name them, and deliberately NOT projected by the outer SELECT — \
+                  LibraryShow and the JSON payload stay exactly as they were. */ \
+               lib.year, lib.season_count, lib.episode_count, lib.runtime, lib.last_updated, \
+               (SELECT avg(ur.rating) FROM app.user_show ur \
+                 WHERE ur.series_id = lib.series_id AND ur.rating IS NOT NULL) AS avg_rating, \
+               {remaining} AS remaining, {progress} AS progress \
+          FROM lib \
+          LEFT JOIN ep ON ep.series_id = lib.series_id \
+          LEFT JOIN lw ON lw.series_id = lib.series_id \
+          LEFT JOIN seen ON seen.series_id = lib.series_id \
+          LEFT JOIN caught ON caught.series_id = lib.series_id \
+        ) q \
         ORDER BY {order}",
         ctes = state::watch_state_ctes("$1"),
-        state_case = state::state_case("lib", keep_upcoming));
+        state_case = state::state_case("lib", keep_upcoming),
+        remaining = state::REMAINING_EXPR,
+        progress = state::PROGRESS_EXPR);
     let started = std::time::Instant::now();
     let rows = sqlx::query_as::<_, LibraryShow>(sql)
         .bind(user_id)
@@ -1060,7 +1141,10 @@ pub async fn user_library(state: &AppState, me: Uuid, target: Uuid, langs: &[Str
     }
     // Sort each category by the OWNER's own rating (highest first), matching how
     // the main library defaults — so a friend's shows read as their ranking.
-    library(state, target, langs, "my_rating", true).await
+    // Another user's library: you can't see their layout, so their categories'
+    // own sorts aren't available. Their rating, highest first — same as the
+    // movie list on their profile.
+    library(state, target, langs, Some(("my_rating", true))).await
 }
 
 /// Recent watch activity from the people the user follows. Everyone here is

@@ -62,7 +62,10 @@ pub struct Filters {
     pub score_min: Option<f64>,
     pub original_languages: Vec<String>, // any-of (e.g. "jpn", "eng")
     pub original_countries: Vec<String>, // any-of (e.g. "jpn", "usa")
-    pub sort: String,                    // popularity | year | name | runtime | seasons | episodes
+    /// The caller's EXPLICIT sort. `None` means nobody picked one — the Library
+    /// then falls back to name A-Z (a search is scanned alphabetically, not by when
+    /// you last watched), and Discover to its popularity score.
+    pub sort: Option<String>,
     pub sort_desc: bool,                 // sort direction (false = ascending)
     pub limit: i64,
     pub offset: i64,
@@ -137,7 +140,8 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // Sorting by watch recency needs the same aggregates a state filter does, so
     // either one pulls the CTEs in — this is what lets a duplicated category match
     // the rail's ORDER as well as its contents.
-    let watch_state_sort = matches!(f.sort.as_str(), "last_watched" | "last_aired" | "remaining" | "progress");
+    let watch_state_sort =
+        matches!(f.sort.as_deref(), Some("last_watched" | "last_aired" | "remaining" | "progress"));
     // Any facet derived from watch history needs the same CTEs. Kept as one list so
     // adding a facet without wiring its trigger can't silently produce a query that
     // references `lw`/`ep` without joining them.
@@ -458,18 +462,27 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         }
     }
 
-    let dir = if f.sort_desc { "DESC" } else { "ASC" };
+    // With no sort chosen, a library-scoped query reads alphabetically. The
+    // direction is forced: `dir` defaults to DESC, which would give Z-A.
+    let unsorted_library = f.sort.is_none() && f.library_user.is_some();
+    let dir = if unsorted_library {
+        "ASC"
+    } else if f.sort_desc {
+        "DESC"
+    } else {
+        "ASC"
+    };
     // "my_rating" orders by the library OWNER's note (the browsed user when viewing
     // their library, else the viewer) — a bound uuid, so it can't be a plain &str.
     // Series-only, since movies have no per-user rating.
-    if f.sort == "my_rating" && !is_movie && rating_owner.is_some() {
+    if f.sort.as_deref() == Some("my_rating") && !is_movie && rating_owner.is_some() {
         qb.push(" ORDER BY (SELECT us2.rating FROM app.user_show us2 \
                    WHERE us2.series_id = x.id AND us2.user_id = ");
         qb.push_bind(rating_owner.unwrap());
         qb.push(format!(") {dir} NULLS LAST, x.name"));
     } else {
         // Column to sort by; the direction is applied uniformly below.
-        let col = match f.sort.as_str() {
+        let col = match f.sort.as_deref().unwrap_or(if unsorted_library { "name" } else { "" }) {
             "year" => "x.year",
             "name" => "x.name",
             "runtime" => "x.runtime",

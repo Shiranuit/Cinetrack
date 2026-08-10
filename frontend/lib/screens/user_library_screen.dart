@@ -40,7 +40,13 @@ class UserLibraryScreen extends StatefulWidget {
 class _UserLibraryScreenState extends State<UserLibraryScreen> {
   // Default to the OWNER's rating so their library reads as their ranking (the
   // backend resolves "my_rating" to the browsed user when viewing their library).
-  final _f = AdvancedFilters(defaultSort: 'my_rating')..type = 'series';
+  // Another user's library: their category layout isn't visible to us, so there
+  // are no per-category sorts to fall back on. Pinned to their rating, highest
+  // first — the order their profile already uses.
+  final _f = AdvancedFilters()
+    ..type = 'series'
+    ..sort = 'my_rating'
+    ..sortDesc = true;
   FilterOptions _options = const FilterOptions();
   // Type toggles, multi-select and combinable (all on by default).
   late Set<_Kind> _kinds = widget.startOnMovies ? {_Kind.movies} : {_Kind.series, _Kind.anime, _Kind.movies};

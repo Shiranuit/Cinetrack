@@ -1107,5 +1107,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      'Built-in categories go back to their original order and are shown again. Your custom categories are hidden, not deleted — you can switch them back on.';
+      'Every category goes back to its original order, is shown again, and returns to its default sort.';
+
+  @override
+  String get categorySortHint =>
+      'How this category orders its shows when you haven\'t picked a sort in the filter.';
 }

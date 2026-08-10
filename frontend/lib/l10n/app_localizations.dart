@@ -2119,8 +2119,14 @@ abstract class AppLocalizations {
   /// No description provided for @resetLayoutConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Built-in categories go back to their original order and are shown again. Your custom categories are hidden, not deleted — you can switch them back on.'**
+  /// **'Every category goes back to its original order, is shown again, and returns to its default sort.'**
   String get resetLayoutConfirm;
+
+  /// No description provided for @categorySortHint.
+  ///
+  /// In en, this message translates to:
+  /// **'How this category orders its shows when you haven\'t picked a sort in the filter.'**
+  String get categorySortHint;
 }
 
 class _AppLocalizationsDelegate

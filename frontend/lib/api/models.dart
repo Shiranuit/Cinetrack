@@ -12,6 +12,18 @@ const kDefaultProfileBlocks = ['stats', 'favorites', 'shows', 'movies', 'activit
 /// The Library's built-in categories, in the order a fresh account sees them.
 /// Mirrors `BUILTIN_SECTIONS` in `backend/src/tracking/sections.rs` and the CHECK
 /// constraint in migration 0044.
+/// The sort each category starts out with. Mirrors `SECTION_SORT_SEEDS` in
+/// `backend/src/tracking/sections.rs` and the backfill in migration 0046.
+const kSectionSortSeeds = <String, (String, bool)>{
+  'watching': ('last_aired', true),
+  'stale': ('last_watched', true),
+  'not_started': ('name', false),
+  'for_later': ('name', false),
+  'up_to_date': ('last_watched', true),
+  'stopped': ('name', false),
+  'movies': ('my_rating', true),
+};
+
 const kBuiltinLibrarySections = [
   'watching',
   'stale',
@@ -36,27 +48,57 @@ class LibrarySection {
   /// restores it where the user had put it.
   final bool enabled;
 
-  const LibrarySection({this.id, required this.builtin, this.enabled = true});
+  /// How this category orders its shows when no sort is picked in the filter sheet.
+  final String sort;
+  final bool sortDesc;
+
+  const LibrarySection({
+    this.id,
+    required this.builtin,
+    this.enabled = true,
+    this.sort = 'last_watched',
+    this.sortDesc = true,
+  });
 
   /// Stable identity for list keys — a built-in appears at most once per layout.
   String get key => builtin;
 
-  LibrarySection copyWith({bool? enabled}) =>
-      LibrarySection(id: id, builtin: builtin, enabled: enabled ?? this.enabled);
-
-  factory LibrarySection.fromJson(Map<String, dynamic> j) => LibrarySection(
-        id: j['id'] as String?,
-        builtin: j['builtin'] as String? ?? '',
-        enabled: j['enabled'] as bool? ?? true,
+  LibrarySection copyWith({bool? enabled, String? sort, bool? sortDesc}) => LibrarySection(
+        id: id,
+        builtin: builtin,
+        enabled: enabled ?? this.enabled,
+        sort: sort ?? this.sort,
+        sortDesc: sortDesc ?? this.sortDesc,
       );
 
-  Map<String, dynamic> toJson() => {'id': id, 'builtin': builtin, 'enabled': enabled};
+  factory LibrarySection.fromJson(Map<String, dynamic> j) {
+    final builtin = j['builtin'] as String? ?? '';
+    final seed = kSectionSortSeeds[builtin] ?? ('last_watched', true);
+    return LibrarySection(
+      id: j['id'] as String?,
+      builtin: builtin,
+      enabled: j['enabled'] as bool? ?? true,
+      // An older server sends no sort; fall back to the seed rather than to a
+      // single hardcoded order that would misrepresent every category but one.
+      sort: j['sort'] as String? ?? seed.$1,
+      sortDesc: j['sort_desc'] as bool? ?? seed.$2,
+    );
+  }
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'builtin': builtin, 'enabled': enabled, 'sort': sort, 'sort_desc': sortDesc};
 }
 
 /// The layout shown before the user customizes anything (mirrors
 /// `default_sections()` on the server).
-List<LibrarySection> defaultLibrarySections() =>
-    [for (final b in kBuiltinLibrarySections) LibrarySection(builtin: b)];
+List<LibrarySection> defaultLibrarySections() => [
+      for (final b in kBuiltinLibrarySections)
+        LibrarySection(
+          builtin: b,
+          sort: kSectionSortSeeds[b]?.$1 ?? 'last_watched',
+          sortDesc: kSectionSortSeeds[b]?.$2 ?? true,
+        ),
+    ];
 
 /// Who may see a user's activity timeline — mirrors `app.users.activity_visibility`.
 const kActivityEveryone = 'everyone';

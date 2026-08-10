@@ -7,6 +7,7 @@ import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import 'confirm_actions.dart';
+import 'filter_sheet.dart' show kLibrarySortKeys, kSortKeys, sortHelp, sortLabel;
 import 'library_categories.dart';
 
 /// A section's translated name in the customize sheet.
@@ -14,6 +15,21 @@ String sectionLabel(AppLocalizations t, LibrarySection s) {
   if (s.builtin == 'movies') return t.typeMovies;
   return builtinCats[s.builtin]?.title(t) ?? s.builtin;
 }
+
+/// Sorts a category may be ordered by. Mirrors `LIBRARY_SORTS` / `MOVIE_SORTS` in
+/// `backend/src/tracking/mod.rs`.
+///
+/// Movies get the shorter list: they have no episodes, so "episodes left" and the
+/// rest of the watch-history sorts would be settings that silently do nothing.
+/// 'popularity' is in neither — the categorized view has no catalog score to order
+/// by and would quietly fall back to last-watched.
+List<String> sortsFor(String builtin) => builtin == 'movies'
+    ? const ['my_rating', 'last_watched', 'name', 'year', 'runtime', 'updated']
+    : [
+        for (final k in kSortKeys)
+          if (k != 'popularity') ...[k, if (k == 'rating') 'my_rating'],
+        ...kLibrarySortKeys,
+      ];
 
 /// Persists a layout and returns it as stored (with server-assigned ids).
 typedef LibrarySectionsSaver = Future<List<LibrarySection>> Function(List<LibrarySection>);
@@ -135,15 +151,39 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
     );
     if (ok != true || !mounted) return;
 
-    // Reuse each built-in's existing row so its id survives the reset; only the
-    // order and the enabled flag are being restored.
+    // Reuse each built-in's existing row so its id survives the reset; the order,
+    // the enabled flag and the sort all go back to stock.
     final existing = {for (final s in _order) s.builtin: s};
     setState(() => _order
       ..clear()
       ..addAll([
         for (final key in kBuiltinLibrarySections)
-          (existing[key] ?? LibrarySection(builtin: key)).copyWith(enabled: true),
+          (existing[key] ?? LibrarySection(builtin: key)).copyWith(
+            enabled: true,
+            sort: kSectionSortSeeds[key]?.$1,
+            sortDesc: kSectionSortSeeds[key]?.$2,
+          ),
       ]));
+    _touch();
+  }
+
+  /// Pick the sort for one category.
+  Future<void> _editSort(int index) async {
+    final section = _order[index];
+    final picked = await showModalBottomSheet<(String, bool)>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _SortPicker(
+        title: sectionLabel(AppLocalizations.of(context), section),
+        keys: sortsFor(section.builtin),
+        sort: section.sort,
+        desc: section.sortDesc,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked.$1 == section.sort && picked.$2 == section.sortDesc) return;
+    setState(() => _order[index] = section.copyWith(sort: picked.$1, sortDesc: picked.$2));
     _touch();
   }
 
@@ -196,6 +236,14 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
                     key: _keyFor(_order[i]),
                     leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle_rounded)),
                     title: Text(sectionLabel(t, _order[i])),
+                    // What this category is ordered by when no sort is picked in
+                    // the filter sheet. Tapping opens the picker — an inline
+                    // dropdown per row would make a reorderable list unscannable.
+                    subtitle: Text(
+                      '${sortLabel(t, _order[i].sort)} ${_order[i].sortDesc ? '↓' : '↑'}',
+                      style: context.text.labelSmall?.copyWith(color: context.scheme.onSurfaceVariant),
+                    ),
+                    onTap: _saving ? null : () => _editSort(i),
                     trailing: Switch(
                       value: _order[i].enabled,
                       onChanged: (on) {
@@ -208,6 +256,93 @@ class LibraryCustomizeSheetState extends State<LibraryCustomizeSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Sort key + direction for one category, as a compact sheet: a dropdown and the
+/// direction beside it, so the two read as the single choice they are.
+class _SortPicker extends StatefulWidget {
+  const _SortPicker({required this.title, required this.keys, required this.sort, required this.desc});
+  final String title;
+  final List<String> keys;
+  final String sort;
+  final bool desc;
+  @override
+  State<_SortPicker> createState() => _SortPickerState();
+}
+
+class _SortPickerState extends State<_SortPicker> {
+  late String _sort = widget.keys.contains(widget.sort) ? widget.sort : widget.keys.first;
+  late bool _desc = widget.desc;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            Insets.lg, 0, Insets.lg, MediaQuery.viewInsetsOf(context).bottom + Insets.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: context.text.titleMedium),
+            const SizedBox(height: Insets.xs),
+            Text(t.categorySortHint,
+                style: context.text.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant)),
+            const SizedBox(height: Insets.md),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _sort,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: Insets.lg, vertical: Insets.md),
+                    ),
+                    items: [
+                      for (final key in widget.keys)
+                        DropdownMenuItem(
+                          value: key,
+                          // "Episodes left" is a count and "Progress" a percentage;
+                          // the labels alone don't say which is which.
+                          child: Tooltip(
+                            message: sortHelp(t, key),
+                            child: Text(sortLabel(t, key), overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                    ],
+                    onChanged: (k) => setState(() => _sort = k ?? _sort),
+                  ),
+                ),
+                const SizedBox(width: Insets.sm),
+                SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: [
+                    ButtonSegment(
+                        value: true, icon: const Icon(Icons.arrow_downward_rounded), tooltip: t.sortDescending),
+                    ButtonSegment(
+                        value: false, icon: const Icon(Icons.arrow_upward_rounded), tooltip: t.sortAscending),
+                  ],
+                  selected: {_desc},
+                  onSelectionChanged: (v) => setState(() => _desc = v.first),
+                ),
+              ],
+            ),
+            const SizedBox(height: Insets.md),
+            // Full-width primary action as a direct Column child: the app themes
+            // FilledButton with an infinite minimum width, so one inside a Row
+            // would be asked to lay out at infinite width.
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop((_sort, _desc)),
+              child: Text(t.save),
+            ),
+          ],
+        ),
       ),
     );
   }

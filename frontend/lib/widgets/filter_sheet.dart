@@ -168,11 +168,14 @@ class _FilterSheetState extends State<FilterSheet> {
               children: [
                 Text(t.sortBy, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
-                ActionChip(
-                  avatar: Icon(f.sortDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded, size: 18),
-                  label: Text(f.sortDesc ? t.sortDescending : t.sortAscending),
-                  onPressed: () => setState(() => f.sortDesc = !f.sortDesc),
-                ),
+                // A direction with no sort chosen means nothing, so it only appears
+                // once one is.
+                if (f.sort != null)
+                  ActionChip(
+                    avatar: Icon(f.sortDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded, size: 18),
+                    label: Text(f.sortDesc ? t.sortDescending : t.sortAscending),
+                    onPressed: () => setState(() => f.sortDesc = !f.sortDesc),
+                  ),
               ],
             ),
           ),
@@ -193,11 +196,18 @@ class _FilterSheetState extends State<FilterSheet> {
                 child: ChoiceChip(
                 label: Text(sortLabel(t, key, othersLibrary: widget.othersLibrary)),
                 selected: f.sort == key,
-                // Default each sort to its natural direction (names A->Z, everything
-                // else high/new first); the toggle above can flip it.
+                // Tapping the chosen sort clears it, which is what hands ordering
+                // back to each Library category (and to popularity in Discover).
+                // Otherwise a sort, once picked, could never be un-picked.
+                // Each sort defaults to its natural direction (names A->Z,
+                // everything else high/new first); the toggle above can flip it.
                 onSelected: (_) => setState(() {
-                  f.sort = key;
-                  f.sortDesc = key != 'name';
+                  if (f.sort == key) {
+                    f.sort = null;
+                  } else {
+                    f.sort = key;
+                    f.sortDesc = key != 'name';
+                  }
                 }),
               )),
           ]),

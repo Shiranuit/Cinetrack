@@ -111,7 +111,9 @@ pub fn build_filters(
         score_min: q.score_min.filter(|v| !v.is_nan()),
         original_languages: csv_strings(q.orig_langs.as_deref()),
         original_countries: csv_strings(q.orig_countries.as_deref()),
-        sort: q.sort.clone().unwrap_or_else(|| "popularity".to_string()),
+        // Passed through as-is: absent means "nobody picked a sort", which the
+        // query layer resolves per scope. Defaulting here would erase that.
+        sort: q.sort.clone(),
         sort_desc: q.dir.as_deref() != Some("asc"),
         limit: q.limit.unwrap_or(120),
         offset: q.offset.unwrap_or(0).max(0),

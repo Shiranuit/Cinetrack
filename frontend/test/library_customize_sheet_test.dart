@@ -19,6 +19,56 @@ Widget host(Widget child, {String locale = 'en'}) => MaterialApp(
 void main() {
   _resetLayoutTests();
   _autoSaveTests();
+  testWidgets('movies are not offered sorts they cannot honour', (tester) async {
+    // Movies have no episodes, so "episodes left" there would be a setting that
+    // silently does nothing — the server rejects it, and the picker must not
+    // offer it in the first place.
+    expect(sortsFor('movies'), isNot(contains('remaining')));
+    expect(sortsFor('movies'), isNot(contains('progress')));
+    expect(sortsFor('movies'), contains('my_rating'));
+    expect(sortsFor('watching'), contains('remaining'));
+    // Neither list offers popularity: the categorized view has no catalog score.
+    expect(sortsFor('watching'), isNot(contains('popularity')));
+    expect(sortsFor('movies'), isNot(contains('popularity')));
+  });
+
+  testWidgets('each row shows the sort it will use, and the picker changes it', (tester) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    List<LibrarySection>? sent;
+    await tester.pumpWidget(host(LibraryCustomizeSheet(
+      sections: defaultLibrarySections(),
+      save: (l) async {
+        sent = List.of(l);
+        return l;
+      },
+    )));
+    await tester.pumpAndSettle();
+
+    // The seeds are visible on the rows, so the ordering isn't a hidden setting.
+    expect(find.text('Latest episode aired ↓'), findsOneWidget, reason: 'To watch');
+
+    await tester.tap(find.text('Latest episode aired ↓'));
+    await tester.pumpAndSettle();
+    // The closed dropdown shows only the current choice; which keys it OFFERS is
+    // covered by the `sortsFor` test above, without depending on menu internals.
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+
+    await tester.tap(find.byType(SegmentedButton<bool>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    final watching = sent!.firstWhere((s) => s.builtin == 'watching');
+    expect(watching.sort, 'last_aired', reason: 'the key was untouched');
+    expect(watching.sortDesc, isFalse, reason: 'only the direction changed');
+    expect(sent!.firstWhere((s) => s.builtin == 'stopped').sort, 'name',
+        reason: 'the other categories are left alone');
+  });
+
   testWidgets('the sheet lists every built-in, and only those', (tester) async {
     tester.view.physicalSize = const Size(360, 720);
     tester.view.devicePixelRatio = 1.0;

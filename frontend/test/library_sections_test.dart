@@ -17,7 +17,7 @@ void main() {
   _presetSyncTests();
   group('AdvancedFilters round trip', () {
     test('preserves every facet a saved section can carry', () {
-      final original = AdvancedFilters(defaultSort: 'my_rating')
+      final original = AdvancedFilters()
         ..query = 'cowboy'
         ..type = 'anime'
         ..sort = 'year'
@@ -41,7 +41,7 @@ void main() {
       original.originalLanguages.add('jpn');
       original.originalCountries.add('jpn');
 
-      final back = AdvancedFilters.fromQuery(original.toQuery(), defaultSort: 'my_rating');
+      final back = AdvancedFilters.fromQuery(original.toQuery());
 
       expect(back.toQuery(), original.toQuery());
       expect(back.query, 'cowboy');
@@ -57,11 +57,30 @@ void main() {
       expect(back.activeCount, original.activeCount);
     });
 
-    test('an empty filter is a valid section — everything, in one order', () {
-      final empty = AdvancedFilters(defaultSort: 'my_rating');
-      final back = AdvancedFilters.fromQuery(empty.toQuery(), defaultSort: 'my_rating');
+    test('an untouched filter picks no sort at all', () {
+      // Null is the whole point: it's what lets each Library category use its own
+      // sort, so `toQuery` must not smuggle in a default.
+      final empty = AdvancedFilters();
+      expect(empty.sort, isNull);
+      expect(empty.toQuery().containsKey('sort'), isFalse);
+      expect(empty.toQuery().containsKey('dir'), isFalse,
+          reason: 'a direction with no sort would read as an explicit choice');
+
+      final back = AdvancedFilters.fromQuery(empty.toQuery());
       expect(back.activeCount, 0);
-      expect(back.sort, 'my_rating');
+      expect(back.sort, isNull);
+    });
+
+    test('a picked sort still round-trips, direction included', () {
+      final f = AdvancedFilters()
+        ..sort = 'progress'
+        ..sortDesc = false;
+      final q = f.toQuery();
+      expect(q['sort'], 'progress');
+      expect(q['dir'], 'asc');
+      final back = AdvancedFilters.fromQuery(q);
+      expect(back.sort, 'progress');
+      expect(back.sortDesc, isFalse);
     });
 
     test('ignores keys and values it cannot parse instead of throwing', () {
@@ -86,10 +105,35 @@ void main() {
       expect(defaults.every((s) => s.enabled), isTrue);
     });
 
-    test('serializes the shape the server accepts', () {
-      final json = const LibrarySection(id: 'abc', builtin: 'watching', enabled: false).toJson();
-      expect(json, {'id': 'abc', 'builtin': 'watching', 'enabled': false});
+    test('serializes the shape the server accepts, sort included', () {
+      final json = const LibrarySection(
+        id: 'abc',
+        builtin: 'watching',
+        enabled: false,
+        sort: 'last_aired',
+        sortDesc: true,
+      ).toJson();
+      expect(json, {
+        'id': 'abc',
+        'builtin': 'watching',
+        'enabled': false,
+        'sort': 'last_aired',
+        'sort_desc': true,
+      });
       expect(json.containsKey('filters'), isFalse, reason: 'the layout carries no saved filters');
+    });
+
+    test('defaults come from the seeds, not one order for every category', () {
+      final byKey = {for (final s in defaultLibrarySections()) s.builtin: s};
+      expect((byKey['watching']!.sort, byKey['watching']!.sortDesc), ('last_aired', true));
+      expect((byKey['stopped']!.sort, byKey['stopped']!.sortDesc), ('name', false));
+      expect((byKey['movies']!.sort, byKey['movies']!.sortDesc), ('my_rating', true));
+    });
+
+    test('an older server that sends no sort falls back to the seed', () {
+      final s = LibrarySection.fromJson(const {'builtin': 'watching', 'enabled': true});
+      expect((s.sort, s.sortDesc), ('last_aired', true),
+          reason: 'a single hardcoded fallback would misrepresent every category but one');
     });
 
     test('round-trips through fromJson', () {
@@ -108,7 +152,7 @@ void main() {
 void _watchHistoryFacetTests() {
   group('watch-history facets round trip', () {
     test('ranges and tri-state flags survive toQuery -> fromQuery', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')
+      final f = AdvancedFilters()
         ..watchedDaysMax = 30
         ..airedDaysMax = 7
         ..remainingMin = 1
@@ -128,7 +172,7 @@ void _watchHistoryFacetTests() {
       expect(q.containsKey('watched_days_min'), isFalse,
           reason: 'a half-open range must not assert a lower bound it does not have');
 
-      final back = AdvancedFilters.fromQuery(q, defaultSort: 'my_rating');
+      final back = AdvancedFilters.fromQuery(q);
       expect(back.watchedDaysMax, 30);
       expect(back.watchedDaysMin, isNull);
       expect(back.remainingMin, 1);
@@ -147,7 +191,7 @@ void _watchHistoryFacetTests() {
     });
 
     test('each facet counts toward the active-filter badge', () {
-      final f = AdvancedFilters(defaultSort: 'my_rating')..watchedDaysMax = 30;
+      final f = AdvancedFilters()..watchedDaysMax = 30;
       expect(f.activeCount, 1);
       f.watchedDaysMin = 5; // same facet, still one badge
       expect(f.activeCount, 1);
@@ -158,7 +202,7 @@ void _watchHistoryFacetTests() {
     test('a "seen recently" view composes into one query the endpoint speaks', () {
       // Several facets at once, which is what the filter sheet emits when the user
       // narrows the Library — each has to survive into the query map.
-      final f = AdvancedFilters(defaultSort: 'my_rating')
+      final f = AdvancedFilters()
         ..type = 'series'
         ..watchedDaysMax = 30
         ..sort = 'remaining'
@@ -249,7 +293,7 @@ void _sortHelpTests() {
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: FilterSheet(
-          filters: AdvancedFilters(defaultSort: 'my_rating'),
+          filters: AdvancedFilters(),
           options: const FilterOptions(),
           showFavorites: true, // library scope, so the watch-history sorts appear
         ),
@@ -422,8 +466,17 @@ void _presetSyncTests() {
     await pump(tester);
     await scrollTo(tester, 'Episode / runtime length');
     expect(runtimeSection(), findsOneWidget);
-    await tester.tap(find.descendant(of: runtimeSection(), matching: find.text('Episode / runtime length')).last);
+    // ensureVisible, not a bare tap: the sheet's exact scroll offset depends on
+    // how many controls are above this section, and a header sitting half off the
+    // viewport swallows the tap silently instead of expanding.
+    final header = find.descendant(of: runtimeSection(), matching: find.text('Episode / runtime length')).last;
+    await tester.ensureVisible(header);
     await tester.pumpAndSettle();
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+    // The sheet is a lazy ListView: expanding a section doesn't guarantee its
+    // contents are built, so scroll to them before asserting.
+    await scrollTo(tester, '< 30m');
     expect(find.text('< 30m'), findsOneWidget, reason: 'the quick path survives the conversion');
     expect(find.descendant(of: runtimeSection(), matching: find.byType(TextField)), findsNWidgets(2));
   });
@@ -431,9 +484,16 @@ void _presetSyncTests() {
   testWidgets('a preset chip writes the fields', (tester) async {
     final f = await pump(tester);
     await scrollTo(tester, 'Episode / runtime length');
-    await tester.tap(find.descendant(of: runtimeSection(), matching: find.text('Episode / runtime length')).last);
+    // ensureVisible, not a bare tap: the sheet's exact scroll offset depends on
+    // how many controls are above this section, and a header sitting half off the
+    // viewport swallows the tap silently instead of expanding.
+    final header = find.descendant(of: runtimeSection(), matching: find.text('Episode / runtime length')).last;
+    await tester.ensureVisible(header);
+    await tester.pumpAndSettle();
+    await tester.tap(header);
     await tester.pumpAndSettle();
 
+    await scrollTo(tester, '30–60m');
     await tester.tap(find.text('30–60m'));
     await tester.pumpAndSettle();
 

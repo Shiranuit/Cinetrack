@@ -1108,5 +1108,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get resetLayoutConfirm =>
-      'As categorias nativas voltam à ordem original e são mostradas novamente. As suas categorias personalizadas ficam ocultas, não são eliminadas — pode reativá-las.';
+      'Cada categoria volta à ordem original, fica novamente visível e retoma a sua ordenação predefinida.';
+
+  @override
+  String get categorySortHint =>
+      'A ordem desta categoria quando não escolheste uma ordenação nos filtros.';
 }

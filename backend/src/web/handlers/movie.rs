@@ -45,9 +45,13 @@ pub async fn list_movies(
     Query(q): Query<MoviesQuery>,
 ) -> AppResult<Json<Vec<LibraryMovie>>> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
-    let sort = q.sort.as_deref().unwrap_or("popularity");
-    let desc = q.dir.as_deref() != Some("asc");
-    Ok(Json(movies::list(&state, uid, &langs, sort, desc).await?))
+    // No explicit sort means the caller hasn't picked one, so the Movies category's
+    // own sort applies — the same rule the series rails follow.
+    let (sort, desc) = match q.sort.as_deref() {
+        Some(s) => (s.to_string(), q.dir.as_deref() != Some("asc")),
+        None => crate::tracking::sections::movies_sort(&state, uid).await?,
+    };
+    Ok(Json(movies::list(&state, uid, &langs, &sort, desc).await?))
 }
 
 /// The authenticated user's relationship to a movie (watched/favorite/count).

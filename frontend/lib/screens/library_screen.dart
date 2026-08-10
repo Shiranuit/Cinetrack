@@ -47,7 +47,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   // Advanced library filter (over the user's own shows). The token resets the
   // infinite grid to page 1 when the filter changes.
-  final _f = AdvancedFilters(defaultSort: 'my_rating');
+  final _f = AdvancedFilters();
   FilterOptions _filterOptions = const FilterOptions();
   int _filterToken = 0;
 
@@ -74,8 +74,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _api = context.read<ApiClient>();
-    _libFuture = _api.library(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
-    _moviesFuture = _api.movies(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
+    _libFuture = _api.library(langs: _langs, sort: _f.sort, dir: _sortDir);
+    _moviesFuture = _api.movies(langs: _langs, sort: _f.sort, dir: _sortDir);
     _content = _combine(_libFuture, _moviesFuture);
     _searchCtrl.addListener(_onSearchChanged);
     _api.addListener(_onExternalMutation);
@@ -109,6 +109,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   bool get _filtering => _f.isActive;
+
+  /// Null when no sort is picked, so the request omits `dir` too — a direction
+  /// with no sort would be read as an explicit choice by the server, and each
+  /// category would stop using its own.
+  String? get _sortDir => _f.sort == null ? null : (_f.sortDesc ? 'desc' : 'asc');
 
   Future<void> _openFilters() async {
     await showModalBottomSheet<void>(
@@ -168,8 +173,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   /// Refresh both series and movies (used by the pull-to-refresh on the body).
   Future<void> _reloadContent() async {
-    final lf = context.read<ApiClient>().library(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
-    final mf = context.read<ApiClient>().movies(langs: _langs, sort: _f.sort, dir: _f.sortDesc ? 'desc' : 'asc');
+    final lf = context.read<ApiClient>().library(langs: _langs, sort: _f.sort, dir: _sortDir);
+    final mf = context.read<ApiClient>().movies(langs: _langs, sort: _f.sort, dir: _sortDir);
     setState(() {
       _libFuture = lf;
       _moviesFuture = mf;
@@ -193,12 +198,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  /// Take on a layout the customize sheet just persisted. Nothing is re-fetched:
-  /// the rails all render from content that's already loaded, so a reorder or a
-  /// hide is a pure re-render.
+  /// Take on a layout the customize sheet just persisted.
+  ///
+  /// Reordering and hiding are pure re-renders — the rails draw from content
+  /// that's already loaded. Changing a category's SORT is not: the ordering is
+  /// applied server-side, so that one needs a refetch.
   void _adoptSections(List<LibrarySection> saved) {
     if (!mounted) return;
+    String sorts(List<LibrarySection> l) =>
+        l.map((s) => '${s.builtin}:${s.sort}:${s.sortDesc}').join('|');
+    final reorderOnly = sorts(saved) == sorts(_sections);
     setState(() => _sections = saved);
+    // An explicit sort overrides every category, so nothing to refetch then.
+    if (!reorderOnly && _f.sort == null) _reloadContent();
   }
 
   // Search within the user's library by name. Writes the query into `_f` (so it
@@ -345,7 +357,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             children: [
               Builder(builder: (context) {
                 final t = AppLocalizations.of(context);
-                final sort = sortLabel(t, _f.sort);
+                // With no sort picked, the flat view reads alphabetically (the
+                // server resolves it) — so name what it IS ordered by, rather
+                // than leaving the line blank or showing a raw key.
+                final sort = sortLabel(t, _f.sort ?? 'name');
                 return Text(
                     _f.activeCount > 0
                         ? t.filteredSummary(_f.activeCount, sort)

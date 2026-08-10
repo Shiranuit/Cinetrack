@@ -12,7 +12,7 @@ fn langs() -> Vec<String> {
 }
 
 fn filters(kind: &str) -> Filters {
-    Filters { kind: kind.into(), sort: "popularity".into(), sort_desc: true, limit: 100, ..Default::default() }
+    Filters { kind: kind.into(), sort: Some("popularity".into()), sort_desc: true, limit: 100, ..Default::default() }
 }
 
 /// The library query buckets each tracked show into the right category and hides
@@ -60,7 +60,7 @@ async fn library_categorizes_and_hides_unavailable() {
     common::follow(&state.db, 1, 60, true, false).await;
     common::set_user_show(&state.db, 1, 60, "unavailable", "true").await;
 
-    let lib = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
+    let lib = tracking::library(&state, common::uid(1), &langs(), Some(("popularity", true))).await.unwrap();
 
     let names = |v: &[tracking::LibraryShow]| v.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>();
     assert_eq!(names(&lib.not_started), vec!["NotStarted"]);
@@ -506,7 +506,7 @@ async fn new_episode_keeps_show_in_watching_not_stale() {
     common::insert_episode_in_days(&state.db, 102, 10, 1, 2, -3, "Ep2").await;
     common::watch_ago(&state.db, 1, 10, 101, "w-ep1", 60).await;
 
-    let lib = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
+    let lib = tracking::library(&state, common::uid(1), &langs(), Some(("popularity", true))).await.unwrap();
     assert_eq!(lib.watching.iter().filter(|s| s.series_id == 10).count(), 1, "fresh episode -> Watching");
     assert!(lib.stale.iter().all(|s| s.series_id != 10), "not Stale when a new episode aired recently");
 
@@ -520,7 +520,7 @@ async fn new_episode_keeps_show_in_watching_not_stale() {
     common::insert_episode_in_days(&state.db, 202, 20, 1, 2, -80, "Ep2").await;
     common::watch_ago(&state.db, 1, 20, 201, "w-ep1", 60).await;
 
-    let lib2 = tracking::library(&state, common::uid(1), &langs(), "popularity", true).await.unwrap();
+    let lib2 = tracking::library(&state, common::uid(1), &langs(), Some(("popularity", true))).await.unwrap();
     assert_eq!(lib2.stale.iter().filter(|s| s.series_id == 20).count(), 1, "old backlog -> Stale");
 }
 
@@ -538,7 +538,13 @@ async fn library_sections_round_trip_and_default() {
     common::insert_user(&state.db, 1, "layout@test.local").await;
     let me = common::uid(1);
 
-    let section = |key: &str, enabled: bool| LibrarySection { id: None, builtin: key.into(), enabled };
+    let section = |key: &str, enabled: bool| LibrarySection {
+        id: None,
+        builtin: key.into(),
+        enabled,
+        sort: "name".into(),
+        sort_desc: false,
+    };
 
     // Never customized -> every built-in, enabled, in default order.
     let defaults = sections::library_sections(&state, me).await.unwrap();
@@ -647,7 +653,7 @@ async fn assert_rails_match_filter(state: &backend::state::AppState, me: uuid::U
     use backend::catalog::discover::{search_db, Filters};
     use backend::tracking::state::STATES;
 
-    let lib = tracking::library(state, me, &langs(), "name", false).await.unwrap();
+    let lib = tracking::library(state, me, &langs(), Some(("name", false))).await.unwrap();
     let rails: Vec<(&str, Vec<i64>)> = vec![
         ("watching", lib.watching.iter().map(|s| s.series_id).collect()),
         ("stale", lib.stale.iter().map(|s| s.series_id).collect()),
@@ -670,7 +676,7 @@ async fn assert_rails_match_filter(state: &backend::state::AppState, me: uuid::U
                 library_user: Some(me),
                 viewer: Some(me),
                 states: vec![bucket.to_string()],
-                sort: "name".into(),
+                sort: Some("name".into()),
                 limit: 200,
                 keep_upcoming_in_to_watch: keep,
                 ..Default::default()
@@ -767,7 +773,7 @@ async fn anime_rail_filter_map_round_trips_and_returns_rows() {
 
     let filters = backend::web::handlers::discover::build_filters(&q, Some(me), None, Some(me), false);
     assert_eq!(filters.kind, "anime");
-    assert_eq!(filters.sort, "last_watched");
+    assert_eq!(filters.sort.as_deref(), Some("last_watched"));
     assert_eq!(filters.limit, 120, "an unset limit falls back to the default");
 
     let rows = search_db(&state, &filters, &langs()).await.unwrap();
@@ -802,7 +808,7 @@ async fn a_watch_recency_sort_alone_does_not_filter_by_state() {
             kind: "series".into(),
             library_user: Some(me),
             viewer: Some(me),
-            sort: "last_watched".into(),
+            sort: Some("last_watched".into()),
             limit: 100,
             ..Default::default() // states is EMPTY
         },
@@ -820,7 +826,7 @@ async fn a_watch_recency_sort_alone_does_not_filter_by_state() {
             kind: "series".into(),
             library_user: Some(me),
             viewer: Some(me),
-            sort: "last_watched".into(),
+            sort: Some("last_watched".into()),
             states: vec!["stopped".into()],
             limit: 100,
             ..Default::default()
@@ -898,7 +904,7 @@ async fn watch_history_facets_and_the_seen_recently_view() {
         &Filters {
             watched_days_max: Some(30),
             statuses: vec!["Continuing".into()],
-            sort: "remaining".into(),
+            sort: Some("remaining".into()),
             sort_desc: true,
             ..base()
         },
@@ -934,7 +940,7 @@ async fn watch_history_facets_and_the_seen_recently_view() {
     // Ascending order = fewest left first, the other reading of the same view.
     let fewest = search_db(
         &state,
-        &Filters { watched_days_max: Some(30), statuses: vec!["Continuing".into()], sort: "remaining".into(), sort_desc: false, ..base() },
+        &Filters { watched_days_max: Some(30), statuses: vec!["Continuing".into()], sort: Some("remaining".into()), sort_desc: false, ..base() },
         &langs(),
     )
     .await
@@ -1095,7 +1101,7 @@ async fn library_scope_matches_main_except_for_the_two_intended_fixes() {
         kind: kind.to_string(),
         library_user: Some(me),
         viewer: Some(me),
-        sort: "name".into(),
+        sort: Some("name".into()),
         sort_desc: false,
         limit: 100,
         ..Default::default()
@@ -1199,7 +1205,13 @@ async fn a_rejected_layout_save_leaves_the_stored_one_intact() {
     common::insert_user(&state.db, 1, "savegate@test.local").await;
     let me = common::uid(1);
 
-    let section = |key: &str, enabled: bool| LibrarySection { id: None, builtin: key.into(), enabled };
+    let section = |key: &str, enabled: bool| LibrarySection {
+        id: None,
+        builtin: key.into(),
+        enabled,
+        sort: "name".into(),
+        sort_desc: false,
+    };
 
     // Store a good layout first.
     let good = LibrarySectionsReq { sections: vec![section("watching", true), section("stale", false)] };
@@ -1276,7 +1288,7 @@ async fn keeping_upcoming_shows_in_to_watch_moves_only_caught_up_shows_still_air
     common::watch_ago(&state.db, 1, 903, 9031, "w-903", 2).await;
 
     let buckets = async || {
-        let lib = tracking::library(&state, me, &langs(), "name", false).await.unwrap();
+        let lib = tracking::library(&state, me, &langs(), Some(("name", false))).await.unwrap();
         let mut out: Vec<(i64, String)> =
             [&lib.watching, &lib.stale, &lib.up_to_date, &lib.not_started, &lib.for_later, &lib.stopped]
                 .iter()
@@ -1353,4 +1365,175 @@ async fn the_preference_follows_the_library_owner_not_the_viewer() {
         vec![910],
         "the owner's setting decides, even though the viewer's is off"
     );
+}
+
+/// Each category orders itself when nobody has picked a sort.
+///
+/// The rails sort WITHIN a category, never across them, so this has to compare
+/// inside a single bucket — a pair split over two buckets keeps its order whatever
+/// the sort does, and the test would pass for a sort that isn't working.
+#[tokio::test]
+async fn each_category_orders_itself_when_no_sort_is_chosen() {
+    use backend::tracking::sections;
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "catsort@test.local").await;
+    let me = common::uid(1);
+
+    // Two shows in "To watch": behind, both aired recently. Alpha aired more
+    // recently but was watched longer ago, so the two sorts disagree.
+    common::insert_series(&state.db, 1700, "Alpha", Some(2001), Some(20), Some(9.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 1700, true, false).await;
+    common::insert_episode_in_days(&state.db, 17001, 1700, 1, 1, -40, "E1").await;
+    common::insert_episode_in_days(&state.db, 17002, 1700, 1, 2, -1, "E2").await;
+    common::watch_ago(&state.db, 1, 1700, 17001, "w-1700", 25).await;
+
+    common::insert_series(&state.db, 1701, "Beta", Some(2020), Some(50), Some(1.0), Some("eng"), serde_json::json!({})).await;
+    common::follow(&state.db, 1, 1701, true, false).await;
+    common::insert_episode_in_days(&state.db, 17011, 1701, 1, 1, -40, "E1").await;
+    common::insert_episode_in_days(&state.db, 17012, 1701, 1, 2, -10, "E2").await;
+    common::watch_ago(&state.db, 1, 1701, 17011, "w-1701", 1).await;
+
+    // Two more in "Stopped", which is seeded by name.
+    for (id, name) in [(1702_i64, "Zulu"), (1703_i64, "Charlie")] {
+        common::insert_series(&state.db, id, name, Some(2010), Some(30), Some(5.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+        common::set_user_show(&state.db, 1, id, "archived", "true").await;
+    }
+
+    let lib = tracking::library(&state, me, &langs(), None).await.unwrap();
+
+    // Seeded: To watch = newest episode aired first.
+    assert_eq!(
+        lib.watching.iter().map(|s| s.series_id).collect::<Vec<_>>(),
+        vec![1700, 1701],
+        "To watch is seeded by what aired most recently, not by what you watched last"
+    );
+    // Seeded: Stopped = name A-Z. A different KEY *and* a different DIRECTION from
+    // the category above, in the same query.
+    assert_eq!(
+        lib.stopped.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>(),
+        vec!["Charlie".to_string(), "Zulu".to_string()],
+        "Stopped is seeded alphabetically"
+    );
+
+    // Change one category; only that one moves.
+    let mut layout = sections::library_sections(&state, me).await.unwrap();
+    for s in &mut layout {
+        if s.builtin == "watching" {
+            s.sort = "last_watched".into();
+            s.sort_desc = true;
+        }
+    }
+    sections::set_library_sections(&state, me, &layout).await.unwrap();
+
+    let lib = tracking::library(&state, me, &langs(), None).await.unwrap();
+    assert_eq!(
+        lib.watching.iter().map(|s| s.series_id).collect::<Vec<_>>(),
+        vec![1701, 1700],
+        "To watch now follows its new sort"
+    );
+    assert_eq!(
+        lib.stopped.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>(),
+        vec!["Charlie".to_string(), "Zulu".to_string()],
+        "and the other categories are untouched"
+    );
+
+    // An explicit sort overrides every category at once.
+    let lib = tracking::library(&state, me, &langs(), Some(("name", false))).await.unwrap();
+    assert_eq!(
+        lib.watching.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>(),
+        vec!["Alpha".to_string(), "Beta".to_string()],
+    );
+    let lib = tracking::library(&state, me, &langs(), Some(("name", true))).await.unwrap();
+    assert_eq!(
+        lib.stopped.iter().filter_map(|s| s.name.clone()).collect::<Vec<_>>(),
+        vec!["Zulu".to_string(), "Charlie".to_string()],
+        "the override reverses a category whose own sort is ascending"
+    );
+}
+
+/// A category's sort is validated on write, and movies get the narrower list.
+#[tokio::test]
+async fn a_category_sort_must_be_one_that_category_can_honour() {
+    use backend::tracking::sections::{self, LibrarySection, SECTION_SORT_SEEDS};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "catsortsave@test.local").await;
+    let me = common::uid(1);
+
+    // Never customized -> the seeds.
+    let defaults = sections::library_sections(&state, me).await.unwrap();
+    for (key, sort, desc) in SECTION_SORT_SEEDS {
+        let row = defaults.iter().find(|s| s.builtin == key).expect(key);
+        assert_eq!((row.sort.as_str(), row.sort_desc), (sort, desc), "{key}");
+    }
+
+    let with_sort = |key: &str, sort: &str| LibrarySection {
+        id: None,
+        builtin: key.into(),
+        enabled: true,
+        sort: sort.into(),
+        sort_desc: true,
+    };
+
+    assert!(sections::set_library_sections(&state, me, &[with_sort("watching", "progress")]).await.is_ok());
+
+    // Movies have no episodes, so the watch-progress sorts mean nothing there —
+    // storing one would be a setting that silently does nothing.
+    assert!(sections::set_library_sections(&state, me, &[with_sort("movies", "progress")]).await.is_err());
+    assert!(sections::set_library_sections(&state, me, &[with_sort("movies", "remaining")]).await.is_err());
+    assert!(sections::set_library_sections(&state, me, &[with_sort("movies", "my_rating")]).await.is_ok());
+
+    // Not a sort at all, and a sort the rails deliberately don't offer.
+    assert!(sections::set_library_sections(&state, me, &[with_sort("stale", "nonsense")]).await.is_err());
+    assert!(sections::set_library_sections(&state, me, &[with_sort("stale", "popularity")]).await.is_err());
+
+    // A key stored by a newer build falls back to the seed instead of reaching the
+    // ORDER BY, where it would sort by nothing in particular.
+    sqlx::query("UPDATE app.library_section SET sort = 'from_the_future' WHERE user_id = $1")
+        .bind(me).execute(&state.db).await.unwrap();
+    let rows = sections::library_sections(&state, me).await.unwrap();
+    let movies = rows.iter().find(|s| s.builtin == "movies").unwrap();
+    assert_eq!((movies.sort.as_str(), movies.sort_desc), ("my_rating", true));
+}
+
+/// With no sort chosen, a library search reads alphabetically rather than by
+/// whatever the query layer happened to default to.
+#[tokio::test]
+async fn an_unsorted_library_search_is_alphabetical() {
+    use backend::catalog::discover::{search_db, Filters};
+
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "unsorted@test.local").await;
+    let me = common::uid(1);
+
+    for (id, name) in [(1710_i64, "Zulu"), (1711_i64, "Alpha"), (1712_i64, "Mike")] {
+        common::insert_series(&state.db, id, name, Some(2010), Some(30), Some(5.0), Some("eng"), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+
+    let names = |rows: Vec<backend::catalog::SearchResult>| {
+        rows.into_iter().filter_map(|r| r.name).collect::<Vec<_>>()
+    };
+    let unsorted = Filters {
+        kind: "series".into(),
+        library_user: Some(me),
+        viewer: Some(me),
+        limit: 100,
+        // sort: None, and sort_desc left at its default — the direction must not
+        // leak through and give Z-A.
+        ..Default::default()
+    };
+    assert_eq!(names(search_db(&state, &unsorted, &langs()).await.unwrap()), vec!["Alpha", "Mike", "Zulu"]);
+
+    // An explicit sort still wins.
+    let by_year = Filters { sort: Some("name".into()), sort_desc: true, ..unsorted };
+    assert_eq!(names(search_db(&state, &by_year, &langs()).await.unwrap()), vec!["Zulu", "Mike", "Alpha"]);
 }

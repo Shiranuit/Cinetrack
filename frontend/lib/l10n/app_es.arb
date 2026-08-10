@@ -465,6 +465,8 @@
   "@filterMax": {},
   "resetLayout": "Restablecer diseño",
   "@resetLayout": {},
-  "resetLayoutConfirm": "Las categorías integradas vuelven a su orden original y se muestran de nuevo. Tus categorías personalizadas se ocultan, no se eliminan: puedes volver a activarlas.",
+  "resetLayoutConfirm": "Cada categoría vuelve a su orden original, se muestra de nuevo y recupera su orden predeterminado.",
+  "categorySortHint": "Cómo ordena esta categoría cuando no has elegido un orden en los filtros.",
+  "@categorySortHint": {},
   "@resetLayoutConfirm": {}
 }

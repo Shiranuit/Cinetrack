@@ -2,18 +2,21 @@
 /// `toQuery()` maps directly onto the backend `/api/discover` + `/api/library/filter`
 /// query params.
 class AdvancedFilters {
-  AdvancedFilters({this.defaultSort = 'popularity'}) : sort = defaultSort;
+  AdvancedFilters();
 
-  /// Initial sort key, also the one restored by [reset]. Discover uses
-  /// 'popularity'; the Library passes 'my_rating' (Your rating).
-  final String defaultSort;
+  /// The sort the user EXPLICITLY picked, or null if they haven't.
+  ///
+  /// Null is a real state, not a missing value: it's what lets each Library
+  /// category use its own sort, and what the flat views resolve to name A-Z
+  /// (library) or popularity (Discover). `toQuery` omits the parameter entirely,
+  /// so the server sees the absence rather than a stand-in default.
 
   /// Free-text name search, combined with the facets below. In the Library it
   /// searches your tracked shows; in Discover it searches the whole catalog.
   String query = '';
   String type = 'series'; // series | movie | anime
-  String sort;
-  bool sortDesc = true; // sort direction; false = ascending
+  String? sort;
+  bool sortDesc = true; // direction, only meaningful once a sort is picked
   bool includeLibrary = true; // Discover only: include shows already in your library (default on; off hides them)
   final Set<int> genresInc = {}, genresExc = {};
   final Set<int> tagsInc = {}, tagsExc = {};
@@ -115,7 +118,7 @@ class AdvancedFilters {
     hasUpcoming = null;
     favoritesOnly = false;
     includeLibrary = true;
-    sort = defaultSort;
+    sort = null;
     sortDesc = true;
   }
 
@@ -126,8 +129,9 @@ class AdvancedFilters {
     final m = <String, String?>{
       'q': query.trim().isEmpty ? null : query.trim(),
       'type': type,
+      // Both omitted when nothing was picked — their ABSENCE is the signal.
       'sort': sort,
-      'dir': sortDesc ? 'desc' : 'asc',
+      'dir': sort == null ? null : (sortDesc ? 'desc' : 'asc'),
       // Backend includes library shows by default; only send the flag to HIDE them.
       'include_library': includeLibrary ? null : 'false',
       'genres': _ids(genresInc),
@@ -169,8 +173,8 @@ class AdvancedFilters {
   /// section in the filter sheet. Unknown keys and unparseable values are ignored
   /// rather than throwing: a section saved by a newer client must still be
   /// editable on an older one, just without the parts it doesn't understand.
-  factory AdvancedFilters.fromQuery(Map<String, String> q, {String defaultSort = 'popularity'}) {
-    final f = AdvancedFilters(defaultSort: defaultSort);
+  factory AdvancedFilters.fromQuery(Map<String, String> q) {
+    final f = AdvancedFilters();
     void ids(String key, Set<int> into) {
       for (final part in (q[key] ?? '').split(',')) {
         final n = int.tryParse(part.trim());
@@ -186,7 +190,7 @@ class AdvancedFilters {
 
     f.query = q['q'] ?? '';
     f.type = q['type'] ?? 'series';
-    f.sort = q['sort'] ?? defaultSort;
+    f.sort = q['sort'];
     f.sortDesc = (q['dir'] ?? 'desc') != 'asc';
     f.includeLibrary = q['include_library'] != 'false';
     ids('genres', f.genresInc);

@@ -466,6 +466,8 @@
   "@filterMax": {},
   "resetLayout": "Réinitialiser",
   "@resetLayout": {},
-  "resetLayoutConfirm": "Les catégories natives retrouvent leur ordre d'origine et réapparaissent. Vos catégories personnalisées sont masquées, pas supprimées — vous pouvez les réactiver.",
+  "resetLayoutConfirm": "Chaque catégorie retrouve son ordre d’origine, redevient visible et reprend son tri par défaut.",
+  "categorySortHint": "L’ordre de cette catégorie quand aucun tri n’est choisi dans les filtres.",
+  "@categorySortHint": {},
   "@resetLayoutConfirm": {}
 }
