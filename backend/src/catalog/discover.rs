@@ -16,6 +16,8 @@ use crate::{
     state::AppState,
 };
 
+use super::search_policy::SearchMode;
+
 /// Enough local browse hits before hybrid mode bothers TheTVDB.
 const MIN_LOCAL: usize = 20;
 
@@ -39,9 +41,9 @@ pub struct Company {
 }
 
 /// Advanced filters. Empty vecs / `None` mean "no constraint".
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Filters {
-    /// Optional name substring (title/aliases); combined with the facet filters.
+    /// Optional title words (base/translations/aliases); combined with facets.
     pub query: Option<String>,
     pub kind: String, // "series" | "movie" | "anime"
     pub genres_include: Vec<i64>,
@@ -62,9 +64,8 @@ pub struct Filters {
     pub score_min: Option<f64>,
     pub original_languages: Vec<String>, // any-of (e.g. "jpn", "eng")
     pub original_countries: Vec<String>, // any-of (e.g. "jpn", "usa")
-    /// The caller's EXPLICIT sort. `None` means nobody picked one — the Library
-    /// then falls back to name A-Z (a search is scanned alphabetically, not by when
-    /// you last watched), and Discover to its popularity score.
+    /// Browsing sort. Text searches always use title relevance. With no text or
+    /// explicit sort, Library falls back to name A-Z and Discover to popularity.
     pub sort: Option<String>,
     pub sort_desc: bool,                 // sort direction (false = ascending)
     pub limit: i64,
@@ -128,7 +129,123 @@ fn movie_membership_sql(alias: &str) -> String {
     format!("({alias}.watched OR {alias}.is_favorited OR {alias}.watchlist)")
 }
 
+/// Library collections are small; only catalog-wide searches need the guard.
+fn search_mode(state: &AppState, f: &Filters, langs: &[String]) -> SearchMode {
+    if f.library_user.is_some() {
+        SearchMode::Full
+    } else {
+        state.search_baseline.mode(f.query.as_deref(), &f.kind, langs)
+    }
+}
+
+fn name_match(qb: &mut QueryBuilder<'_, Postgres>, column: &str, query: &str, exact: bool) {
+    if exact {
+        qb.push(format!("catalog.search_title_key({column}) = catalog.search_title_key("))
+            .push_bind(query.to_owned()).push(")");
+    } else {
+        let words = super::search_policy::words(query);
+        if words.is_empty() {
+            qb.push("FALSE");
+            return;
+        }
+        // Match terms independently on the SAME title variant. Splitting at
+        // punctuation makes "laid-off" and "laid off" generate identical indexed
+        // predicates. Folded expression indexes keep these lookups indexable.
+        qb.push("(");
+        for (i, word) in words.iter().enumerate() {
+            if i > 0 {
+                qb.push(" AND ");
+            }
+            qb.push(format!("catalog.fold_search_text({column}) LIKE "))
+                .push_bind(format!("%{word}%"));
+        }
+        qb.push(")");
+    }
+}
+
+/// Score only names that passed the indexed matcher. The best eligible variant
+/// wins; words from different translations/aliases never combine into a match.
+fn relevance(qb: &mut QueryBuilder<'_, Postgres>, query: &str, exact: bool) {
+    if exact {
+        qb.push("1000000::bigint");
+    } else {
+        let words = super::search_policy::words(query);
+        let key = words.join(" ");
+        let mut terms = words;
+        terms.sort();
+        terms.dedup();
+        qb.push("catalog.title_relevance(h.name, ")
+            .push_bind(key).push(", ").push_bind(terms).push(")");
+    }
+}
+
+fn search_join(
+    qb: &mut QueryBuilder<'_, Postgres>, f: &Filters, langs: &[String],
+    table: &str, etype: &str, query: &str, mode: SearchMode,
+) {
+    let exact = mode == SearchMode::Exact;
+    if f.library_user.is_some() {
+        // Restrict to the user's library before inspecting variants; broad library
+        // searches must not rank a catalog-wide set of names.
+        qb.push(" JOIN LATERAL (SELECT max(");
+        relevance(qb, query, exact);
+        qb.push(") AS relevance FROM (SELECT x.name UNION ALL SELECT tr.name FROM catalog.translation tr WHERE tr.entity_type = ")
+            .push_bind(etype.to_owned());
+        qb.push(" AND tr.entity_id = x.id AND (tr.language = ANY(").push_bind(langs.to_vec());
+        qb.push(") OR tr.language = x.original_language) UNION ALL SELECT ea.name FROM catalog.entity_alias ea WHERE ea.entity_type = ")
+            .push_bind(etype.to_owned());
+        qb.push(" AND ea.entity_id = x.id AND (ea.language = ANY(").push_bind(langs.to_vec());
+        qb.push(") OR ea.language = x.original_language)) h WHERE ");
+        name_match(qb, "h.name", query, exact);
+        qb.push(") sr ON sr.relevance IS NOT NULL");
+    } else {
+        // Keep each source's indexable predicates inside its UNION branch, then
+        // deduplicate and score before pagination. No full-catalog ranking scan.
+        qb.push(" JOIN (SELECT h.id, max(");
+        relevance(qb, query, exact);
+        qb.push(") AS relevance FROM (SELECT id, name FROM ").push(table).push(" WHERE NOT deleted AND ");
+        name_match(qb, "name", query, exact);
+        qb.push(" UNION ALL SELECT t.entity_id, t.name FROM catalog.translation t JOIN ")
+            .push(table).push(" s ON s.id = t.entity_id WHERE NOT s.deleted AND t.entity_type = ")
+            .push_bind(etype.to_owned());
+        qb.push(" AND (t.language = ANY(").push_bind(langs.to_vec());
+        qb.push(") OR t.language = s.original_language) AND ");
+        name_match(qb, "t.name", query, exact);
+        qb.push(" UNION ALL SELECT a.entity_id, a.name FROM catalog.entity_alias a JOIN ")
+            .push(table).push(" s2 ON s2.id = a.entity_id WHERE NOT s2.deleted AND a.entity_type = ")
+            .push_bind(etype.to_owned());
+        qb.push(" AND (a.language = ANY(").push_bind(langs.to_vec());
+        qb.push(") OR a.language = s2.original_language) AND ");
+        name_match(qb, "a.name", query, exact);
+        qb.push(") h GROUP BY h.id) sr ON sr.id = x.id");
+    }
+}
+
 pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppResult<Vec<SearchResult>> {
+    let (_, results) = search_db_with_mode(state, f, langs).await?;
+    Ok(results)
+}
+
+/// Normalize the input once, before both the in-memory frequency guard and SQL
+/// matching. The database's pinned dictionary gives input and indexed names the
+/// same Unicode/ligature folding, including composed and decomposed accents.
+pub async fn search_db_with_mode(
+    state: &AppState, f: &Filters, langs: &[String],
+) -> AppResult<(SearchMode, Vec<SearchResult>)> {
+    let mut prepared = f.clone();
+    if let Some(query) = f.query.as_deref() {
+        prepared.query = Some(sqlx::query_scalar::<_, String>(
+            "SELECT catalog.fold_search_text($1)"
+        ).bind(query).fetch_one(&state.db).await?);
+    }
+    let mode = search_mode(state, &prepared, langs);
+    let results = search_prepared(state, &prepared, langs, mode).await?;
+    Ok((mode, results))
+}
+
+async fn search_prepared(
+    state: &AppState, f: &Filters, langs: &[String], mode: SearchMode,
+) -> AppResult<Vec<SearchResult>> {
     let is_movie = f.kind == "movie";
     let is_anime = f.kind == "anime";
     let (table, etype, result_kind) =
@@ -140,7 +257,7 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // Sorting by watch recency needs the same aggregates a state filter does, so
     // either one pulls the CTEs in — this is what lets a duplicated category match
     // the rail's ORDER as well as its contents.
-    let watch_state_sort =
+    let watch_state_sort = f.query.is_none() &&
         matches!(f.sort.as_deref(), Some("last_watched" | "last_aired" | "remaining" | "progress"));
     // Any facet derived from watch history needs the same CTEs. Kept as one list so
     // adding a facet without wiring its trigger can't silently produce a query that
@@ -219,6 +336,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             qb.push(", NULL::smallint AS rating, false AS is_favorited");
         }
     }
+    if f.query.is_some() {
+        qb.push(", sr.relevance, x.score AS search_popularity");
+    } else {
+        qb.push(", NULL::bigint AS relevance, NULL::double precision AS search_popularity");
+    }
     qb.push(format!(" FROM {table} x"));
 
     // Library scope: only titles this user tracks. Movies join `user_movie` — they
@@ -241,6 +363,12 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // The watch-state aggregates, when a state filter asked for them.
     if with_state && !is_movie {
         qb.push(format!(" {}", crate::tracking::state::watch_state_joins("x.id")));
+    }
+    if let Some(query) = f.query.as_deref() {
+        if !query.chars().any(char::is_alphanumeric) {
+            return Ok(vec![]);
+        }
+        search_join(&mut qb, f, langs, table, etype, query, mode);
     }
     qb.push(" WHERE NOT x.deleted");
 
@@ -411,57 +539,6 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
         qb.push(" AND x.original_country = ANY(").push_bind(f.original_countries.clone()).push(")");
     }
 
-    // Name search: substring match on the base name OR any TRANSLATED name / alias, so
-    // a show is found by the localized title the user actually sees, not only its
-    // original-language form (e.g. a show shown as "Hanamonogatari" whose base name is
-    // Japanese with no aliases). Translations/aliases are matched only in the languages
-    // that matter to this user: their OWN languages PLUS the show's own original
-    // language (so a Japanese show is still findable by its Japanese title even when the
-    // user only reads eng/fra), never all ~113. Both sides hit their pg_trgm GIN index
-    // (series/movie _name_trgm / translation_search_idx); a UNION of indexed lookups
-    // stays fast, whereas an OR couldn't use them.
-    if let Some(query) = f.query.as_deref() {
-        let like = format!("%{query}%");
-        if f.library_user.is_some() {
-            // Library: `x` is already restricted to the user's (few hundred) shows by
-            // the JOIN above, so OR EXISTS on their translations/aliases is cheap
-            // (single-digit ms) even for common substrings that would match huge slices
-            // of the catalog-wide translation/alias tables. `x.original_language` is on
-            // the base row already, so the original-language branch needs no extra join.
-            qb.push(" AND (x.name ILIKE ").push_bind(like.clone());
-            qb.push(" OR EXISTS (SELECT 1 FROM catalog.translation tr WHERE tr.entity_type = ");
-            qb.push_bind(etype);
-            qb.push(" AND tr.entity_id = x.id AND (tr.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") OR tr.language = x.original_language) AND tr.name ILIKE ").push_bind(like.clone());
-            qb.push(") OR EXISTS (SELECT 1 FROM catalog.entity_alias ea WHERE ea.entity_type = ");
-            qb.push_bind(etype);
-            qb.push(" AND ea.entity_id = x.id AND (ea.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") OR ea.language = x.original_language) AND ea.name ILIKE ").push_bind(like);
-            qb.push("))");
-        } else {
-            // Discover (catalog-wide): a UNION of pg_trgm GIN-indexed lookups over the
-            // base name, translated titles, and aliases. The translation/alias branches
-            // join back to the base table for its `original_language`, so a match counts
-            // when the row's language is one of the user's OR the show's own original.
-            qb.push(" AND x.id IN (SELECT id FROM ");
-            qb.push(table);
-            qb.push(" WHERE name ILIKE ").push_bind(like.clone());
-            qb.push(" UNION SELECT t.entity_id FROM catalog.translation t JOIN ");
-            qb.push(table);
-            qb.push(" s ON s.id = t.entity_id WHERE t.entity_type = ");
-            qb.push_bind(etype);
-            qb.push(" AND (t.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") OR t.language = s.original_language) AND t.name ILIKE ").push_bind(like.clone());
-            qb.push(" UNION SELECT a.entity_id FROM catalog.entity_alias a JOIN ");
-            qb.push(table);
-            qb.push(" s2 ON s2.id = a.entity_id WHERE a.entity_type = ");
-            qb.push_bind(etype);
-            qb.push(" AND (a.language = ANY(").push_bind(langs.to_vec());
-            qb.push(") OR a.language = s2.original_language) AND a.name ILIKE ").push_bind(like);
-            qb.push(")");
-        }
-    }
-
     // With no sort chosen, a library-scoped query reads alphabetically. The
     // direction is forced: `dir` defaults to DESC, which would give Z-A.
     let unsorted_library = f.sort.is_none() && f.library_user.is_some();
@@ -475,7 +552,11 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     // "my_rating" orders by the library OWNER's note (the browsed user when viewing
     // their library, else the viewer) — a bound uuid, so it can't be a plain &str.
     // Series-only, since movies have no per-user rating.
-    if f.sort.as_deref() == Some("my_rating") && !is_movie && rating_owner.is_some() {
+    if f.query.is_some() {
+        // Popularity only breaks equal textual scores; the browsing sort and its
+        // direction cannot displace a stronger title match.
+        qb.push(" ORDER BY sr.relevance DESC, x.score DESC NULLS LAST");
+    } else if f.sort.as_deref() == Some("my_rating") && !is_movie && rating_owner.is_some() {
         qb.push(" ORDER BY (SELECT us2.rating FROM app.user_show us2 \
                    WHERE us2.series_id = x.id AND us2.user_id = ");
         qb.push_bind(rating_owner.unwrap());
@@ -516,13 +597,13 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
     }
 
     let rows = qb
-        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, bool, Option<i16>, bool)>()
+        .build_query_as::<(i64, Option<String>, Option<i32>, Option<String>, bool, Option<i16>, bool, Option<i64>, Option<f64>)>()
         .fetch_all(&state.db)
         .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(id, name, year, image_url, in_library, rating, is_favorited)| SearchResult {
+        .map(|(id, name, year, image_url, in_library, rating, is_favorited, relevance, search_popularity)| SearchResult {
             tvdb_id: Some(id),
             kind: Some(result_kind.to_string()),
             name,
@@ -531,6 +612,8 @@ pub async fn search_db(state: &AppState, f: &Filters, langs: &[String]) -> AppRe
             in_library,
             rating,
             is_favorited,
+            relevance,
+            search_popularity,
         })
         .collect())
 }
@@ -750,6 +833,8 @@ async fn popular_local(
             in_library: false,
             rating: None,
             is_favorited: false,
+            relevance: None,
+            search_popularity: None,
         })
         .collect())
 }
@@ -800,6 +885,8 @@ async fn popular_remote(
             in_library: false,
             rating: None,
             is_favorited: false,
+            relevance: None,
+            search_popularity: None,
         });
     }
     Ok(out)

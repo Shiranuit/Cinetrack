@@ -42,6 +42,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchAllShows => '搜索所有剧集和电影';
 
   @override
+  String get searchExactOnly => '添加其他词语可扩大搜索范围。较短或常见的词语仅显示标题完全匹配的作品。';
+
+  @override
+  String get sortRelevance => '标题匹配度';
+
+  @override
+  String get searchRelevanceHelp => '搜索结果按标题匹配度排序。清空搜索即可使用所选排序方式。';
+
+  @override
   String get libraryNoMatchDiscover => '库中没有匹配项。在“发现”中查找新作品。';
 
   @override

@@ -2,6 +2,7 @@ use uuid::Uuid;
 use axum::{
     Json,
     extract::{Query, State},
+    http::{HeaderMap, HeaderValue},
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +20,7 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct DiscoverQuery {
-    /// Optional name query: substring match on the title (base + aliases). Lets
+    /// Optional name query: words within a title (base/translations/aliases). Lets
     /// Discover and the Library search by name AND filter at the same time.
     pub q: Option<String>,
     /// "series" (default), "movie", or "anime".
@@ -82,13 +83,13 @@ pub fn build_filters(
     keep_upcoming_in_to_watch: bool,
 ) -> Filters {
     Filters {
-        // Trimmed; ignored if under 2 chars (a 1-char substring is meaningless and
-        // can't use the trigram index on the whole-catalog Discover query).
+        // Blank means browse. Short Discover queries use indexed exact-title
+        // lookup; never silently turn a nonempty search into an unfiltered page.
         query: q
             .q
             .as_deref()
             .map(str::trim)
-            .filter(|s| s.chars().count() >= 2)
+            .filter(|s| !s.is_empty())
             .map(str::to_string),
         kind: q.kind.clone().unwrap_or_else(|| "series".to_string()),
         genres_include: csv_ids(q.genres.as_deref()),
@@ -153,13 +154,13 @@ pub fn build_filters(
     }
 }
 
-/// Advanced discover over the whole mirrored catalog, excluding shows the user
-/// already tracks (discovery = new shows; filter your own shows in the Library).
+/// Advanced Discover over the mirrored catalog. The response remains an array;
+/// x-search-mode tells clients when broad matching was limited to exact titles.
 pub async fn discover(
     AuthUser(uid): AuthUser,
     State(state): State<AppState>,
     Query(q): Query<DiscoverQuery>,
-) -> AppResult<Json<Vec<SearchResult>>> {
+) -> AppResult<(HeaderMap, Json<Vec<SearchResult>>)> {
     let langs = LangsQuery { langs: q.langs.clone() }.list();
     // Default: INCLUDE the user's tracked shows (they're marked `in_library` so the
     // UI can flag them). Pass `include_library=false` to hide tracked shows and see
@@ -167,7 +168,11 @@ pub async fn discover(
     let exclude = if q.include_library.unwrap_or(true) { None } else { Some(uid) };
     // Discover is catalog-wide, so no library bucket is classified and the
     // preference cannot apply.
-    Ok(Json(catalog::discover::search_db(&state, &build_filters(&q, None, exclude, Some(uid), false), &langs).await?))
+    let f = build_filters(&q, None, exclude, Some(uid), false);
+    let (mode, results) = catalog::discover::search_db_with_mode(&state, &f, &langs).await?;
+    let mut headers = HeaderMap::new();
+    headers.insert("x-search-mode", HeaderValue::from_static(mode.as_str()));
+    Ok((headers, Json(results)))
 }
 
 /// Same advanced filter, scoped to the user's own tracked shows.

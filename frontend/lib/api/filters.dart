@@ -7,8 +7,8 @@ class AdvancedFilters {
   /// The sort the user EXPLICITLY picked, or null if they haven't.
   ///
   /// Null is a real state, not a missing value: it's what lets each Library
-  /// category use its own sort, and what the flat views resolve to name A-Z
-  /// (library) or popularity (Discover). `toQuery` omits the parameter entirely,
+  /// category use its own sort, and what browsing resolves to name A-Z
+  /// (library) or popularity (Discover). Text searches use relevance. `toQuery` omits the parameter entirely,
   /// so the server sees the absence rather than a stand-in default.
 
   /// Free-text name search, combined with the facets below. In the Library it

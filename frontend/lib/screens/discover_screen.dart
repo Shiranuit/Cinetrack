@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../api/filters.dart';
 import '../api/models.dart';
+import '../api/ranked_search_pager.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../state/library_membership.dart';
@@ -35,6 +36,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   FilterOptions _options = const FilterOptions();
   // Bumping this resets the infinite grid to the first page (kinds/filters changed).
   int _reloadToken = 0;
+  bool _exactOnly = false;
+  bool _rankedExactOnly = false;
+  RankedSearchPager? _rankedPager;
   // The type toggles are multi-select and combinable; all on by default.
   Set<String> _kinds = {'series', 'anime', 'movie'};
   final _selection = SelectionController();
@@ -59,8 +63,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     super.dispose();
   }
 
-  // Name search composes with the facet filters (both go into `_f`). Debounced,
-  // and only fires once the query clears the backend's 2-char minimum.
+  // Name search composes with the facets. The backend decides whether short or
+  // common terms need exact-title lookup, and reports that mode with the page.
   void _onSearchChanged() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () {
@@ -91,6 +95,27 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     if (kinds.isEmpty) return [];
     final api = context.read<ApiClient>();
     final langs = context.read<SettingsController>().langsParam;
+    final token = _reloadToken;
+    if (_f.query.trim().isNotEmpty) {
+      if (offset == 0 || _rankedPager == null) {
+        final filters = AdvancedFilters.fromQuery(_f.toQuery());
+        _rankedExactOnly = false;
+        _rankedPager = RankedSearchPager(kinds: kinds, batchSize: limit,
+          fetch: (kind, start, size) => api.filteredSearch(
+            filters, type: kind, langs: langs, offset: start, limit: size,
+            onSearchMode: (exact) {
+              if (token == _reloadToken) _rankedExactOnly |= exact;
+            },
+          ),
+        );
+      }
+      final page = await _rankedPager!.page(offset, limit);
+      if (mounted && token == _reloadToken && _exactOnly != _rankedExactOnly) {
+        setState(() { _exactOnly = _rankedExactOnly; });
+      }
+      return page;
+    }
+    var exactOnly = false;
     final lists = await Future.wait(
       kinds.map(
         (k) => api.filteredSearch(
@@ -99,13 +124,22 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           langs: langs,
           offset: offset,
           limit: limit,
+          onSearchMode: (exact) { exactOnly |= exact; },
         ),
       ),
     );
+    if (mounted && token == _reloadToken && _exactOnly != exactOnly) {
+      setState(() { _exactOnly = exactOnly; });
+    }
     return [for (final l in lists) ...l];
   }
 
-  void _reload() => setState(() => _reloadToken++);
+  void _reload() => setState(() {
+    _reloadToken++;
+    _exactOnly = false;
+    _rankedExactOnly = false;
+    _rankedPager = null;
+  });
 
   Future<void> _openFilters() async {
     await showModalBottomSheet<void>(
@@ -227,13 +261,21 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               ],
             ),
           ),
+          if (_exactOnly)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
+              child: Text(t.searchExactOnly),
+            ),
           Expanded(
             child: InfiniteGrid(
+              // Dispose an older in-flight page when a new query starts, so its
+              // results cannot overwrite the new query's cards or search mode.
+              key: ValueKey(_reloadToken),
               resetKey: _reloadToken,
               fetchPage: _pageFetch,
               empty: MessageView(
                 icon: Icons.auto_awesome_rounded,
-                message: t.discoverEmpty,
+                message: _exactOnly ? t.noResults : t.discoverEmpty,
               ),
               itemBuilder: (context, r) => ShowCard(
                 title: r.name ?? '—',

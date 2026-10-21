@@ -15,6 +15,321 @@ fn filters(kind: &str) -> Filters {
     Filters { kind: kind.into(), sort: Some("popularity".into()), sort_desc: true, limit: 100, ..Default::default() }
 }
 
+/// Text relevance replaces browsing sorts; the best eligible variant wins once
+/// per title. Facets, library membership and deterministic paging still apply.
+#[tokio::test]
+async fn title_relevance_overrides_browse_sort_and_preserves_scope() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "relevance@test.local").await;
+    for (id, name, popularity, year) in [
+        (9001, "Malgré moi", 1., 2001),
+        (9002, "Despite Myself", 100., 2002),
+        (9003, "Alternate Me", 50., 2003),
+        (9004, "Toujours malgré moi", 1000., 2024),
+        (9005, "Malgre moitie", 2000., 2025),
+        (9006, "Malgre moi outside", 3000., 2026),
+        (9007, "Rare Name", 4000., 2027),
+        (9008, "Malgre", 5000., 2028),
+        (9009, "Malgré moi", 1., 2001),
+    ] {
+        common::insert_series(&state.db, id, name, Some(year), None, Some(popularity), Some("eng"), serde_json::json!({})).await;
+        if id != 9006 { common::follow(&state.db, 1, id, true, false).await; }
+    }
+    sqlx::query("INSERT INTO catalog.translation (entity_type,entity_id,language,name) VALUES \
+        ('series',9002,'fra','Malgré moi'), ('series',9007,'spa','Malgré moi')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.entity_alias (entity_type,entity_id,language,name) VALUES \
+        ('series',9003,'fra','Malgré-moi'), ('series',9003,'eng','Malgre moi'), \
+        ('series',9007,'eng','Toujours malgré moi'), ('series',9008,'eng','Moi')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.movie (id,name,score,year) VALUES (9001,'Malgré-moi',1,2001)")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO app.user_movie (user_id,movie_id,watchlist) VALUES ($1,9001,true)")
+        .bind(common::uid(1)).execute(&state.db).await.unwrap();
+    let languages = vec!["fra".into(), "eng".into()];
+    let ids = |rows: &[backend::catalog::SearchResult]| rows.iter().map(|r| r.tvdb_id.unwrap()).collect::<Vec<_>>();
+    for scope in [None, Some(common::uid(1))] {
+        let mut reference = None;
+        for query in ["malgre moi", "MALGRÉ-MOI", "malgre\u{0301} moi"] {
+            for sort in ["popularity", "year", "name", "my_rating", "last_watched", "progress"] {
+                for descending in [false, true] {
+                    let f = Filters { query: Some(query.into()), sort: Some(sort.into()), sort_desc: descending,
+                        library_user: scope, viewer: Some(common::uid(1)), ..filters("series") };
+                    let rows = discover::search_db(&state, &f, &languages).await.unwrap();
+                    let found = ids(&rows);
+                    assert_eq!(&found[..4], &[9002,9003,9009,9001], "{query}, {sort}, {scope:?}");
+                    assert!(!found.contains(&9008), "words cannot combine across variants");
+                    assert_eq!(found.contains(&9006), scope.is_none());
+                    assert_eq!(rows.iter().filter(|r| r.relevance == Some(1_000_000)).count(), 4,
+                        "foreign-language exact matches must not affect ranking");
+                    assert!(rows.windows(2).all(|w| w[0].relevance >= w[1].relevance));
+                    if let Some(expected) = &reference { assert_eq!(&found, expected); }
+                    else { reference = Some(found); }
+                }
+            }
+        }
+        let f = Filters { query: Some("malgre moi".into()), library_user: scope, limit: 2, ..filters("series") };
+        let first = ids(&discover::search_db(&state, &f, &languages).await.unwrap());
+        let second = ids(&discover::search_db(&state, &Filters { offset: 2, ..f.clone() }, &languages).await.unwrap());
+        assert_eq!([first,second].concat(), vec![9002,9003,9009,9001]);
+        let narrowed = discover::search_db(&state, &Filters { year_min: Some(2020), ..f }, &languages).await.unwrap();
+        assert!(narrowed.iter().all(|r| r.year.unwrap() >= 2020 && r.relevance.unwrap() < 1_000_000));
+        let movies = discover::search_db(&state, &Filters { query: Some("malgre moi".into()), library_user: scope, ..filters("movie") }, &languages).await.unwrap();
+        assert_eq!(ids(&movies), vec![9001]);
+        assert_eq!(movies[0].relevance, Some(1_000_000));
+    }
+    let browsing = discover::search_db(&state, &filters("series"), &languages).await.unwrap();
+    assert_eq!(browsing[0].tvdb_id, Some(9008));
+    assert!(browsing.iter().all(|r| r.relevance.is_none() && r.search_popularity.is_none()));
+}
+
+/// Whole words and concise titles are better matches than middle-of-word
+/// fragments and long extras. Infix/reordered/non-Latin matches remain valid.
+#[tokio::test]
+async fn relevance_rewards_word_boundaries_and_title_coverage() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    let score = |name: &str, query: &str| {
+        let name = name.to_owned();
+        let key = query.to_owned();
+        let db = state.db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("SELECT catalog.title_relevance($1,catalog.search_title_key($2), \
+                regexp_split_to_array(catalog.search_title_key($2),' +'))")
+                .bind(name).bind(key).fetch_one(&db).await.unwrap()
+        }
+    };
+    assert_eq!(score("Malgré-moi", "malgre moi").await, 1_000_000);
+    assert!(score("Laid Off Mage", "laid mage").await > score("Laid Off Mage: A Very Long Behind the Scenes Documentary", "laid mage").await);
+    assert!(score("Laid Off Mage", "laid mage").await > score("Unlaid Magenta", "laid mage").await);
+    assert!(score("Harry Potter", "har pot").await > score("Harry Potter: Behind the Magic and More", "har pot").await);
+    assert!(score("Stranger Things", "rang thing").await > 0);
+    assert!(score("進撃の巨人", "進撃 巨人").await > 0);
+    assert!(score("The Laid-Off Cheat-Granting Mage Enjoys a Second Lease on Life", "mage laid").await > 0);
+}
+
+/// Accent folding is shared by ordinary matching, exact-title keys and the
+/// common-word guard, while returned titles retain their original spelling.
+#[tokio::test]
+async fn search_folds_accents_ligatures_and_combining_marks() {
+    use std::sync::Arc;
+    use backend::catalog::search_policy::{SearchBaseline, SearchMode};
+
+    let _g = common::guard().await;
+    let Some(mut state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "accentsearch@test.local").await;
+    for (id, name, language) in [
+        (8101, "Malgré moi", "fra"),
+        (8102, "Malgre moi", "fra"),
+        (8103, "Translated Title", "eng"),
+        (8104, "Alternate Title", "eng"),
+        (8105, "Foreign Title", "eng"),
+        (8106, "Cœur d'Été", "fra"),
+        (8107, "Été", "fra"),
+        (8108, "ETE", "fra"),
+        (8109, "Caféïne", "fra"),
+        (8110, "ガールズバンドクライ", "jpn"),
+    ] {
+        common::insert_series(&state.db, id, name, None, None, Some(1.0), Some(language), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+    sqlx::query("INSERT INTO catalog.translation (entity_type,entity_id,language,name) VALUES \
+        ('series',8103,'fra','Malgré moi'), ('series',8105,'spa','Malgré moi')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.entity_alias (entity_type,entity_id,language,name) \
+        VALUES ('series',8104,'fra','Malgré-moi')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.movie (id,name,original_language) \
+        VALUES (8101,'Un héros malgré moi','fra')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.series (id,name,original_language) \
+        SELECT n, 'Été populaire ' || n, 'fra' FROM generate_series(40000,44999) n")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("SELECT catalog.refresh_search_word_baseline()")
+        .execute(&state.db).await.unwrap();
+    state.search_baseline = Arc::new(SearchBaseline::load(&state.db).await.unwrap());
+    let langs = vec!["fra".to_string()];
+    let ids = |rows: Vec<backend::catalog::SearchResult>| {
+        let mut ids: Vec<_> = rows.into_iter().filter_map(|row| row.tvdb_id).collect();
+        ids.sort();
+        ids
+    };
+    for scope in [None, Some(common::uid(1))] {
+        for query in ["malgre moi", "malgré moi", "MALGRÉ-MOI", "malgre\u{0301} moi"] {
+            let f = Filters { query: Some(query.into()), library_user: scope, ..filters("series") };
+            let rows = discover::search_db(&state, &f, &langs).await.unwrap();
+            assert_eq!(rows.iter().find(|row| row.tvdb_id == Some(8101)).unwrap().name.as_deref(), Some("Malgré moi"));
+            assert_eq!(ids(rows), vec![8101,8102,8103,8104], "{query}, library={scope:?}");
+        }
+    }
+    for query in ["coeur ete", "cœur été"] {
+        let f = Filters { query: Some(query.into()), ..filters("series") };
+        assert_eq!(ids(discover::search_db(&state, &f, &langs).await.unwrap()), vec![8106]);
+    }
+    for query in ["cafeine", "caféïne", "cafe\u{0301}i\u{0308}ne"] {
+        let f = Filters { query: Some(query.into()), ..filters("series") };
+        assert_eq!(ids(discover::search_db(&state, &f, &langs).await.unwrap()), vec![8109]);
+    }
+    for query in ["ete", "ÉTÉ", "e\u{0301}te\u{0301}"] {
+        let f = Filters { query: Some(query.into()), ..filters("series") };
+        let (mode, rows) = discover::search_db_with_mode(&state, &f, &langs).await.unwrap();
+        assert_eq!(mode, SearchMode::Exact, "accent variants must not bypass the common-word guard");
+        assert_eq!(ids(rows), vec![8107,8108]);
+    }
+    for query in ["malgre moi", "malgré moi"] {
+        let f = Filters { query: Some(query.into()), ..filters("movie") };
+        assert_eq!(ids(discover::search_db(&state, &f, &langs).await.unwrap()), vec![8101]);
+    }
+    let japanese: String = sqlx::query_scalar("SELECT catalog.fold_search_text('ガールズバンドクライ')")
+        .fetch_one(&state.db).await.unwrap();
+    assert_eq!(japanese, "ガールズバンドクライ");
+}
+
+/// Punctuation variants must yield the same matches across base titles,
+/// translations and aliases. Every query word belongs to one title variant.
+#[tokio::test]
+async fn search_matches_words_across_punctuation_gaps_and_word_order() {
+    let _g = common::guard().await;
+    let Some(state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "wordsearch@test.local").await;
+    for (id, name, language) in [
+        (8001, "The Laid-Off Mage", "eng"),
+        (8002, "The Laid Off Demon King", "eng"),
+        (8003, "元のタイトル", "jpn"),
+        (8004, "Alternate Name", "jpn"),
+        (8005, "Mage Without The Other Words", "eng"),
+        (8006, "Foreign Translation", "eng"),
+        (8007, "Laid Witness", "eng"),
+    ] {
+        common::insert_series(&state.db, id, name, Some(2026), None, Some(1.0), Some(language), serde_json::json!({})).await;
+        common::follow(&state.db, 1, id, true, false).await;
+    }
+    sqlx::query("INSERT INTO catalog.translation (entity_type,entity_id,language,name) VALUES \
+        ('series',8003,'eng','The Laid–Off Cheat-Granting Mage Enjoys a Second Lease on Life'), \
+        ('series',8006,'fra','Laid-Off Mage'), \
+        ('series',8007,'eng','Off Guard')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.entity_alias (entity_type,entity_id,language,name) VALUES \
+        ('series',8004,'eng','The Laid_Off Mage')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.movie (id,name,original_language) VALUES \
+        (8001,'A Laid-Off Movie','eng'), (8002,'Laid Off','eng'), (8003,'Off Target','eng')")
+        .execute(&state.db).await.unwrap();
+
+    for scope in [None, Some(common::uid(1))] {
+        for query in ["laid-off", "laid off", "LaId—OfF", "laid   off", "off laid"] {
+            let f = Filters { query: Some(query.into()), library_user: scope, ..filters("series") };
+            let mut ids: Vec<_> = discover::search_db(&state, &f, &langs()).await.unwrap()
+                .into_iter().filter_map(|row| row.tvdb_id).collect();
+            ids.sort();
+            assert_eq!(ids, vec![8001,8002,8003,8004], "{query}, library={scope:?}");
+        }
+        for query in ["laid mage", "laid-off mage", "mage laid", "The laid of"] {
+            let f = Filters { query: Some(query.into()), library_user: scope, ..filters("series") };
+            let mut ids: Vec<_> = discover::search_db(&state, &f, &langs()).await.unwrap()
+                .into_iter().filter_map(|row| row.tvdb_id).collect();
+            ids.sort();
+            // "The laid of" also matches the Demon King, which has all its terms.
+            let expected = if query == "The laid of" { vec![8001,8002,8003,8004] } else { vec![8001,8003,8004] };
+            assert_eq!(ids, expected, "{query}, library={scope:?}");
+        }
+    }
+    for query in ["laid-off", "laid off"] {
+        let f = Filters { query: Some(query.into()), ..filters("movie") };
+        let mut ids: Vec<_> = discover::search_db(&state, &f, &langs()).await.unwrap()
+            .into_iter().filter_map(|row| row.tvdb_id).collect();
+        ids.sort();
+        assert_eq!(ids, vec![8001,8002]);
+    }
+}
+
+/// Migrated statistics count titles once across aliases. Broad Discover queries
+/// preserve exact base/translated/alternate titles and never restrict a Library.
+#[tokio::test]
+async fn startup_baseline_limits_broad_discover_queries_to_exact_titles() {
+    use std::sync::Arc;
+    use backend::catalog::search_policy::{SearchBaseline, SearchMode};
+
+    let _g = common::guard().await;
+    let Some(mut state) = common::state().await else { return };
+    common::clean(&state.db).await;
+    common::insert_user(&state.db, 1, "baseline@test.local").await;
+    sqlx::query("INSERT INTO catalog.series (id, name, original_language) \
+        SELECT n, 'The Story ' || n, 'eng' FROM generate_series(10000, 14999) n")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.translation (entity_type,entity_id,language,name) \
+        SELECT 'series', n, 'fra', 'Les Histoires ' || n FROM generate_series(10000,14999) n")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.series (id,name,original_language) VALUES \
+        (9001,'The','eng'), (9002,'Alias Base','eng'), (9003,'Translation Base','jpn'), \
+        (9004,'Original Alias','jpn'), (9005,'IT!','eng'), (9006,'It Takes Two','eng'), \
+        (9007,'Unknown Alias','eng')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.translation (entity_type,entity_id,language,name) \
+        VALUES ('series',9003,'eng','The')")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.entity_alias (entity_type,entity_id,language,name) VALUES \
+        ('series',9002,'eng','THE!'), ('series',9004,'jpn','The'), \
+        ('series',9007,NULL,'The')")
+        .execute(&state.db).await.unwrap();
+    // Many alternate rows on ONE title must not make a rare word look common.
+    sqlx::query("INSERT INTO catalog.entity_alias (entity_type,entity_id,language,name) \
+        SELECT 'series',9002,'eng','Omnibus' FROM generate_series(1,5001)")
+        .execute(&state.db).await.unwrap();
+    sqlx::query("INSERT INTO catalog.series (id,name,deleted) \
+        SELECT n, 'Discarded', true FROM generate_series(20000,24999) n")
+        .execute(&state.db).await.unwrap();
+    // The migration runs this once against the existing catalog. Here fixtures
+    // are installed afterwards, so explicitly refresh to exercise the same SQL.
+    sqlx::query("SELECT catalog.refresh_search_word_baseline()")
+        .execute(&state.db).await.unwrap();
+    state.search_baseline = Arc::new(SearchBaseline::load(&state.db).await.unwrap());
+    let baseline = &state.search_baseline;
+    assert_eq!(baseline.mode(Some("the"), "series", &langs()), SearchMode::Exact);
+    assert_eq!(baseline.mode(Some("les"), "series", &langs()), SearchMode::Full);
+    assert_eq!(baseline.mode(Some("les"), "series", &["fra".into()]), SearchMode::Exact);
+    assert_eq!(baseline.mode(Some("omnibus"), "series", &langs()), SearchMode::Full);
+    assert_eq!(baseline.mode(Some("discarded"), "series", &langs()), SearchMode::Full);
+    assert_eq!(baseline.mode(Some("the story"), "series", &langs()), SearchMode::Full);
+
+    // Loading a saved snapshot must not silently aggregate the catalog again.
+    sqlx::query("INSERT INTO catalog.series (id,name) \
+        SELECT n, 'Newcommon' FROM generate_series(30000,34999) n")
+        .execute(&state.db).await.unwrap();
+    let reloaded = SearchBaseline::load(&state.db).await.unwrap();
+    assert_eq!(reloaded.mode(Some("newcommon"), "series", &langs()), SearchMode::Full);
+
+    let query = Filters { query: Some("  THE! ".into()), ..filters("series") };
+    let mut ids: Vec<_> = discover::search_db(&state, &query, &langs()).await.unwrap()
+        .into_iter().filter_map(|row| row.tvdb_id).collect();
+    ids.sort();
+    assert_eq!(ids, vec![9001,9002,9003,9004]);
+    let short = Filters { query: Some("it".into()), ..filters("series") };
+    let ids: Vec<_> = discover::search_db(&state, &short, &langs()).await.unwrap()
+        .into_iter().filter_map(|row| row.tvdb_id).collect();
+    assert_eq!(ids, vec![9005]);
+    let punctuation = Filters { query: Some("%%".into()), ..filters("series") };
+    assert!(discover::search_db(&state, &punctuation, &langs()).await.unwrap().is_empty());
+
+    common::follow(&state.db, 1, 10000, true, false).await;
+    let library = Filters { query: Some("the".into()), library_user: Some(common::uid(1)), ..filters("series") };
+    let (mode, rows) = discover::search_db_with_mode(&state, &library, &langs()).await.unwrap();
+    assert_eq!(mode, SearchMode::Full);
+    assert_eq!(rows[0].tvdb_id, Some(10000));
+
+    // Existing clients keep the array body; new ones can explain the restricted mode.
+    let q = serde_urlencoded::from_str("q=the&type=series").unwrap();
+    let (headers, axum::Json(rows)) = backend::web::handlers::discover::discover(
+        backend::auth::AuthUser(common::uid(1)), axum::extract::State(state), axum::extract::Query(q)
+    ).await.unwrap();
+    assert_eq!(headers["x-search-mode"], "exact");
+    assert_eq!(rows.len(), 4);
+}
+
 /// The library query buckets each tracked show into the right category and hides
 /// `unavailable` (dead-id) shows entirely.
 #[tokio::test]

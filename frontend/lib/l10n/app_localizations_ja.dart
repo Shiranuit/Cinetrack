@@ -42,6 +42,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get searchAllShows => 'すべての作品を検索';
 
   @override
+  String get searchExactOnly =>
+      '別の単語を追加すると検索範囲を広げられます。短い語や一般的な語では、タイトルが完全一致する作品を表示します。';
+
+  @override
+  String get sortRelevance => 'タイトルの一致度';
+
+  @override
+  String get searchRelevanceHelp =>
+      '検索結果はタイトルの一致度順に表示されます。選択した並び順を使うには、検索をクリアしてください。';
+
+  @override
   String get libraryNoMatchDiscover => 'ライブラリに一致なし。「見つける」で新しい作品を探せます。';
 
   @override

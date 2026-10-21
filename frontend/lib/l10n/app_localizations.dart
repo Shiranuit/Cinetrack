@@ -178,6 +178,24 @@ abstract class AppLocalizations {
   /// **'Search all shows & movies'**
   String get searchAllShows;
 
+  /// No description provided for @searchExactOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another word to broaden your search. Short or common terms show exact title matches.'**
+  String get searchExactOnly;
+
+  /// No description provided for @sortRelevance.
+  ///
+  /// In en, this message translates to:
+  /// **'Best title match'**
+  String get sortRelevance;
+
+  /// No description provided for @searchRelevanceHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Search results are ordered by title match. Clear the search to use your selected sort.'**
+  String get searchRelevanceHelp;
+
   /// No description provided for @libraryNoMatchDiscover.
   ///
   /// In en, this message translates to:

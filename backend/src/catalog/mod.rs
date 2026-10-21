@@ -13,6 +13,7 @@ pub mod facets;
 pub mod models;
 pub mod movie;
 pub mod season;
+pub mod search_policy;
 pub mod series;
 pub mod translation;
 
@@ -47,6 +48,12 @@ pub struct SearchResult {
     /// Whether the viewer has favorited this title (Library filtered/search view).
     #[serde(default)]
     pub is_favorited: bool,
+    /// Present for text searches. Shared with the client for merging independently
+    /// paged series/movie streams in the same order as PostgreSQL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relevance: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_popularity: Option<f64>,
 }
 
 /// Insert a minimal, deliberately-stale catalog stub for a series/movie we saw

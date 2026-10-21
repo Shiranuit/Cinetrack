@@ -42,6 +42,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchAllShows => 'Search all shows & movies';
 
   @override
+  String get searchExactOnly =>
+      'Add another word to broaden your search. Short or common terms show exact title matches.';
+
+  @override
+  String get sortRelevance => 'Best title match';
+
+  @override
+  String get searchRelevanceHelp =>
+      'Search results are ordered by title match. Clear the search to use your selected sort.';
+
+  @override
   String get libraryNoMatchDiscover =>
       'Nothing in your library matches. Find new shows in Discover.';
 

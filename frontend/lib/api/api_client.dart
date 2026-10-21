@@ -62,7 +62,8 @@ class ApiClient extends ChangeNotifier {
 
   /// Run a request; on a 401 for an authenticated call, try to refresh the access
   /// token once and retry. If refresh fails, drop the session.
-  Future<dynamic> _request(Future<http.Response> Function() send, {bool auth = true}) async {
+  Future<dynamic> _request(Future<http.Response> Function() send,
+      {bool auth = true, void Function(http.Response)? onResponse}) async {
     var r = await send();
     if (r.statusCode == 401 && auth) {
       if (await _tryRefresh()) {
@@ -71,11 +72,14 @@ class ApiClient extends ChangeNotifier {
         onUnauthorized?.call();
       }
     }
-    return _decode(r);
+    final result = await _decode(r);
+    onResponse?.call(r);
+    return result;
   }
 
-  Future<dynamic> _get(String path, [Map<String, dynamic>? query]) =>
-      _request(() => _client.get(_uri(path, query), headers: _headers()));
+  Future<dynamic> _get(String path,
+          [Map<String, dynamic>? query, void Function(http.Response)? onResponse]) =>
+      _request(() => _client.get(_uri(path, query), headers: _headers()), onResponse: onResponse);
 
   /// `notify: false` for POST-shaped READS. The listener signal means "data
   /// changed, reload" — a screen that reloads by POSTing would otherwise notify
@@ -311,7 +315,8 @@ class ApiClient extends ChangeNotifier {
 
   /// Advanced filtered search — Discover (`library: false`) or the user's Library.
   Future<List<SearchResult>> filteredSearch(AdvancedFilters f,
-      {bool library = false, String? langs, String? type, int limit = 60, int offset = 0}) async {
+      {bool library = false, String? langs, String? type, int limit = 60, int offset = 0,
+      void Function(bool exactOnly)? onSearchMode}) async {
     final path = library ? '/api/library/filter' : '/api/discover';
     // `type` overrides f.type so callers can fan out over several kinds.
     final q = {
@@ -321,7 +326,9 @@ class ApiClient extends ChangeNotifier {
       'offset': '$offset',
       'langs': ?langs,
     };
-    return _list(await _get(path, q), SearchResult.fromJson);
+    return _list(await _get(path, q, (r) {
+      onSearchMode?.call(r.headers['x-search-mode'] == 'exact');
+    }), SearchResult.fromJson);
   }
 
   /// Filter options present in the catalog (or the library when `library: true`).

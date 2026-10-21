@@ -42,6 +42,17 @@ class AppLocalizationsIt extends AppLocalizations {
   String get searchAllShows => 'Cerca serie e film';
 
   @override
+  String get searchExactOnly =>
+      'Aggiungi un’altra parola per ampliare la ricerca. I termini brevi o comuni mostrano i titoli esatti.';
+
+  @override
+  String get sortRelevance => 'Migliore corrispondenza del titolo';
+
+  @override
+  String get searchRelevanceHelp =>
+      'I risultati sono ordinati per corrispondenza del titolo. Cancella la ricerca per usare l’ordinamento scelto.';
+
+  @override
   String get libraryNoMatchDiscover =>
       'Niente nella tua libreria. Trova nuove serie in Esplora.';
 

@@ -66,11 +66,89 @@ stored, not the images). Object storage holds only **user-uploaded** avatars and
 
 ## Search
 
-Search uses PostgreSQL's `pg_trgm` extension with GIN trigram indexes on the searchable text
-and on translation names, so it's fuzzy (tolerant of punctuation and spelling drift) and
-alias/translation aware. Queries run as a union of index-friendly branches rather than a
-single cross-table scan, and require at least 3 characters (shorter queries have no usable
-trigram). In `hybrid` mode, thin local results are topped up from TheTVDB and cached.
+Discover and Library name searches run locally against base titles, translations and
+language-tagged aliases, using word matching and PostgreSQL GIN trigram indexes. Discover uses
+a union of indexed branches; Library checks only the owner's tracked titles. Translated
+titles and aliases match the viewer's languages plus each show's original language.
+Ordinary queries use the same word tokenizer as the baseline: lowercase letters/numbers,
+with punctuation and whitespace separating terms. Each term is matched independently
+within the same title variant, so `laid-off` and `laid off` produce identical searches,
+and `laid mage` can find words separated in a title. Terms can appear in any order.
+Migration 0049 adds accent folding through PostgreSQL's standard `unaccent` dictionary
+and Unicode NFC normalization. Input is folded once before tokenization and frequency
+checks; expression indexes store folded title text for the matching predicates. Thus
+`malgré moi`, `malgre moi` and decomposed accent input use the same representation,
+including ligatures such as `œ` → `oe`. Display names keep their original spelling.
+Words from separate aliases or translations are never combined.
+
+Migration 0050 adds title relevance for every nonblank text search. Indexed word/exact
+predicates first retrieve matching name variants; SQL scores those variants and keeps
+the best score per title before sorting and pagination. Normalized exact titles rank
+first, followed by a combination of word boundaries, query coverage of the title, and
+small phrase/prefix bonuses. Base names, eligible translations and aliases can all
+provide the winning match. Popularity only breaks equal textual scores, followed by
+id for stable paging. The selected browsing sort and direction apply when text is empty;
+facet filters and library scope apply in both modes. Watch aggregates are not loaded
+just because an inactive browsing sort needs them.
+
+Text-search results include `relevance` and `search_popularity` for the client's mixed
+series/movie grid. `RankedSearchPager` merges the independently sorted streams, filling
+an exhausted stream before selecting the next result, then cuts global pages. It keeps
+unconsumed rows rather than applying the same offset to both streams and concatenating
+pages. A query/filter/type change creates a new pager and disposes the old grid, so
+pending requests cannot overwrite new search results. The filter sheet explains title
+ordering and retains the browsing sort for when the search is cleared.
+
+Local validation on 2026-10-21 used 1,465,216 eligible name variants for 532,201 titles
+(English/French plus original-language variants), two warmups and seven timed runs.
+Adding relevance increased selective SQL lookups by roughly 0.1–0.9 ms; the broad
+`love` query increased from 31 to 67 ms. All eight known-intent targets stayed in the
+top ten, and the exact *Malgré moi* series moved from fourth to first. Exact-title films
+can correctly precede longer series titles for ambiguous input such as `laid off`.
+This is a small regression set, not a general relevance-quality guarantee.
+
+A second check copied the actual catalog title tables (about 532,000 entities,
+1,392,346 translations and 173,336 aliases) into a disposable migrated database and
+called the backend search function, including viewer metadata and language joins.
+Warm selective searches took 3–12 ms per kind, `the` exact lookup 13–18 ms, and `love`
+62–76 ms. Two-character Japanese fragments (`進撃 巨人`) remain a retrieval limitation:
+448–957 ms, comparable to the pre-ranking matcher, since these terms provide no
+selective trigrams. Library checks with seven tracked series took 2–3 ms. These are
+local warm-cache measurements without HTTP or concurrent-user load.
+
+Migration 0048 aggregates all active series/movie titles, translations and aliases
+once into `catalog.search_word_baseline`, an offline word-frequency baseline.
+Counts are distinct titles per language and content type, so duplicate aliases do not
+inflate frequency. Three-character word prefixes are included for typing; episode names
+and deleted titles are excluded. Base titles and original-language variants also form an
+always-searchable cohort. Only terms matching at least 5,000 titles and 2% of a cohort
+are stored in Postgres. Each server startup only loads this small snapshot into memory.
+On the local catalog (about 533,000 titles), the initial aggregation took about 45 seconds
+and produced 43 common term/language/type entries. That cost applies once during the
+migration, before the listener starts; ordinary restarts never rescan titles, including
+when the saved snapshot is empty. After a major catalog import an administrator can
+explicitly run `SELECT catalog.refresh_search_word_baseline();` and restart the backend
+to load the refreshed snapshot. No automatic rebuild is scheduled. Migration 0049
+refreshes the saved baseline once with accent folding, so accented common terms follow
+the same guard as their unaccented equivalents. It also rebuilds the exact-title indexes
+and replaces raw-name trigram indexes with folded-name indexes; this adds work to that
+first migration, not subsequent startups. The pinned unaccent dictionary is treated as
+fixed for indexing; changing its rules requires rebuilding the dependent indexes.
+
+A single common term or a one/two-character query uses indexed,
+normalized exact-title lookup in Discover; punctuation-only input returns no matches.
+This preserves short titles such as *It* and
+*Up* while avoiding a catalog-wide substring scan. Exact-title normalization folds case
+and accents and replaces punctuation with spaces. Full title, translation and alias equality use
+dedicated indexes from migration 0047. Library searches and multi-word queries use
+ordinary word matching. Frequency is a selectivity estimate, not a guarantee
+of substring-match counts; longer incomplete words and interior substrings are not
+fully represented by the word/prefix baseline.
+
+The `/api/discover` response remains a JSON array and includes `x-search-mode: exact`
+or `full` (also exposed through CORS). Discover displays a prompt to add another word
+when broad matching was restricted, alongside any exact title matches. Blank input
+browses normally. No remote API calls or frequency aggregation occur in a search request.
 
 ## Authentication & sessions
 

@@ -41,6 +41,8 @@ impl SyncProfile {
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    /// Persisted word-frequency snapshot, loaded by main before serving.
+    pub search_baseline: Arc<crate::catalog::search_policy::SearchBaseline>,
     pub tvdb: Arc<TheTvdbClient>,
     /// `None` when S3 is not configured. Object storage holds user-uploaded
     /// avatars & covers only (TheTVDB artwork is served straight from its CDN).
@@ -83,6 +85,7 @@ impl AppState {
 
         Ok(AppState {
             db,
+            search_baseline: Arc::new(crate::catalog::search_policy::SearchBaseline::default()),
             tvdb,
             storage,
             config: Arc::new(config),

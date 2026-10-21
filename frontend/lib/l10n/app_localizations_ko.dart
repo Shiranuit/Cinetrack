@@ -42,6 +42,17 @@ class AppLocalizationsKo extends AppLocalizations {
   String get searchAllShows => '모든 작품 검색';
 
   @override
+  String get searchExactOnly =>
+      '검색어를 추가하면 더 폭넓게 검색할 수 있습니다. 짧거나 흔한 검색어는 제목이 정확히 일치하는 작품만 표시합니다.';
+
+  @override
+  String get sortRelevance => '제목 일치도';
+
+  @override
+  String get searchRelevanceHelp =>
+      '검색 결과는 제목 일치도순으로 표시됩니다. 선택한 정렬을 사용하려면 검색어를 지우세요.';
+
+  @override
   String get libraryNoMatchDiscover => '라이브러리에 없습니다. 발견에서 새 작품을 찾아보세요.';
 
   @override

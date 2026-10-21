@@ -28,7 +28,10 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let bind_addr = config.bind_addr.clone();
 
-    let state = AppState::bootstrap(config).await?;
+    let mut state = AppState::bootstrap(config).await?;
+    state.search_baseline = std::sync::Arc::new(
+        backend::catalog::search_policy::SearchBaseline::load(&state.db).await?,
+    );
     tracing::info!(
         "catalog mode: {:?} · mirror scope: {:?}",
         state.config.catalog_mode,

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../api/filters.dart';
 import '../api/models.dart';
+import '../api/ranked_search_pager.dart';
 import '../l10n/app_localizations.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
@@ -50,6 +51,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _f = AdvancedFilters();
   FilterOptions _filterOptions = const FilterOptions();
   int _filterToken = 0;
+  RankedSearchPager? _rankedPager;
 
   // The user's layout: which sections show, in what order. Server-owned so it
   // follows them across devices; the built-in defaults render until it arrives.
@@ -147,6 +149,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final kinds = _backendKinds();
     if (kinds.isEmpty) return [];
     final api = context.read<ApiClient>();
+    if (_f.query.trim().isNotEmpty) {
+      if (offset == 0 || _rankedPager == null) {
+        final filters = AdvancedFilters.fromQuery(_f.toQuery());
+        final langs = _langs;
+        _rankedPager = RankedSearchPager(kinds: kinds, batchSize: limit,
+          fetch: (kind, start, size) => api.filteredSearch(
+            filters, library: true, type: kind, langs: langs, offset: start, limit: size),
+        );
+      }
+      return _rankedPager!.page(offset, limit);
+    }
     final lists = await Future.wait(kinds
         .map((k) => api.filteredSearch(_f, library: true, type: k, langs: _langs, offset: offset, limit: limit)));
     return [for (final l in lists) ...l];
@@ -360,7 +373,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 // With no sort picked, the flat view reads alphabetically (the
                 // server resolves it) — so name what it IS ordered by, rather
                 // than leaving the line blank or showing a raw key.
-                final sort = sortLabel(t, _f.sort ?? 'name');
+                final sort = _f.query.trim().isNotEmpty ? t.sortRelevance : sortLabel(t, _f.sort ?? 'name');
                 return Text(
                     _f.activeCount > 0
                         ? t.filteredSummary(_f.activeCount, sort)
@@ -387,6 +400,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         Expanded(
           child: InfiniteGrid(
+            key: ValueKey(_filterToken),
             resetKey: _filterToken,
             fetchPage: _filterPage,
             empty: MessageView(

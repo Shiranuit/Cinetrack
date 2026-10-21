@@ -226,6 +226,7 @@ fn build_cors(config: &Config) -> CorsLayer {
     };
     CorsLayer::new()
         .allow_origin(origin)
+        .expose_headers([HeaderName::from_static("x-search-mode")])
         .allow_credentials(true)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers([

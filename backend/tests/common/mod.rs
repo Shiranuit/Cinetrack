@@ -79,7 +79,8 @@ pub async fn clean(db: &PgPool) {
         "TRUNCATE app.users, app.user_show, app.user_movie, app.watch_event, app.episode_rating, \
                   app.episode_rewatch, app.list, app.list_item, \
                   catalog.series, catalog.movie, catalog.episode, catalog.season, \
-                  catalog.translation, catalog.artwork RESTART IDENTITY CASCADE",
+                  catalog.translation, catalog.entity_alias, catalog.search_word_baseline, \
+                  catalog.artwork RESTART IDENTITY CASCADE",
     )
     .execute(db)
     .await

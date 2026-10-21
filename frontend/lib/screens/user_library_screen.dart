@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../api/filters.dart';
 import '../api/models.dart';
+import '../api/ranked_search_pager.dart';
 import '../design/app_colors.dart';
 import '../design/tokens.dart';
 import '../l10n/app_localizations.dart';
@@ -107,7 +108,9 @@ class _UserLibraryScreenState extends State<UserLibraryScreen> {
     final api = context.read<ApiClient>();
     final lists =
         await Future.wait(kinds.map((k) => api.userFilteredShows(widget.userId, _f, type: k, langs: _langs)));
-    return [for (final l in lists) ...l];
+    final results = [for (final l in lists) ...l];
+    if (_f.query.trim().isNotEmpty) results.sort(compareSearchResults);
+    return results;
   }
 
   // Search inside their library by name; writes the query into `_f` (so it

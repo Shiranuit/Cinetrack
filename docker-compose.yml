@@ -92,6 +92,7 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_REGION: ${S3_REGION}
       S3_BUCKET: ${S3_BUCKET}

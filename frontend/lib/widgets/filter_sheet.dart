@@ -161,56 +161,63 @@ class _FilterSheetState extends State<FilterSheet> {
               ),
             ),
 
-          // "Sort by" header with an ascending/descending toggle on the right.
-          Padding(
-            padding: const EdgeInsets.only(top: Insets.lg, bottom: Insets.sm),
-            child: Row(
-              children: [
-                Text(t.sortBy, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const Spacer(),
-                // A direction with no sort chosen means nothing, so it only appears
-                // once one is.
-                if (f.sort != null)
-                  ActionChip(
-                    avatar: Icon(f.sortDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded, size: 18),
-                    label: Text(f.sortDesc ? t.sortDescending : t.sortAscending),
-                    onPressed: () => setState(() => f.sortDesc = !f.sortDesc),
-                  ),
-              ],
+          if (f.query.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: Insets.lg),
+              child: Text(t.searchRelevanceHelp),
             ),
-          ),
-          Wrap(spacing: Insets.sm, children: [
-            // "Your rating" (my_rating) is offered only in the Library: Discover
-            // hides your tracked shows, and you can only rate what you track, so
-            // it would be empty there. Slot it right after "Top rated".
-            for (final key in [
-              for (final k in kSortKeys) ...[k, if (k == 'rating' && widget.showFavorites) 'my_rating'],
-              // Library scope only — these read your watch history.
-              if (widget.showFavorites) ...kLibrarySortKeys,
-            ])
-              // Several sorts are easy to confuse — "Episodes left" is a count and
-              // "Progress" a percentage, and three different clocks look alike.
-              // Hover (desktop/web) or long-press (touch) explains each one.
-              Tooltip(
-                message: sortHelp(t, key, othersLibrary: widget.othersLibrary),
-                child: ChoiceChip(
-                label: Text(sortLabel(t, key, othersLibrary: widget.othersLibrary)),
-                selected: f.sort == key,
-                // Tapping the chosen sort clears it, which is what hands ordering
-                // back to each Library category (and to popularity in Discover).
-                // Otherwise a sort, once picked, could never be un-picked.
-                // Each sort defaults to its natural direction (names A->Z,
-                // everything else high/new first); the toggle above can flip it.
-                onSelected: (_) => setState(() {
-                  if (f.sort == key) {
-                    f.sort = null;
-                  } else {
-                    f.sort = key;
-                    f.sortDesc = key != 'name';
-                  }
-                }),
-              )),
-          ]),
+          // Retain the chosen browse sort while text search uses relevance.
+          if (f.query.trim().isEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: Insets.lg, bottom: Insets.sm),
+              child: Row(
+                children: [
+                  Text(t.sortBy, style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  // A direction with no sort chosen means nothing, so it only appears
+                  // once one is.
+                  if (f.sort != null)
+                    ActionChip(
+                      avatar: Icon(f.sortDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded, size: 18),
+                      label: Text(f.sortDesc ? t.sortDescending : t.sortAscending),
+                      onPressed: () => setState(() => f.sortDesc = !f.sortDesc),
+                    ),
+                ],
+              ),
+            ),
+            Wrap(spacing: Insets.sm, children: [
+              // "Your rating" (my_rating) is offered only in the Library: Discover
+              // hides your tracked shows, and you can only rate what you track, so
+              // it would be empty there. Slot it right after "Top rated".
+              for (final key in [
+                for (final k in kSortKeys) ...[k, if (k == 'rating' && widget.showFavorites) 'my_rating'],
+                // Library scope only — these read your watch history.
+                if (widget.showFavorites) ...kLibrarySortKeys,
+              ])
+                // Several sorts are easy to confuse — "Episodes left" is a count and
+                // "Progress" a percentage, and three different clocks look alike.
+                // Hover (desktop/web) or long-press (touch) explains each one.
+                Tooltip(
+                  message: sortHelp(t, key, othersLibrary: widget.othersLibrary),
+                  child: ChoiceChip(
+                  label: Text(sortLabel(t, key, othersLibrary: widget.othersLibrary)),
+                  selected: f.sort == key,
+                  // Tapping the chosen sort clears it, which is what hands ordering
+                  // back to each Library category (and to popularity in Discover).
+                  // Otherwise a sort, once picked, could never be un-picked.
+                  // Each sort defaults to its natural direction (names A->Z,
+                  // everything else high/new first); the toggle above can flip it.
+                  onSelected: (_) => setState(() {
+                    if (f.sort == key) {
+                      f.sort = null;
+                    } else {
+                      f.sort = key;
+                      f.sortDesc = key != 'name';
+                    }
+                  }),
+                )),
+            ]),
+          ],
 
           // Every option facet is a collapsible section (see [_ChipSection]).
           if (o.genres.isNotEmpty)

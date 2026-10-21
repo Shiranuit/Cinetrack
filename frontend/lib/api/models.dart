@@ -428,6 +428,10 @@ class SearchResult {
   final int? rating;
   final bool isFavorited;
 
+  /// Text-search ordering, also used when merging series and movie pages.
+  final int? relevance;
+  final double? searchPopularity;
+
   const SearchResult({
     this.tvdbId,
     this.kind,
@@ -437,6 +441,8 @@ class SearchResult {
     this.inLibrary = false,
     this.rating,
     this.isFavorited = false,
+    this.relevance,
+    this.searchPopularity,
   });
 
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
@@ -448,6 +454,8 @@ class SearchResult {
         inLibrary: j['in_library'] as bool? ?? false,
         rating: (j['rating'] as num?)?.toInt(),
         isFavorited: j['is_favorited'] as bool? ?? false,
+        relevance: (j['relevance'] as num?)?.toInt(),
+        searchPopularity: (j['search_popularity'] as num?)?.toDouble(),
       );
 }
 
